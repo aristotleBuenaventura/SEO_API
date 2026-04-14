@@ -1,0 +1,2587 @@
+/**
+ * Google Sheet list mode:
+ * — Kapag may URL ang sheet: walang Add site, Bulk import, o Delete sa front; list galing sa sheet.
+ * — Pwede sa wp-config.php: define( 'DUM_SHEET_SOURCE_URL', 'https://docs.google.com/spreadsheets/d/…/edit…' );
+ * — O ilagay dito sa ibaba (kung hindi mo ginagamit ang wp-config para sa constant).
+ *
+ * Kailangan "Anyone with the link" → Viewer (o published CSV) para makuha ng server ang CSV.
+ *
+ * Optional: define( 'DUM_SHEET_GID', '1234567890' ); kung ang domains ay nasa ibang tab (#gid= sa URL).
+ * Optional: define( 'DUM_SHEET_SSL_INSECURE', true ); kung SSL error lang ang fetch sa hosting.
+ */
+$dum_monitor_sheet_source = 'https://docs.google.com/spreadsheets/d/1d5ADP7zaNQjtKpaI61FZoeiqaeuZLNnSqQagRK1L8Ds/edit?usp=sharing'; // i-blank kung mano-mano (Add/Bulk/Delete) at wp-config ang DUM_SHEET_SOURCE_URL
+if ($dum_monitor_sheet_source !== '' && !defined('DUM_SHEET_SOURCE_URL')) {
+    define('DUM_SHEET_SOURCE_URL', $dum_monitor_sheet_source);
+}
+if (!defined('DUM_SHEET_SOURCE_URL')) {
+    define('DUM_SHEET_SOURCE_URL', '');
+}
+if (!defined('DUM_SHEET_GID')) {
+    define('DUM_SHEET_GID', '');
+}
+if (!defined('DUM_SHEET_SSL_INSECURE')) {
+    define('DUM_SHEET_SSL_INSECURE', false);
+}
+
+if (!function_exists('dum_table_name')) {
+
+    function dum_sheet_effective_source_url() {
+        $u = defined('DUM_SHEET_SOURCE_URL') ? (string) DUM_SHEET_SOURCE_URL : '';
+        /**
+         * Filter the Google Sheet / CSV source URL.
+         *
+         * @param string $u Raw URL from DUM_SHEET_SOURCE_URL.
+         */
+        return apply_filters('dum_sheet_source_url', trim($u));
+    }
+
+    function dum_normalize_sheet_csv_url($url) {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return '';
+        }
+        // Already a publish or export CSV-style URL.
+        if (preg_match('#/spreadsheets/d/e/#', $url)) {
+            return $url;
+        }
+        if (preg_match('~/export\?[^#]*format=csv~i', $url) || preg_match('~[?&]output=csv(\b|&)~i', $url)) {
+            return $url;
+        }
+        // docs.google.com/spreadsheets/d/SHEET_ID/... → public CSV export (needs link sharing: Viewer).
+        if (preg_match('#docs\.google\.com/spreadsheets/d/([a-zA-Z0-9_-]+)#', $url, $m)) {
+            $gid = '0';
+            if (defined('DUM_SHEET_GID') && (string) DUM_SHEET_GID !== '') {
+                $gid = (string) DUM_SHEET_GID;
+            } elseif (preg_match('~[?#&]gid=(\d+)~', $url, $gm)) {
+                $gid = $gm[1];
+            }
+            return 'https://docs.google.com/spreadsheets/d/' . $m[1] . '/export?format=csv&gid=' . rawurlencode($gid);
+        }
+        return $url;
+    }
+
+    function dum_is_sheet_source_mode() {
+        return dum_normalize_sheet_csv_url(dum_sheet_effective_source_url()) !== '';
+    }
+
+    function dum_sheet_csv_fetch_url() {
+        return dum_normalize_sheet_csv_url(dum_sheet_effective_source_url());
+    }
+
+    /**
+     * @return string[] Normalized https://host URLs (unique, in sheet order).
+     */
+    function dum_fetch_sheet_domain_urls($csv_url) {
+        if ($csv_url === '') {
+            return [];
+        }
+        $sslverify = true;
+        if (defined('DUM_SHEET_SSL_INSECURE') && DUM_SHEET_SSL_INSECURE) {
+            $sslverify = false;
+        }
+        $req_args = [
+            'timeout' => 25,
+            'redirection' => 5,
+            'sslverify' => $sslverify,
+            'headers' => [
+                'Accept' => 'text/csv,text/plain,*/*;q=0.8',
+            ],
+        ];
+        /**
+         * @param array<string,mixed> $req_args Arguments for wp_remote_get( $csv_url, $req_args ).
+         */
+        $req_args = apply_filters('dum_sheet_remote_get_args', $req_args, $csv_url);
+        $res = wp_remote_get($csv_url, $req_args);
+        if (is_wp_error($res)) {
+            return [];
+        }
+        $code = (int) wp_remote_retrieve_response_code($res);
+        if ($code < 200 || $code >= 300) {
+            return [];
+        }
+        $body = wp_remote_retrieve_body($res);
+        if ($body === null || $body === '') {
+            return [];
+        }
+        $trimmed = ltrim($body);
+        // Google sign-in / error HTML instead of CSV.
+        if ($trimmed !== '' && ($trimmed[0] === '<' || stripos($trimmed, '<!DOCTYPE') === 0 || stripos($trimmed, '<html') === 0)) {
+            return [];
+        }
+        $lines = preg_split('/\r\n|\r|\n/', $body);
+        if (!empty($lines[0])) {
+            $lines[0] = preg_replace('/^\xEF\xBB\xBF/', '', $lines[0]);
+        }
+        $out = [];
+        $seen = [];
+        $header_labels = ['domain', 'url', 'website', 'site', 'domains', 'link', 'hostname'];
+        foreach ($lines as $i => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || (isset($line[0]) && $line[0] === '#')) {
+                continue;
+            }
+            $parts = str_getcsv($line);
+            $max_col = min(5, count($parts));
+            $picked = null;
+            for ($ci = 0; $ci < $max_col; $ci++) {
+                $cell = isset($parts[$ci]) ? trim((string) $parts[$ci]) : '';
+                if ($cell === '') {
+                    continue;
+                }
+                $low = strtolower($cell);
+                if ($i === 0 && in_array($low, $header_labels, true)) {
+                    continue;
+                }
+                $url = dum_normalize_domain($cell);
+                if ($url) {
+                    $picked = $url;
+                    break;
+                }
+            }
+            if ($picked === null) {
+                continue;
+            }
+            if (isset($seen[$picked])) {
+                continue;
+            }
+            $seen[$picked] = true;
+            $out[] = $picked;
+        }
+        return $out;
+    }
+
+    /**
+     * Sync DB domains to match the Google Sheet. Does not delete everything if fetch returns empty.
+     *
+     * @return array{ok:bool, synced:int, fetched:int}
+     */
+    function dum_sync_domains_from_google_sheet($wpdb, $table_name, $force_fetch = false) {
+        $csv_url = dum_sheet_csv_fetch_url();
+        if ($csv_url === '') {
+            return ['ok' => false, 'synced' => 0, 'fetched' => 0];
+        }
+        // v2: older versions cached empty arrays and blocked sync for minutes.
+        $cache_key = 'dum_sheet_url_list_cache_v2';
+
+        $urls = null;
+        if (!$force_fetch) {
+            $cached = get_transient($cache_key);
+            if (is_array($cached) && isset($cached['urls'], $cached['t']) && (time() - (int) $cached['t']) < 90) {
+                $urls = $cached['urls'];
+            }
+        }
+        if ($urls === null) {
+            $urls = dum_fetch_sheet_domain_urls($csv_url);
+            // Do not cache empty fetches — otherwise one failed request blocks the UI for minutes.
+            if (is_array($urls) && !empty($urls)) {
+                set_transient($cache_key, ['urls' => $urls, 't' => time()], 120);
+            }
+        }
+        if (!is_array($urls) || empty($urls)) {
+            return ['ok' => false, 'synced' => 0, 'fetched' => is_array($urls) ? count($urls) : 0];
+        }
+        $n = count($urls);
+        $placeholders = implode(',', array_fill(0, $n, '%s'));
+        $wpdb->query($wpdb->prepare("DELETE FROM $table_name WHERE domain NOT IN ($placeholders)", $urls));
+        $existing = $wpdb->get_col("SELECT domain FROM $table_name");
+        $have = array_flip($existing ?: []);
+        $now = dum_ph_datetime_string();
+        $added = 0;
+        foreach ($urls as $url) {
+            if (isset($have[$url])) {
+                continue;
+            }
+            $wpdb->insert($table_name, [
+                'domain' => $url,
+                'status' => '0',
+                'detail' => 'Pending check',
+                'last_checked' => $now,
+            ], ['%s', '%s', '%s', '%s']);
+            $have[$url] = true;
+            $added++;
+        }
+        return ['ok' => true, 'synced' => $n, 'fetched' => $n];
+    }
+
+    function dum_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'domain_uptime_checker';
+    }
+
+    function dum_ensure_table() {
+        global $wpdb;
+        $table_name = dum_table_name();
+        $wpdb->query("CREATE TABLE IF NOT EXISTS $table_name (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            domain VARCHAR(255) UNIQUE,
+            status VARCHAR(10),
+            detail TEXT,
+            last_checked DATETIME
+        )");
+    }
+
+    function dum_normalize_domain($url) {
+        $url = trim($url);
+        if (!preg_match('#^https?://#', $url)) {
+            $url = 'https://' . $url;
+        }
+        $parsed = parse_url($url);
+        if (!$parsed || empty($parsed['host'])) {
+            return false;
+        }
+
+        $host = strtolower($parsed['host']);
+        $host = preg_replace('/^www\./', '', $host);
+
+        return 'https://' . $host;
+    }
+
+    function dum_ph_datetime_string() {
+        try {
+            $tz = new DateTimeZone('Asia/Manila');
+            $now = new DateTime('now', $tz);
+            return $now->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            return date('Y-m-d H:i:s');
+        }
+    }
+
+    function dum_probe_attempt($url, $connect_timeout, $timeout, $prefer_head = true) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_NOBODY => $prefer_head,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_TIMEOUT => (int) $timeout,
+            CURLOPT_CONNECTTIMEOUT => (int) $connect_timeout,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_USERAGENT => 'SiteUptimeMonitor/1.0 WordPress',
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_WHATEVER,
+        ]);
+        curl_exec($ch);
+        $errno = curl_errno($ch);
+        $err = $errno ? (string) curl_error($ch) : '';
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $time = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
+        curl_close($ch);
+
+        return [
+            'errno' => $errno,
+            'error' => $err,
+            'http_code' => $code,
+            'time' => $time,
+        ];
+    }
+
+    /**
+     * Probe URL: UP if we get a valid HTTP response (any 1xx–5xx from server).
+     * DOWN on timeout, connection/DNS/TLS failure, or HTTP code 0.
+     */
+    function dum_probe_site($url) {
+        $attempt = dum_probe_attempt($url, 10, 15, true);
+
+        // Retry once with a longer timeout and full body fetch for borderline servers.
+        if (($attempt['http_code'] <= 0 || $attempt['http_code'] >= 600) && (int) $attempt['errno'] !== 0) {
+            $retry = dum_probe_attempt($url, 20, 30, false);
+            if ((int) $retry['http_code'] > 0 && (int) $retry['http_code'] < 600) {
+                $attempt = $retry;
+            }
+        }
+
+        // Fallback to HTTP only when HTTPS failed entirely.
+        if ((int) $attempt['http_code'] === 0 && (int) $attempt['errno'] !== 0) {
+            $http_url = preg_replace('#^https://#i', 'http://', $url);
+            if ($http_url && $http_url !== $url) {
+                $fallback = dum_probe_attempt($http_url, 20, 30, true);
+                if ((int) $fallback['http_code'] > 0 && (int) $fallback['http_code'] < 600) {
+                    $attempt = $fallback;
+                }
+            }
+        }
+
+        $errno = (int) $attempt['errno'];
+        $err = (string) $attempt['error'];
+        $code = (int) $attempt['http_code'];
+        $time = (float) $attempt['time'];
+        $up = ($code > 0 && $code < 600);
+        if ($up) {
+            $detail = 'HTTP ' . $code;
+            if ($time > 0) {
+                $detail .= ' · ' . sprintf('%.2fs', $time);
+            }
+        } else {
+            $detail = $err !== '' ? $err : ($code > 0 ? 'HTTP ' . $code : 'No response');
+        }
+
+        return [
+            'up' => $up,
+            'http_code' => $code,
+            'detail' => $detail,
+        ];
+    }
+
+    function dum_upsert_domain($wpdb, $table_name, $url) {
+        if (!$url) {
+            return null;
+        }
+        $result = dum_probe_site($url);
+        $status = (string) (int) $result['http_code'];
+        $detail = (string) $result['detail'];
+
+        $now = dum_ph_datetime_string();
+
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM $table_name WHERE domain=%s",
+            $url
+        ));
+
+        if ($existing) {
+            $wpdb->update($table_name, [
+                'status' => $status,
+                'detail' => $detail,
+                'last_checked' => $now,
+            ], ['id' => $existing->id]);
+        } else {
+            $wpdb->insert($table_name, [
+                'domain' => $url,
+                'status' => $status,
+                'detail' => $detail,
+                'last_checked' => $now,
+            ]);
+        }
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE domain=%s",
+            $url
+        ));
+    }
+
+    function dum_row_is_up($row) {
+        $code = (int) $row->status;
+        return $code > 0 && $code < 600;
+    }
+
+    function dum_status_sort_label($row) {
+        return dum_row_is_up($row) ? 'UP' : 'DOWN';
+    }
+
+    function dum_format_last_checked($last_checked) {
+        $last_checked = trim((string) $last_checked);
+        if ($last_checked === '') {
+            return '';
+        }
+        try {
+            $tz = new DateTimeZone('Asia/Manila');
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $last_checked, $tz);
+            if ($dt instanceof DateTime) {
+                $dt->setTimezone($tz);
+                return $dt->format('F j, Y g:i a');
+            }
+        } catch (Exception $e) {
+            // Fall through to strtotime fallback.
+        }
+        $ts = strtotime($last_checked);
+        if ($ts === false) {
+            return $last_checked;
+        }
+        $dt = new DateTime('@' . $ts);
+        $dt->setTimezone(new DateTimeZone('Asia/Manila'));
+        return $dt->format('F j, Y g:i a');
+    }
+
+    function dum_render_data_row_html($row, $view_only = false) {
+        $id = (int) $row->id;
+        $up = dum_row_is_up($row);
+        $status_sort_label = dum_status_sort_label($row);
+        $detail = isset($row->detail) ? trim((string) $row->detail) : '';
+
+        ob_start();
+        ?>
+<tr class="checker-data-row" data-row-id="<?php echo esc_attr((string) $id); ?>"
+    data-sort-domain="<?php echo esc_attr($row->domain); ?>"
+    data-sort-status-label="<?php echo esc_attr($status_sort_label); ?>"
+    data-sort-detail="<?php echo esc_attr($detail); ?>"
+    data-sort-time="<?php echo esc_attr($row->last_checked); ?>">
+    <?php if (!$view_only) : ?>
+    <td class="checker-cell-select">
+        <input class="checker-row-select" type="checkbox" value="<?php echo esc_attr((string) $id); ?>" aria-label="Select row">
+    </td>
+    <?php endif; ?>
+    <td class="checker-cell-domain">
+        <a class="checker-domain-link" href="<?php echo esc_url($row->domain); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html($row->domain); ?></a>
+    </td>
+    <td><?php
+        if ($up) {
+            echo "<span class='badge badge-up'>UP</span>";
+        } else {
+            echo "<span class='badge badge-down'>DOWN</span>";
+        }
+        ?></td>
+    <td class="checker-cell-redirect"><?php echo $detail !== '' ? esc_html($detail) : '—'; ?></td>
+    <td class="checker-cell-time"><?php echo esc_html(dum_format_last_checked($row->last_checked)); ?></td>
+    <?php if (!$view_only) : ?>
+    <td class="checker-cell-actions">
+        <a class="checker-delete" href="<?php echo esc_url(add_query_arg('monitor_delete_id', $id)); ?>" data-delete-id="<?php echo esc_attr((string) $id); ?>" title="Remove">×</a>
+    </td>
+    <?php endif; ?>
+</tr>
+        <?php
+        return trim(ob_get_clean());
+    }
+
+    function dum_count_rows() {
+        global $wpdb;
+        dum_ensure_table();
+        return (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . dum_table_name());
+    }
+
+    function dum_render_table_rows_html($rows, $view_only = false) {
+        if (empty($rows) || !is_array($rows)) {
+            return '';
+        }
+        $html = [];
+        foreach ($rows as $row) {
+            $html[] = dum_render_data_row_html($row, $view_only);
+        }
+        return implode("\n", $html);
+    }
+
+    function dum_run_check_all_domains($wpdb, $table_name) {
+        @set_time_limit(600);
+        $all_domains = $wpdb->get_col("SELECT domain FROM $table_name");
+        $checked = 0;
+        if (!empty($all_domains)) {
+            foreach ($all_domains as $saved_domain) {
+                $url = dum_normalize_domain($saved_domain);
+                if (!$url) {
+                    continue;
+                }
+                dum_upsert_domain($wpdb, $table_name, $url);
+                $checked++;
+            }
+        }
+        return $checked;
+    }
+
+    function dum_auto_check_interval_seconds() {
+        return 5 * MINUTE_IN_SECONDS;
+    }
+
+    function dum_ph_now_timestamp() {
+        try {
+            $tz = new DateTimeZone('Asia/Manila');
+            $now = new DateTime('now', $tz);
+            return (int) $now->getTimestamp();
+        } catch (Exception $e) {
+            return time();
+        }
+    }
+
+    function dum_next_slot_timestamp($from_ts = null) {
+        $interval = dum_auto_check_interval_seconds();
+        $ts = $from_ts === null ? dum_ph_now_timestamp() : max(0, (int) $from_ts);
+        return (int) ((floor($ts / $interval) + 1) * $interval);
+    }
+
+    function dum_auto_check_slot($ts) {
+        $interval = dum_auto_check_interval_seconds();
+        $ts = max(0, (int) $ts);
+        return (int) floor($ts / $interval);
+    }
+
+    function dum_next_run_timestamp($wpdb, $table_name) {
+        $now_ts = dum_ph_now_timestamp();
+        $next_ts = dum_next_slot_timestamp($now_ts);
+        update_option('dum_next_auto_run_ts', $next_ts, false);
+        return $next_ts;
+    }
+
+    function dum_maybe_run_scheduled_check($wpdb, $table_name, $now_ts) {
+        $now_ts = (int) $now_ts;
+        $current_slot = dum_auto_check_slot($now_ts);
+        $last_checked_slot = (int) get_option('dum_last_auto_check_slot', -1);
+        if ($last_checked_slot >= $current_slot) {
+            return 0;
+        }
+
+        $lock_key = 'dum_auto_check_lock';
+        if (get_transient($lock_key)) {
+            return 0;
+        }
+        set_transient($lock_key, 1, dum_auto_check_interval_seconds());
+
+        try {
+            $fresh_slot = dum_auto_check_slot(time());
+            $fresh_last_slot = (int) get_option('dum_last_auto_check_slot', -1);
+            if ($fresh_last_slot >= $fresh_slot) {
+                return 0;
+            }
+            $checked = dum_run_check_all_domains($wpdb, $table_name);
+            update_option('dum_last_auto_check_ts', $now_ts, false);
+            update_option('dum_last_auto_check_slot', $fresh_slot, false);
+            update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+            return $checked;
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function dum_maybe_run_target_slot_check($wpdb, $table_name, $now_ts, $target_slot) {
+        $now_ts = (int) $now_ts;
+        $target_slot = (int) $target_slot;
+        if ($target_slot < 0) {
+            return 0;
+        }
+
+        $last_checked_slot = (int) get_option('dum_last_auto_check_slot', -1);
+        if ($last_checked_slot >= $target_slot) {
+            return 0;
+        }
+
+        $lock_key = 'dum_auto_check_lock';
+        if (get_transient($lock_key)) {
+            return 0;
+        }
+        set_transient($lock_key, 1, dum_auto_check_interval_seconds());
+
+        try {
+            $fresh_last_slot = (int) get_option('dum_last_auto_check_slot', -1);
+            if ($fresh_last_slot >= $target_slot) {
+                return 0;
+            }
+            $checked = dum_run_check_all_domains($wpdb, $table_name);
+            $effective_slot = max(dum_auto_check_slot($now_ts), $target_slot);
+            update_option('dum_last_auto_check_ts', $now_ts, false);
+            update_option('dum_last_auto_check_slot', $effective_slot, false);
+            update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+            return $checked;
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function dum_schedule_auto_check_event() {
+        $hook = 'dum_checker_auto_check_cron';
+        if (wp_next_scheduled($hook)) {
+            return;
+        }
+        $first_run = dum_next_slot_timestamp();
+        wp_schedule_event($first_run, 'dum_every_five_minutes', $hook);
+    }
+
+    function dum_auto_check_cron_runner() {
+        global $wpdb;
+        dum_ensure_table();
+        $table_name = dum_table_name();
+        if (dum_is_sheet_source_mode()) {
+            dum_sync_domains_from_google_sheet($wpdb, $table_name, true);
+        }
+        $now_ts = dum_ph_now_timestamp();
+        dum_maybe_run_scheduled_check($wpdb, $table_name, $now_ts);
+        update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+    }
+
+    function dum_ajax_verify_nonce() {
+        if (empty($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'domain_uptime_ajax')) {
+            wp_send_json_error(['message' => 'Invalid security token.'], 403);
+        }
+    }
+
+    function dum_ajax_add() {
+        dum_ajax_verify_nonce();
+        if (dum_is_sheet_source_mode()) {
+            wp_send_json_error(['message' => 'Ang listahan ay mula sa Google Sheet; mag-edit doon.'], 403);
+        }
+        global $wpdb;
+        dum_ensure_table();
+        $table_name = dum_table_name();
+        $raw = isset($_POST['domain_url']) ? wp_unslash($_POST['domain_url']) : '';
+        $url = dum_normalize_domain($raw);
+        if (!$url) {
+            wp_send_json_error(['message' => 'Invalid domain.']);
+        }
+        $row = dum_upsert_domain($wpdb, $table_name, $url);
+        if (!$row) {
+            wp_send_json_error(['message' => 'Could not save domain.']);
+        }
+        wp_send_json_success([
+            'row_html' => dum_render_data_row_html($row, dum_is_sheet_source_mode()),
+            'row_id' => (int) $row->id,
+            'count' => dum_count_rows(),
+        ]);
+    }
+
+    function dum_ajax_delete() {
+        dum_ajax_verify_nonce();
+        if (dum_is_sheet_source_mode()) {
+            wp_send_json_error(['message' => 'Ang listahan ay mula sa Google Sheet; mag-edit doon.'], 403);
+        }
+        global $wpdb;
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        if (!$id) {
+            wp_send_json_error(['message' => 'Invalid row.']);
+        }
+        dum_ensure_table();
+        $wpdb->delete(dum_table_name(), ['id' => $id], ['%d']);
+        wp_send_json_success(['count' => dum_count_rows()]);
+    }
+
+    function dum_ajax_delete_selected() {
+        dum_ajax_verify_nonce();
+        if (dum_is_sheet_source_mode()) {
+            wp_send_json_error(['message' => 'Ang listahan ay mula sa Google Sheet; mag-edit doon.'], 403);
+        }
+        global $wpdb;
+        $ids = isset($_POST['ids']) ? (array) $_POST['ids'] : [];
+        $ids = array_values(array_filter(array_map('absint', $ids)));
+        if (empty($ids)) {
+            wp_send_json_error(['message' => 'No rows selected.']);
+        }
+        dum_ensure_table();
+        $table = dum_table_name();
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $sql = "DELETE FROM $table WHERE id IN ($placeholders)";
+        $wpdb->query($wpdb->prepare($sql, $ids));
+
+        wp_send_json_success(['count' => dum_count_rows()]);
+    }
+
+    /**
+     * Full HTTP re-check for every row. Used when the browser countdown fires so the tab always
+     * gets fresh status even if WP-Cron already ran this 5-minute slot (slot dedupe would skip otherwise).
+     */
+    /**
+     * @return int Number of URLs probed, or -1 if another process holds the lock.
+     */
+    function dum_force_probe_all_with_lock($wpdb, $table_name, $now_ts) {
+        $now_ts = (int) $now_ts;
+        $lock_key = 'dum_auto_check_lock';
+        if (get_transient($lock_key)) {
+            return -1;
+        }
+        set_transient($lock_key, 1, dum_auto_check_interval_seconds());
+        try {
+            $checked = dum_run_check_all_domains($wpdb, $table_name);
+            $slot = dum_auto_check_slot($now_ts);
+            update_option('dum_last_auto_check_ts', $now_ts, false);
+            update_option('dum_last_auto_check_slot', $slot, false);
+            update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+            return $checked;
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function dum_ajax_auto_check() {
+        dum_ajax_verify_nonce();
+        global $wpdb;
+        dum_ensure_table();
+        $table_name = dum_table_name();
+        $vo = dum_is_sheet_source_mode();
+        if ($vo) {
+            dum_sync_domains_from_google_sheet($wpdb, $table_name, false);
+        }
+        $server_now = dum_ph_now_timestamp();
+        $target_slot = isset($_POST['target_slot']) ? (int) wp_unslash($_POST['target_slot']) : -1;
+        if ($target_slot >= 0) {
+            // Countdown tick: always re-probe (slot dedupe would often skip after WP-Cron ran first).
+            $fp = dum_force_probe_all_with_lock($wpdb, $table_name, $server_now);
+            $checked = max(0, $fp);
+        } else {
+            $checked = dum_maybe_run_scheduled_check($wpdb, $table_name, $server_now);
+            // Google Sheet view: 15s AJAX poll — still run a full probe at least once per interval if slot logic skipped.
+            if ($vo && $checked === 0) {
+                $iv = dum_auto_check_interval_seconds();
+                if ($server_now - (int) get_option('dum_sheet_ui_probe_ts', 0) >= $iv) {
+                    $fp = dum_force_probe_all_with_lock($wpdb, $table_name, $server_now);
+                    if ($fp >= 0) {
+                        update_option('dum_sheet_ui_probe_ts', $server_now, false);
+                    }
+                    if ($fp > 0) {
+                        $checked = $fp;
+                    }
+                }
+            }
+        }
+        $rows = $wpdb->get_results("SELECT * FROM $table_name ORDER BY last_checked DESC");
+
+        wp_send_json_success([
+            'checked' => (int) $checked,
+            'count' => dum_count_rows(),
+            'next_run_ts' => (int) dum_next_run_timestamp($wpdb, $table_name),
+            'rows_html' => dum_render_table_rows_html($rows, $vo),
+        ]);
+    }
+
+    add_action('wp_ajax_dum_checker_add', 'dum_ajax_add');
+    add_action('wp_ajax_dum_checker_delete', 'dum_ajax_delete');
+    add_action('wp_ajax_dum_checker_delete_selected', 'dum_ajax_delete_selected');
+    add_action('wp_ajax_dum_checker_auto_check', 'dum_ajax_auto_check');
+    add_action('wp_ajax_nopriv_dum_checker_auto_check', 'dum_ajax_auto_check');
+    add_filter('cron_schedules', function ($schedules) {
+        $schedules['dum_every_five_minutes'] = [
+            'interval' => dum_auto_check_interval_seconds(),
+            'display' => 'Every 5 Minutes (DUM)',
+        ];
+        return $schedules;
+    });
+    add_action('init', 'dum_schedule_auto_check_event');
+    add_action('dum_checker_auto_check_cron', 'dum_auto_check_cron_runner');
+}
+
+function domain_uptime_monitor_shortcode() {
+    global $wpdb;
+
+    date_default_timezone_set('Asia/Manila');
+
+    dum_ensure_table();
+    $table_name = dum_table_name();
+    $server_now = dum_ph_now_timestamp();
+    $next_run_ts = dum_next_run_timestamp($wpdb, $table_name);
+
+    $monitor_bulk_notice = null;
+    $dum_sheet_mode = dum_is_sheet_source_mode();
+    if ($dum_sheet_mode) {
+        $synced = dum_sync_domains_from_google_sheet($wpdb, $table_name, false);
+        if (!$synced['ok'] && (int) $wpdb->get_var("SELECT COUNT(*) FROM $table_name") === 0) {
+            $monitor_bulk_notice = 'Could not load domains from Google Sheet. Set DUM_SHEET_SOURCE_URL in wp-config.php; sharing must be Anyone with the link → Viewer. If domains are on another tab, set DUM_SHEET_GID to that tab’s gid (from the URL #gid=…). If the server cannot verify SSL to Google, try DUM_SHEET_SSL_INSECURE true (last resort only).';
+        }
+    }
+
+    if (function_exists('current_user_can') && current_user_can('manage_options')) {
+        $monitor_clear_url = wp_nonce_url(
+            add_query_arg([
+                'upt_clear' => 1,
+                'upt_confirm' => 'CLEAR',
+            ]),
+            'domain_uptime_clear_all',
+            'upt_nonce'
+        );
+
+        if (isset($_GET['upt_clear_link']) && (string) wp_unslash($_GET['upt_clear_link']) === '1') {
+            $monitor_bulk_notice = 'Clear-all URL (admin only): ' . $monitor_clear_url;
+        }
+
+        if (
+            isset($_GET['upt_clear'], $_GET['upt_confirm'], $_GET['upt_nonce'])
+            && (string) wp_unslash($_GET['upt_clear']) === '1'
+            && (string) wp_unslash($_GET['upt_confirm']) === 'CLEAR'
+            && wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['upt_nonce'])), 'domain_uptime_clear_all')
+        ) {
+            if ($dum_sheet_mode) {
+                $monitor_bulk_notice = 'Listahan ay galing sa Google Sheet — hindi available ang clear-all.';
+            } else {
+                $wpdb->query("TRUNCATE TABLE $table_name");
+                $monitor_bulk_notice = 'All monitored sites have been removed.';
+            }
+        }
+    }
+
+    if (!$dum_sheet_mode && isset($_GET['monitor_delete_id'])) {
+        $wpdb->delete($table_name, ['id' => intval($_GET['monitor_delete_id'])]);
+    }
+
+    // DELETE SELECTED (non-JS fallback)
+    if (
+        !$dum_sheet_mode
+        && isset($_POST['monitor_delete_selected_submit'], $_POST['monitor_delete_selected_nonce'])
+        && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['monitor_delete_selected_nonce'])), 'domain_uptime_delete_selected')
+    ) {
+        $ids = isset($_POST['monitor_selected_ids']) ? (array) $_POST['monitor_selected_ids'] : [];
+        $ids = array_values(array_filter(array_map('absint', $ids)));
+        if (!empty($ids)) {
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $wpdb->query($wpdb->prepare("DELETE FROM $table_name WHERE id IN ($placeholders)", $ids));
+        }
+    }
+
+    if (!$dum_sheet_mode && isset($_POST['monitor_domain_url']) && !isset($_POST['monitor_bulk_submit'])) {
+        $url = dum_normalize_domain(wp_unslash($_POST['monitor_domain_url']));
+        dum_upsert_domain($wpdb, $table_name, $url);
+    }
+
+    if (
+        isset($_POST['monitor_check_all_submit'])
+        && isset($_POST['monitor_check_all_nonce'])
+        && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['monitor_check_all_nonce'])), 'domain_uptime_check_all')
+    ) {
+        if ($dum_sheet_mode) {
+            dum_sync_domains_from_google_sheet($wpdb, $table_name, false);
+        }
+        $is_auto_submit = isset($_POST['dum_auto_tick']) && (string) wp_unslash($_POST['dum_auto_tick']) === '1';
+        if ($is_auto_submit) {
+            $checked = dum_maybe_run_scheduled_check($wpdb, $table_name, $server_now);
+            if ($checked > 0) {
+                $monitor_bulk_notice = sprintf('Auto-check updated %d site(s).', $checked);
+            }
+        } else {
+            $checked = dum_run_check_all_domains($wpdb, $table_name);
+            update_option('dum_last_auto_check_ts', $server_now, false);
+            update_option('dum_last_auto_check_slot', dum_auto_check_slot($server_now), false);
+            update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($server_now), false);
+            $monitor_bulk_notice = sprintf('Re-checked reachability for %d site(s).', $checked);
+        }
+    }
+
+    if (
+        !$dum_sheet_mode
+        && isset($_POST['monitor_bulk_submit'])
+        && isset($_POST['monitor_bulk_nonce'])
+        && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['monitor_bulk_nonce'])), 'domain_uptime_bulk')
+    ) {
+        @set_time_limit(600);
+
+        $lines = [];
+        $raw_text = isset($_POST['monitor_bulk_domains_text']) ? wp_unslash($_POST['monitor_bulk_domains_text']) : '';
+        if ($raw_text !== '') {
+            $lines = array_merge($lines, preg_split('/\r\n|\r|\n/', $raw_text));
+        }
+
+        if (!empty($_FILES['monitor_bulk_csv']['tmp_name']) && is_uploaded_file($_FILES['monitor_bulk_csv']['tmp_name'])) {
+            $fname = isset($_FILES['monitor_bulk_csv']['name']) ? $_FILES['monitor_bulk_csv']['name'] : '';
+            $ext = strtolower(pathinfo($fname, PATHINFO_EXTENSION));
+            if (in_array($ext, ['csv', 'txt'], true) && empty($_FILES['monitor_bulk_csv']['error'])) {
+                $content = file_get_contents($_FILES['monitor_bulk_csv']['tmp_name']);
+                if ($content !== false && $content !== '') {
+                    $lines = array_merge($lines, preg_split('/\r\n|\r|\n/', $content));
+                }
+            }
+        }
+
+        if (!empty($lines)) {
+            $lines[0] = preg_replace('/^\xEF\xBB\xBF/', '', $lines[0]);
+        }
+
+        $seen = [];
+        $processed = 0;
+        $skipped = 0;
+        $max_bulk = 500;
+
+        foreach ($lines as $line) {
+            if ($processed >= $max_bulk) {
+                break;
+            }
+            $line = trim($line);
+            if ($line === '' || (isset($line[0]) && $line[0] === '#')) {
+                continue;
+            }
+            $parts = str_getcsv($line);
+            $cell = isset($parts[0]) ? trim($parts[0]) : '';
+            if ($cell === '') {
+                continue;
+            }
+            $url = dum_normalize_domain($cell);
+            if (!$url) {
+                $skipped++;
+                continue;
+            }
+            if (isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            dum_upsert_domain($wpdb, $table_name, $url);
+            $processed++;
+        }
+
+        if ($processed > 0 || $skipped > 0 || $raw_text !== '' || !empty($_FILES['monitor_bulk_csv']['tmp_name'])) {
+            $monitor_bulk_notice = sprintf(
+                'Bulk import: %1$d site(s) checked. %2$d line(s) skipped (invalid). Max %3$d per run. Duplicates in the same batch are ignored.',
+                $processed,
+                $skipped,
+                $max_bulk
+            );
+        }
+    }
+
+    $rows = $wpdb->get_results("SELECT * FROM $table_name ORDER BY last_checked DESC");
+    $row_count = is_array($rows) ? count($rows) : 0;
+
+    ob_start();
+?>
+<style>
+.monitor-app {
+    --checker-surface: #ffffff;
+    --checker-surface-2: #f8fafc;
+    --checker-border: #e2e8f0;
+    --checker-text: #0f172a;
+    --checker-muted: #64748b;
+    --checker-accent: #2563eb;
+    --checker-accent-hover: #1d4ed8;
+    --checker-radius: 12px;
+    --checker-radius-sm: 8px;
+    --checker-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 24px rgba(15, 23, 42, 0.06);
+    --checker-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--checker-font);
+    color: var(--checker-text);
+    background: linear-gradient(145deg, #0f172a 0%, #1e293b 48%, #0f172a 100%);
+    padding: clamp(20px, 4vw, 32px);
+    border-radius: 20px;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+/* Google Sheet mode: never show add / bulk / delete UI (backup if markup is cached or duplicated). */
+.monitor-app[data-dum-sheet-mode="1"] .checker-input-group,
+.monitor-app[data-dum-sheet-mode="1"] .checker-bulk-toggle,
+.monitor-app[data-dum-sheet-mode="1"] .checker-bulk-drawer,
+.monitor-app[data-dum-sheet-mode="1"] .checker-cell-select,
+.monitor-app[data-dum-sheet-mode="1"] th.checker-cell-select,
+.monitor-app[data-dum-sheet-mode="1"] .checker-cell-actions,
+.monitor-app[data-dum-sheet-mode="1"] th.checker-cell-actions,
+.monitor-app[data-dum-sheet-mode="1"] .checker-delete-selected-btn,
+.monitor-app[data-dum-sheet-mode="1"] .checker-selected-bar .checker-per-page-label,
+.monitor-app[data-dum-sheet-mode="1"] a.checker-delete,
+.monitor-app[data-dum-sheet-mode="1"] #monitorDeleteModal {
+    display: none !important;
+}
+
+.monitor-app *,
+.monitor-app *::before,
+.monitor-app *::after {
+    box-sizing: border-box;
+}
+
+.monitor-app .checker-dash-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.monitor-app .checker-dash-top__text h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #f8fafc;
+}
+
+.monitor-app .checker-dash-top__text p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #94a3b8;
+    max-width: 42ch;
+    line-height: 1.45;
+}
+
+.monitor-app .checker-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(248, 250, 252, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.monitor-app .checker-stat strong {
+    color: #fff;
+    font-weight: 700;
+}
+
+.monitor-app .checker-stat-countdown {
+    display: inline-flex;
+    align-items: center;
+    padding-right: 8px;
+    margin-right: 2px;
+    border-right: 1px solid rgba(148, 163, 184, 0.35);
+    color: #cbd5e1;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.monitor-app .checker-dash-top__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.monitor-app .checker-check-all-btn {
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(15, 23, 42, 0.4);
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.monitor-app .checker-check-all-btn:hover {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: #94a3b8;
+}
+
+.monitor-app .checker-toolbar-grid {
+    --checker-bar-height: 54px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(200px, 280px);
+    gap: 12px;
+    align-items: stretch;
+    margin-bottom: 20px;
+}
+
+.monitor-app .checker-toolbar-grid .checker-input-group {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 100%;
+    align-self: stretch;
+}
+
+.monitor-app .checker-toolbar-grid .checker-search {
+    width: 100%;
+    max-width: 280px;
+    justify-self: end;
+    min-height: var(--checker-bar-height);
+    box-sizing: border-box;
+}
+
+.monitor-app .checker-toolbar-grid--sheet-only {
+    grid-template-columns: 1fr minmax(240px, 400px);
+    justify-items: stretch;
+}
+
+.monitor-app .checker-toolbar-grid--sheet-only .checker-search {
+    grid-column: 2;
+    justify-self: end;
+    width: 100%;
+    max-width: 400px;
+}
+
+.monitor-app .checker-bulk-toggle {
+    flex-shrink: 0;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0 20px;
+    min-height: var(--checker-bar-height);
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    border-radius: var(--checker-radius);
+    border: 1px solid var(--checker-border);
+    background: #fff;
+    color: #0a0a0a;
+    box-shadow: var(--checker-shadow);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.monitor-app .checker-bulk-toggle:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.monitor-app .checker-bulk-toggle[aria-expanded="true"] {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.monitor-app .checker-bulk-drawer {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+}
+
+.monitor-app .checker-bulk-drawer[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    .monitor-app .checker-toolbar-grid {
+        grid-template-columns: 1fr;
+    }
+    .monitor-app .checker-toolbar-grid .checker-search {
+        justify-self: stretch;
+        max-width: none;
+    }
+    .monitor-app .checker-toolbar-grid--sheet-only .checker-search {
+        grid-column: 1;
+        justify-self: stretch;
+        max-width: none;
+    }
+    .monitor-app .checker-bulk-toggle {
+        justify-self: start;
+    }
+}
+
+.monitor-app .checker-bulk-notice {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: var(--checker-radius-sm);
+    background: rgba(37, 99, 235, 0.15);
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    color: #e2e8f0;
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+.monitor-app .checker-bulk-panel {
+    background: #fff;
+    border: 1px solid var(--checker-border);
+    border-radius: var(--checker-radius);
+    box-shadow: var(--checker-shadow);
+    padding: 16px 18px;
+    margin-bottom: 0;
+    color: #0a0a0a;
+}
+
+.monitor-app .checker-bulk-hint {
+    font-size: 0.8125rem;
+    color: #404040;
+    margin: 0 0 12px;
+    line-height: 1.45;
+}
+
+.monitor-app .checker-bulk-hint strong {
+    color: #0a0a0a;
+    font-weight: 600;
+}
+
+.monitor-app .checker-bulk-panel .checker-per-page-label {
+    color: #171717;
+}
+
+.monitor-app .checker-bulk-textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px 14px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.8125rem;
+    color: #0a0a0a;
+    background: #fff;
+    border: 1px solid #d4d4d4;
+    border-radius: var(--checker-radius-sm);
+    resize: vertical;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+.monitor-app .checker-bulk-textarea::placeholder {
+    color: #737373;
+}
+
+.monitor-app .checker-bulk-textarea:focus {
+    outline: none;
+    border-color: #737373;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.monitor-app .checker-bulk-file {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    font-size: 0.875rem;
+    margin-bottom: 14px;
+    color: #171717;
+}
+
+.monitor-app .checker-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.monitor-app .checker-bulk-submit {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    border-radius: var(--checker-radius-sm);
+    border: none;
+    background: var(--checker-accent);
+    color: #fff;
+    cursor: pointer;
+}
+
+.monitor-app .checker-bulk-submit:hover {
+    background: var(--checker-accent-hover);
+}
+
+.monitor-app .checker-input-group {
+    display: flex;
+    flex: 1 1 280px;
+    min-width: 0;
+    background: var(--checker-surface);
+    border-radius: var(--checker-radius);
+    padding: 4px;
+    box-shadow: var(--checker-shadow);
+    border: 1px solid var(--checker-border);
+}
+
+.monitor-app .checker-input-group input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    padding: 12px 14px;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    background: transparent;
+    color: var(--checker-text);
+}
+
+.monitor-app .checker-input-group input::placeholder {
+    color: #94a3b8;
+}
+
+.monitor-app .checker-input-group button {
+    flex-shrink: 0;
+    background: var(--checker-accent);
+    color: #fff;
+    border: none;
+    padding: 0 22px;
+    border-radius: var(--checker-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.monitor-app .checker-input-group button:hover {
+    background: var(--checker-accent-hover);
+}
+
+.monitor-app .checker-input-group button:active {
+    transform: scale(0.98);
+}
+
+.monitor-app .checker-search {
+    flex: 0 1 260px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--checker-surface);
+    border: 1px solid var(--checker-border);
+    border-radius: var(--checker-radius);
+    padding: 4px 4px 4px 14px;
+    box-shadow: var(--checker-shadow);
+}
+
+.monitor-app .checker-search::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    opacity: 0.45;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.monitor-app .checker-search input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    padding: 12px 12px 12px 0;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    background: transparent;
+    color: var(--checker-text);
+}
+
+.monitor-app .checker-table-wrap {
+    background: #000;
+    border-radius: var(--checker-radius);
+    border: 1px solid #262626;
+    box-shadow: var(--checker-shadow);
+    overflow: hidden;
+}
+
+.monitor-app .checker-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.monitor-app table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.monitor-app thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 14px 18px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #a3a3a3;
+    background: #000;
+    border-bottom: 1px solid #404040;
+    white-space: nowrap;
+}
+
+.monitor-app tbody td {
+    padding: 14px 18px;
+    vertical-align: middle;
+    border-bottom: 1px solid #262626;
+}
+
+.monitor-app tbody tr.checker-row-light td {
+    background: #fff;
+    color: #334155;
+    border-bottom-color: #e5e5e5;
+}
+
+.monitor-app tbody tr.checker-row-dark td {
+    background: #000;
+    color: #e5e5e5;
+    border-bottom-color: #333;
+}
+
+.monitor-app tbody tr.checker-data-row:last-child td {
+    border-bottom: none;
+}
+
+.monitor-app tbody tr {
+    transition: background 0.12s ease;
+}
+
+.monitor-app tbody tr.checker-row-light:hover td {
+    background: #f4f4f5;
+}
+
+.monitor-app tbody tr.checker-row-dark:hover td {
+    background: #0a0a0a;
+}
+
+.monitor-app .checker-cell-domain {
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #0f172a;
+    word-break: break-all;
+}
+
+.monitor-app .checker-domain-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.monitor-app .checker-domain-link:hover,
+.monitor-app .checker-domain-link:focus-visible {
+    color: var(--checker-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.monitor-app tbody tr.checker-row-dark .checker-cell-domain {
+    color: #fafafa;
+}
+
+.monitor-app .checker-cell-redirect {
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.75rem;
+    color: #475569;
+    word-break: break-all;
+    max-width: 280px;
+}
+
+.monitor-app tbody tr.checker-row-dark .checker-cell-redirect {
+    color: #a3a3a3;
+}
+
+.monitor-app .checker-cell-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--checker-muted);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.monitor-app tbody tr.checker-row-dark .checker-cell-time {
+    color: #737373;
+}
+
+.monitor-app .checker-cell-actions {
+    width: 52px;
+    text-align: center;
+}
+
+.monitor-app thead th.checker-cell-actions {
+    text-align: center;
+}
+
+.monitor-app .checker-th-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.monitor-app .checker-th-label {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.3;
+}
+
+.monitor-app .checker-th-sort {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.monitor-app .checker-sort-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 16px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid #525252;
+    border-radius: 3px;
+    background: #171717;
+    color: #d4d4d4;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.monitor-app .checker-sort-btn:hover {
+    background: #262626;
+    color: #fff;
+    border-color: #737373;
+}
+
+.monitor-app .checker-sort-btn:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+}
+
+.monitor-app .checker-sort-btn:active {
+    background: #404040;
+}
+
+.monitor-app .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+}
+
+.monitor-app .badge-up { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.monitor-app .badge-down { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+.monitor-app .checker-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--checker-radius-sm);
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+}
+
+.monitor-app .checker-delete:hover {
+    color: #dc2626;
+    background: #fef2f2;
+}
+
+.monitor-app tbody tr.checker-row-dark .checker-delete {
+    color: #737373;
+}
+
+.monitor-app tbody tr.checker-row-dark .checker-delete:hover {
+    color: #fca5a5;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.monitor-app .checker-empty {
+    padding: 48px 24px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.9375rem;
+}
+
+.monitor-app tbody tr.checker-table-empty td.checker-empty {
+    background: #fff;
+    border-bottom: none;
+}
+
+.monitor-app .checker-cell-select {
+    width: 44px;
+    text-align: center;
+}
+
+.monitor-app thead th.checker-cell-select {
+    text-align: center;
+}
+
+.monitor-app .checker-row-select,
+.monitor-app .checker-select-all {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--checker-accent);
+    cursor: pointer;
+}
+
+.monitor-app .checker-selected-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.monitor-app .checker-delete-selected-btn {
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    background: rgba(127, 29, 29, 0.65);
+    color: #fef2f2;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.monitor-app .checker-delete-selected-btn:hover:not(:disabled) {
+    background: rgba(153, 27, 27, 0.9);
+    border-color: #fca5a5;
+}
+
+.monitor-app .checker-delete-selected-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.monitor-app .checker-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(16px, 4vw, 32px);
+    font-family: var(--checker-font);
+}
+
+.monitor-app .checker-delete-modal[hidden] {
+    display: none;
+}
+
+.monitor-app .checker-delete-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(8px);
+}
+
+.monitor-app .checker-delete-modal__dialog {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    border-radius: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+    background: linear-gradient(145deg, #0f172a 0%, #1e293b 48%, #0f172a 100%);
+}
+
+.monitor-app .checker-delete-modal__head {
+    padding: 22px 22px 12px;
+    background: transparent;
+    border-bottom: none;
+}
+
+.monitor-app .checker-delete-modal__title {
+    margin: 0;
+    font-size: clamp(1.15rem, 2.2vw, 1.35rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    color: #f8fafc;
+}
+
+.monitor-app .checker-delete-modal__body {
+    padding: 0 22px 20px;
+    background: transparent;
+    color: #94a3b8;
+}
+
+.monitor-app .checker-delete-modal__text {
+    margin: 0 0 14px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #94a3b8;
+    max-width: 38ch;
+}
+
+.monitor-app .checker-delete-modal__domain {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: var(--checker-radius-sm);
+    background: rgba(248, 250, 252, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #e2e8f0;
+    word-break: break-all;
+}
+
+.monitor-app .checker-delete-modal__foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px 22px;
+    background: rgba(15, 23, 42, 0.35);
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.monitor-app .checker-delete-modal__btn {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.monitor-app .checker-delete-modal__btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.monitor-app .checker-delete-modal__btn--cancel {
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+}
+
+.monitor-app .checker-delete-modal__btn--cancel:hover:not(:disabled) {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: #94a3b8;
+    color: #fff;
+}
+
+.monitor-app .checker-delete-modal__btn--danger {
+    background: rgba(127, 29, 29, 0.85);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: #fef2f2;
+}
+
+.monitor-app .checker-delete-modal__btn--danger:hover:not(:disabled) {
+    background: #991b1b;
+    border-color: #fca5a5;
+}
+
+.monitor-app .checker-pagination-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(248, 250, 252, 0.06);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: var(--checker-radius);
+}
+
+.monitor-app .checker-pagination-bar__left {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-self: start;
+}
+
+.monitor-app .checker-pagination-bar__right {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-self: end;
+    justify-content: flex-end;
+}
+
+.monitor-app .checker-pagination-bar__center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    grid-column: 2;
+}
+
+.monitor-app .checker-pagination-bar__spacer {
+    grid-column: 3;
+}
+
+.monitor-app .checker-per-page-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #cbd5e1;
+}
+
+.monitor-app .checker-per-page-select {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 8px 32px 8px 12px;
+    border-radius: var(--checker-radius-sm);
+    border: 1px solid var(--checker-border);
+    background: #fff;
+    color: #0f172a;
+    cursor: pointer;
+}
+
+.monitor-app .checker-page-btn {
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--checker-radius-sm);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(15, 23, 42, 0.5);
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.monitor-app .checker-page-btn:hover:not(:disabled) {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: #64748b;
+}
+
+.monitor-app .checker-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.monitor-app .checker-page-info {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    text-align: center;
+    white-space: nowrap;
+}
+</style>
+
+<div class="monitor-app" id="monitorAppRoot" data-dum-ajax="<?php echo esc_url(admin_url('admin-ajax.php')); ?>" data-dum-nonce="<?php echo esc_attr(wp_create_nonce('domain_uptime_ajax')); ?>" data-dum-server-now="<?php echo esc_attr((string) $server_now); ?>" data-dum-next-run="<?php echo esc_attr((string) $next_run_ts); ?>" data-dum-sheet-mode="<?php echo $dum_sheet_mode ? '1' : '0'; ?>">
+
+    <header class="checker-dash-top">
+        <div class="checker-dash-top__text">
+            <h1>Site uptime monitoring</h1>
+            <p>Check whether each domain responds over HTTP. UP means the server returned a valid HTTP status; DOWN means timeout, connection error, or no response.</p>
+        </div>
+        <div class="checker-dash-top__meta">
+            <span class="checker-stat"><span class="checker-stat-countdown" id="monitorAutoCountdown" data-next-run-ts="<?php echo esc_attr((string) (int) $next_run_ts); ?>" data-server-now="<?php echo esc_attr((string) (int) $server_now); ?>" aria-live="polite">05:00</span><strong id="monitorStatCount"><?php echo (int) $row_count; ?></strong> tracked</span>
+            <form method="post" style="margin:0;" id="monitorAutoCheckForm">
+                <?php wp_nonce_field('domain_uptime_check_all', 'monitor_check_all_nonce'); ?>
+                <input type="hidden" name="dum_auto_tick" id="monitorAutoTickInput" value="0">
+                <button type="submit" name="monitor_check_all_submit" value="1" class="checker-check-all-btn">Check all sites</button>
+            </form>
+        </div>
+    </header>
+
+    <?php if ($monitor_bulk_notice !== null) : ?>
+    <div class="checker-bulk-notice" role="status"><?php echo esc_html($monitor_bulk_notice); ?></div>
+    <?php endif; ?>
+
+    <div class="checker-toolbar-grid<?php echo $dum_sheet_mode ? ' checker-toolbar-grid--sheet-only' : ''; ?>">
+        <?php if (!$dum_sheet_mode) : ?>
+        <form method="post" class="checker-input-group" id="monitorAddDomainForm">
+            <input type="text" name="monitor_domain_url" id="monitorAddDomainInput" placeholder="example.com or https://…" required autocomplete="off">
+            <button type="submit" id="monitorAddDomainSubmit">Add site</button>
+        </form>
+        <button type="button" class="checker-bulk-toggle" id="monitorBulkToggle" aria-expanded="<?php echo $monitor_bulk_notice !== null ? 'true' : 'false'; ?>" aria-controls="monitorBulkDrawer">Bulk import</button>
+        <?php endif; ?>
+        <div class="checker-search">
+            <input type="text" id="searchMonitorDomain" placeholder="Filter table…" autocomplete="off">
+        </div>
+        <?php if (!$dum_sheet_mode) : ?>
+        <div id="monitorBulkDrawer" class="checker-bulk-drawer"<?php echo $monitor_bulk_notice !== null ? '' : ' hidden'; ?>>
+            <div class="checker-bulk-panel">
+                <p class="checker-bulk-hint">Upload a <strong>.csv</strong> or <strong>.txt</strong> file, or paste domains below (one per line). For Excel, use <strong>Save As → CSV (UTF-8)</strong>. Each row uses the <strong>first column</strong> as the URL. Duplicates in the same batch are skipped. Up to <strong>500</strong> sites per run.</p>
+                <form method="post" enctype="multipart/form-data" class="checker-bulk-form">
+                    <?php wp_nonce_field('domain_uptime_bulk', 'monitor_bulk_nonce'); ?>
+                    <textarea class="checker-bulk-textarea" name="monitor_bulk_domains_text" placeholder="example.com&#10;https://another.test&#10;site.org,ignored-extra-column" autocomplete="off"></textarea>
+                    <label class="checker-per-page-label" for="monitor_bulk_csv" style="display:block;margin-bottom:6px;">CSV / text file</label>
+                    <input class="checker-bulk-file" type="file" id="monitor_bulk_csv" name="monitor_bulk_csv" accept=".csv,.txt,text/csv,text/plain">
+                    <div class="checker-bulk-actions">
+                        <button type="submit" name="monitor_bulk_submit" value="1" class="checker-bulk-submit">Import &amp; check all</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="checker-table-wrap">
+        <div class="checker-table-scroll">
+        <table id="monitorDomainTable" data-dum-empty-colspan="<?php echo $dum_sheet_mode ? '4' : '6'; ?>">
+            <thead>
+            <tr>
+                <?php if (!$dum_sheet_mode) : ?>
+                <th class="checker-cell-select" scope="col">
+                    <input id="monitorSelectAll" class="checker-select-all" type="checkbox" aria-label="Select all visible rows">
+                </th>
+                <?php endif; ?>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Domain</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="domain" data-monitor-dir="asc" aria-label="Sort domain ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="domain" data-monitor-dir="desc" aria-label="Sort domain descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Status</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="status" data-monitor-dir="asc" aria-label="Sort status ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="status" data-monitor-dir="desc" aria-label="Sort status descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Response</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="detail" data-monitor-dir="asc" aria-label="Sort response ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="detail" data-monitor-dir="desc" aria-label="Sort response descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Last checked</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="time" data-monitor-dir="asc" aria-label="Sort date ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-monitor-sort="time" data-monitor-dir="desc" aria-label="Sort date descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <?php if (!$dum_sheet_mode) : ?>
+                <th class="checker-cell-actions" scope="col">Action</th>
+                <?php endif; ?>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($rows)): ?>
+            <tr class="checker-table-empty">
+                <td colspan="<?php echo $dum_sheet_mode ? '4' : '6'; ?>" class="checker-empty"><?php echo $dum_sheet_mode ? 'Walang domain sa sheet o hindi ma-load ang CSV.' : 'No sites yet. Add one above to start monitoring.'; ?></td>
+            </tr>
+            <?php else: foreach ($rows as $row): echo dum_render_data_row_html($row, $dum_sheet_mode); endforeach; endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="checker-pagination-bar" id="monitorPaginationBar" aria-label="Table pagination">
+        <?php if (!$dum_sheet_mode) : ?>
+        <div class="checker-pagination-bar__left">
+            <span class="checker-selected-bar">
+                <button type="button" class="checker-delete-selected-btn" id="monitorDeleteSelectedBtn" disabled>Delete selected</button>
+                <span class="checker-per-page-label" id="monitorSelectedCountLabel" aria-live="polite"></span>
+            </span>
+        </div>
+        <?php else : ?>
+        <div class="checker-pagination-bar__left" aria-hidden="true"></div>
+        <?php endif; ?>
+        <div class="checker-pagination-bar__center">
+            <button type="button" class="checker-page-btn" id="monitorPagePrev">Previous</button>
+            <span class="checker-page-info" id="monitorPageInfo" aria-live="polite"></span>
+            <button type="button" class="checker-page-btn" id="monitorPageNext">Next</button>
+        </div>
+        <div class="checker-pagination-bar__right">
+            <label class="checker-per-page-label" for="monitorPerPage">Rows per page</label>
+            <select id="monitorPerPage" class="checker-per-page-select">
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="all">All sites</option>
+            </select>
+        </div>
+    </div>
+
+    <?php if (!$dum_sheet_mode) : ?>
+    <div id="monitorDeleteModal" class="checker-delete-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="monitorDeleteModalTitle">
+        <div class="checker-delete-modal__backdrop" id="monitorDeleteModalBackdrop" tabindex="-1"></div>
+        <div class="checker-delete-modal__dialog">
+            <div class="checker-delete-modal__head">
+                <h2 id="monitorDeleteModalTitle" class="checker-delete-modal__title">Remove site</h2>
+            </div>
+            <div class="checker-delete-modal__body">
+                <p class="checker-delete-modal__text">Remove this site from your monitoring list? You can add it again later.</p>
+                <p class="checker-delete-modal__domain" id="monitorDeleteModalDomain"></p>
+            </div>
+            <div class="checker-delete-modal__foot">
+                <button type="button" class="checker-delete-modal__btn checker-delete-modal__btn--cancel" id="monitorDeleteModalCancel">Cancel</button>
+                <button type="button" class="checker-delete-modal__btn checker-delete-modal__btn--danger" id="monitorDeleteModalConfirm">Remove</button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+</div>
+
+<script>
+(function () {
+    var table = document.getElementById('monitorDomainTable');
+    var search = document.getElementById('searchMonitorDomain');
+    var pagBar = document.getElementById('monitorPaginationBar');
+    var perPageSel = document.getElementById('monitorPerPage');
+    var pagePrev = document.getElementById('monitorPagePrev');
+    var pageNext = document.getElementById('monitorPageNext');
+    var pageInfo = document.getElementById('monitorPageInfo');
+    var selectAll = document.getElementById('monitorSelectAll');
+    var deleteSelectedBtn = document.getElementById('monitorDeleteSelectedBtn');
+    var selectedCountLabel = document.getElementById('monitorSelectedCountLabel');
+    if (!table) return;
+
+    var currentPage = 1;
+
+    var appRoot = document.getElementById('monitorAppRoot');
+    var ajaxUrl = appRoot ? appRoot.getAttribute('data-dum-ajax') : '';
+    var ajaxNonce = appRoot ? appRoot.getAttribute('data-dum-nonce') : '';
+    var addForm = document.getElementById('monitorAddDomainForm');
+    var addInput = document.getElementById('monitorAddDomainInput');
+    var addSubmit = document.getElementById('monitorAddDomainSubmit');
+    var statCount = document.getElementById('monitorStatCount');
+    var autoCheckForm = document.getElementById('monitorAutoCheckForm');
+    var autoCountdown = document.getElementById('monitorAutoCountdown');
+    var autoCountdownTimer = null;
+    var autoSubmitLock = false;
+    var countdownSkewMs = 0;
+    var autoIntervalSec = 300;
+
+    if (autoCountdown) {
+        var serverNowTs = parseInt(autoCountdown.getAttribute('data-server-now') || '0', 10);
+        if (!isNaN(serverNowTs) && serverNowTs > 0) {
+            countdownSkewMs = Date.now() - (serverNowTs * 1000);
+        }
+    }
+
+    function monitorClientNowTs() {
+        return Math.floor((Date.now() - countdownSkewMs) / 1000);
+    }
+
+    function monitorFormatCountdown(totalSec) {
+        var sec = Math.max(0, parseInt(totalSec, 10) || 0);
+        var mm = Math.floor(sec / 60);
+        var ss = sec % 60;
+        return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+    }
+
+    function monitorRequestAutoCheck(targetSlot) {
+        if (!autoCountdown || !ajaxUrl || !ajaxNonce || autoSubmitLock) return;
+        autoSubmitLock = true;
+        var body = new URLSearchParams();
+        body.set('action', 'dum_checker_auto_check');
+        body.set('nonce', ajaxNonce);
+        if (typeof targetSlot === 'number' && targetSlot >= 0) {
+            body.set('target_slot', String(targetSlot));
+        }
+
+        fetch(ajaxUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res && res.success && res.data) {
+                    var data = res.data;
+                    if (typeof data.count !== 'undefined') {
+                        monitorUpdateStatCount(parseInt(data.count, 10) || 0);
+                    }
+                    if (typeof data.next_run_ts !== 'undefined') {
+                        var nextTs = parseInt(data.next_run_ts, 10) || 0;
+                        if (nextTs > monitorClientNowTs()) {
+                            autoCountdown.setAttribute('data-next-run-ts', String(nextTs));
+                        } else {
+                            autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+                        }
+                    } else {
+                        autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+                    }
+                    if (typeof data.rows_html === 'string') {
+                        var tbody = table.querySelector('tbody');
+                        if (tbody) {
+                            if (data.rows_html.trim() === '') {
+                                tbody.innerHTML = '';
+                                monitorEnsureEmptyPlaceholder();
+                            } else {
+                                tbody.innerHTML = data.rows_html;
+                            }
+                            currentPage = 1;
+                            monitorRebuildView();
+                            monitorUpdateSelectedUI();
+                        }
+                    }
+                } else {
+                    if (autoCheckForm) {
+                        var autoTickInput2 = autoCheckForm.querySelector('input[name="dum_auto_tick"]');
+                        if (!autoTickInput2) {
+                            autoTickInput2 = document.createElement('input');
+                            autoTickInput2.type = 'hidden';
+                            autoTickInput2.name = 'dum_auto_tick';
+                            autoCheckForm.appendChild(autoTickInput2);
+                        }
+                        autoTickInput2.value = '1';
+                        autoCheckForm.submit();
+                        return;
+                    }
+                    autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+                }
+                autoSubmitLock = false;
+                monitorUpdateAutoCountdown();
+            })
+            .catch(function () {
+                if (autoCheckForm) {
+                    var autoTickInput3 = autoCheckForm.querySelector('input[name="dum_auto_tick"]');
+                    if (!autoTickInput3) {
+                        autoTickInput3 = document.createElement('input');
+                        autoTickInput3.type = 'hidden';
+                        autoTickInput3.name = 'dum_auto_tick';
+                        autoCheckForm.appendChild(autoTickInput3);
+                    }
+                    autoTickInput3.value = '1';
+                    autoCheckForm.submit();
+                    return;
+                }
+                autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+                autoSubmitLock = false;
+            });
+    }
+
+    function monitorUpdateAutoCountdown() {
+        if (!autoCountdown) return;
+        var nextRunTs = parseInt(autoCountdown.getAttribute('data-next-run-ts') || '0', 10);
+        if (isNaN(nextRunTs) || nextRunTs <= 0) return;
+        var nowTs = monitorClientNowTs();
+        var remaining = nextRunTs - nowTs;
+        autoCountdown.textContent = monitorFormatCountdown(remaining);
+        if (remaining <= 0) {
+            autoCountdown.textContent = '00:00';
+            autoCountdown.setAttribute('data-next-run-ts', String(nowTs + autoIntervalSec));
+            var targetSlot = Math.floor(nextRunTs / autoIntervalSec);
+            monitorRequestAutoCheck(targetSlot);
+        }
+    }
+
+    if (autoCountdown) {
+        monitorUpdateAutoCountdown();
+        autoCountdownTimer = window.setInterval(monitorUpdateAutoCountdown, 1000);
+        window.setInterval(function () {
+            if (document.visibilityState === 'hidden') return;
+            monitorRequestAutoCheck(-1);
+        }, 15000);
+    }
+
+    function monitorSelectedIds() {
+        var ids = [];
+        table.querySelectorAll('tbody tr.checker-data-row input.checker-row-select:checked').forEach(function (cb) {
+            ids.push(cb.value);
+        });
+        return ids;
+    }
+
+    function monitorUpdateSelectedUI() {
+        var ids = monitorSelectedIds();
+        if (deleteSelectedBtn) deleteSelectedBtn.disabled = ids.length === 0;
+        if (selectedCountLabel) selectedCountLabel.textContent = ids.length ? (ids.length + ' selected') : '';
+
+        if (selectAll) {
+            var visibleCbs = [];
+            table.querySelectorAll('tbody tr.checker-data-row').forEach(function (row) {
+                if (row.style.display === 'none') return;
+                var cb = row.querySelector('input.checker-row-select');
+                if (cb) visibleCbs.push(cb);
+            });
+            if (visibleCbs.length === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else {
+                var checkedCount = visibleCbs.filter(function (cb) { return cb.checked; }).length;
+                selectAll.checked = checkedCount === visibleCbs.length;
+                selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCbs.length;
+            }
+        }
+    }
+
+    function monitorUpdateStatCount(n) {
+        if (statCount) statCount.textContent = String(n);
+    }
+
+    function monitorRemoveEmptyPlaceholder() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var emptyRow = tbody.querySelector('tr.checker-table-empty');
+        if (emptyRow) emptyRow.remove();
+    }
+
+    function monitorEnsureEmptyPlaceholder() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        if (tbody.querySelectorAll('tr.checker-data-row').length) return;
+        if (tbody.querySelector('tr.checker-table-empty')) return;
+        var tr = document.createElement('tr');
+        tr.className = 'checker-table-empty';
+        var td = document.createElement('td');
+        var colspan = 6;
+        if (table.getAttribute('data-dum-empty-colspan')) {
+            colspan = parseInt(table.getAttribute('data-dum-empty-colspan'), 10) || 6;
+        }
+        td.colSpan = colspan;
+        td.className = 'checker-empty';
+        var sheetMode = appRoot && appRoot.getAttribute('data-dum-sheet-mode') === '1';
+        td.textContent = sheetMode ? 'Walang domain sa sheet o hindi ma-load ang CSV.' : 'No sites yet. Add one above to start monitoring.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+
+    function dumParseRowHtml(html) {
+        var wrap = document.createElement('tbody');
+        wrap.innerHTML = html.trim();
+        return wrap.firstElementChild;
+    }
+
+    if (ajaxUrl && ajaxNonce && addForm && addInput) {
+        addForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var val = addInput.value.trim();
+            if (!val) return;
+            if (addSubmit) addSubmit.disabled = true;
+            var body = new URLSearchParams();
+            body.set('action', 'dum_checker_add');
+            body.set('nonce', ajaxNonce);
+            body.set('domain_url', val);
+            fetch(ajaxUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (addSubmit) addSubmit.disabled = false;
+                    if (!res || !res.success) {
+                        var msg = (res && res.data && res.data.message) ? res.data.message : 'Request failed.';
+                        window.alert(msg);
+                        return;
+                    }
+                    var rowEl = dumParseRowHtml(res.data.row_html);
+                    if (!rowEl) return;
+                    var tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    monitorRemoveEmptyPlaceholder();
+                    var rid = String(res.data.row_id || rowEl.getAttribute('data-row-id') || '');
+                    if (rid) {
+                        var old = tbody.querySelector('tr.checker-data-row[data-row-id="' + rid + '"]');
+                        if (old) old.remove();
+                    }
+                    tbody.insertBefore(rowEl, tbody.firstChild);
+                    addInput.value = '';
+                    monitorUpdateStatCount(res.data.count);
+                    currentPage = 1;
+                    monitorRebuildView();
+                    monitorUpdateSelectedUI();
+                })
+                .catch(function () {
+                    if (addSubmit) addSubmit.disabled = false;
+                    window.alert('Network error.');
+                });
+        });
+    }
+
+    var deleteModal = document.getElementById('monitorDeleteModal');
+    var deleteModalBackdrop = document.getElementById('monitorDeleteModalBackdrop');
+    var deleteModalDomain = document.getElementById('monitorDeleteModalDomain');
+    var deleteModalTitle = document.getElementById('monitorDeleteModalTitle');
+    var deleteModalText = deleteModal ? deleteModal.querySelector('.checker-delete-modal__text') : null;
+    var deleteModalCancel = document.getElementById('monitorDeleteModalCancel');
+    var deleteModalConfirm = document.getElementById('monitorDeleteModalConfirm');
+    var pendingDelete = null;
+
+    function monitorConfigureDeleteModal(title, text, domainLine, confirmLabel) {
+        if (deleteModalTitle && title) deleteModalTitle.textContent = title;
+        if (deleteModalText && text) deleteModalText.textContent = text;
+        if (deleteModalDomain) deleteModalDomain.textContent = domainLine || '—';
+        if (deleteModalConfirm && confirmLabel) deleteModalConfirm.textContent = confirmLabel;
+    }
+
+    function monitorCloseDeleteModal() {
+        pendingDelete = null;
+        if (deleteModal) {
+            deleteModal.setAttribute('hidden', '');
+            deleteModal.setAttribute('aria-hidden', 'true');
+        }
+        if (deleteModalCancel) deleteModalCancel.disabled = false;
+        if (deleteModalConfirm) deleteModalConfirm.disabled = false;
+        document.removeEventListener('keydown', monitorDeleteModalKeydown);
+    }
+
+    function monitorDeleteModalKeydown(ev) {
+        if (ev.key === 'Escape') {
+            ev.preventDefault();
+            monitorCloseDeleteModal();
+        }
+    }
+
+    function monitorOpenDeleteModal(link, id, domainLabel) {
+        if (!deleteModal || !deleteModalDomain) return;
+        pendingDelete = { kind: 'single', link: link, id: id };
+        monitorConfigureDeleteModal(
+            'Remove site',
+            'Remove this site from your monitoring list? You can add it again later.',
+            domainLabel || '—',
+            'Remove'
+        );
+        deleteModal.removeAttribute('hidden');
+        deleteModal.setAttribute('aria-hidden', 'false');
+        document.addEventListener('keydown', monitorDeleteModalKeydown);
+        if (deleteModalCancel) deleteModalCancel.focus();
+    }
+
+    function monitorRunPendingDelete() {
+        if (!pendingDelete || !ajaxUrl || !ajaxNonce) return;
+        var kind = pendingDelete.kind || 'single';
+        var link = pendingDelete.link || null;
+        var id = pendingDelete.id || null;
+        var ids = pendingDelete.ids || null;
+        monitorCloseDeleteModal();
+        var body = new URLSearchParams();
+        body.set('action', kind === 'bulk' ? 'dum_checker_delete_selected' : 'dum_checker_delete');
+        body.set('nonce', ajaxNonce);
+        if (kind === 'bulk') {
+            (ids || []).forEach(function (x) { body.append('ids[]', x); });
+        } else {
+            body.set('id', id);
+        }
+        if (link) link.style.pointerEvents = 'none';
+        fetch(ajaxUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (link) link.style.pointerEvents = '';
+                if (!res || !res.success) {
+                    var msg = (res && res.data && res.data.message) ? res.data.message : 'Could not delete.';
+                    window.alert(msg);
+                    return;
+                }
+                if (kind === 'bulk') {
+                    (ids || []).forEach(function (x) {
+                        var trb = table.querySelector('tbody tr.checker-data-row[data-row-id=\"' + String(x) + '\"]');
+                        if (trb) trb.remove();
+                    });
+                } else if (link) {
+                    var tr = link.closest('tr.checker-data-row');
+                    if (tr) tr.remove();
+                }
+                monitorEnsureEmptyPlaceholder();
+                monitorUpdateStatCount(res.data.count);
+                monitorRebuildView();
+                monitorUpdateSelectedUI();
+            })
+            .catch(function () {
+                link.style.pointerEvents = '';
+                window.alert('Network error.');
+            });
+    }
+
+    if (deleteModalCancel) {
+        deleteModalCancel.addEventListener('click', monitorCloseDeleteModal);
+    }
+    if (deleteModalBackdrop) {
+        deleteModalBackdrop.addEventListener('click', monitorCloseDeleteModal);
+    }
+    if (deleteModalConfirm) {
+        deleteModalConfirm.addEventListener('click', function () {
+            if (!pendingDelete) return;
+            if (deleteModalCancel) deleteModalCancel.disabled = true;
+            deleteModalConfirm.disabled = true;
+            monitorRunPendingDelete();
+        });
+    }
+
+    if (ajaxUrl && ajaxNonce) {
+        table.addEventListener('click', function (e) {
+            var link = e.target.closest('a.checker-delete');
+            if (!link || !table.contains(link)) return;
+            e.preventDefault();
+            var id = link.getAttribute('data-delete-id');
+            if (!id) return;
+            var delRow = link.closest('tr.checker-data-row');
+            var domainCell = delRow ? delRow.querySelector('.checker-cell-domain') : null;
+            var domainLabel = domainCell ? domainCell.textContent.trim() : '';
+            if (deleteModal && deleteModalDomain) {
+                monitorOpenDeleteModal(link, id, domainLabel);
+            } else {
+                if (!window.confirm(domainLabel ? 'Remove ' + domainLabel + ' from the list?' : 'Remove this site from the list?')) return;
+                pendingDelete = { link: link, id: id };
+                monitorRunPendingDelete();
+            }
+        });
+    }
+
+    table.addEventListener('change', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('checker-row-select')) {
+            monitorUpdateSelectedUI();
+        }
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            var want = !!selectAll.checked;
+            table.querySelectorAll('tbody tr.checker-data-row').forEach(function (row) {
+                if (row.style.display === 'none') return;
+                var cb = row.querySelector('input.checker-row-select');
+                if (cb) cb.checked = want;
+            });
+            monitorUpdateSelectedUI();
+        });
+    }
+
+    if (deleteSelectedBtn && ajaxUrl && ajaxNonce) {
+        deleteSelectedBtn.addEventListener('click', function () {
+            var ids = monitorSelectedIds();
+            if (!ids.length) return;
+            if (deleteModal && deleteModalDomain) {
+                pendingDelete = { kind: 'bulk', ids: ids.slice() };
+                monitorConfigureDeleteModal(
+                    ids.length === 1 ? 'Remove selected site' : 'Remove selected sites',
+                    ids.length === 1
+                        ? 'Remove the selected site from your monitoring list?'
+                        : ('Remove ' + ids.length + ' selected sites from your monitoring list?'),
+                    ids.length === 1 ? '1 site selected' : (ids.length + ' sites selected'),
+                    ids.length === 1 ? 'Remove' : 'Remove all'
+                );
+                deleteModal.removeAttribute('hidden');
+                deleteModal.setAttribute('aria-hidden', 'false');
+                document.addEventListener('keydown', monitorDeleteModalKeydown);
+                if (deleteModalCancel) deleteModalCancel.focus();
+            } else {
+                // fallback
+                if (!window.confirm(ids.length === 1 ? 'Delete the selected site?' : ('Delete ' + ids.length + ' selected sites?'))) return;
+                pendingDelete = { kind: 'bulk', ids: ids.slice() };
+                monitorRunPendingDelete();
+            }
+        });
+    }
+
+    function monitorApplyStripes() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var n = 0;
+        tbody.querySelectorAll('tr.checker-data-row').forEach(function (row) {
+            row.classList.remove('checker-row-light', 'checker-row-dark');
+            if (row.style.display === 'none') return;
+            n += 1;
+            row.classList.add(n % 2 === 1 ? 'checker-row-light' : 'checker-row-dark');
+        });
+    }
+
+    function monitorRebuildView() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr.checker-data-row'));
+        var filterActive = search && search.value.trim() !== '';
+
+        if (filterActive) {
+            if (pagBar) pagBar.style.display = 'none';
+            var ft = search.value.toLowerCase().trim();
+            allRows.forEach(function (row) {
+                row.style.display = row.innerText.toLowerCase().includes(ft) ? '' : 'none';
+            });
+        } else {
+            var total = allRows.length;
+            var perPageValue = perPageSel ? perPageSel.value : '10';
+            var perPage = perPageValue === 'all' ? total : (parseInt(perPageValue, 10) || 10);
+
+            if (pagBar) {
+                pagBar.style.display = total === 0 ? 'none' : 'grid';
+            }
+
+            if (total > 0) {
+                var totalPages = perPageValue === 'all' ? 1 : Math.max(1, Math.ceil(total / perPage));
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+
+                allRows.forEach(function (row, i) {
+                    var onPage = i >= (currentPage - 1) * perPage && i < currentPage * perPage;
+                    row.style.display = onPage ? '' : 'none';
+                });
+
+                if (pagBar && pageInfo) {
+                    var start = perPageValue === 'all' ? 1 : ((currentPage - 1) * perPage + 1);
+                    var end = perPageValue === 'all' ? total : Math.min(currentPage * perPage, total);
+                    pageInfo.textContent = 'Showing ' + start + '–' + end + ' of ' + total + ' · Page ' + currentPage + ' / ' + totalPages;
+                }
+                if (pagePrev) pagePrev.disabled = currentPage <= 1 || perPageValue === 'all';
+                if (pageNext) pageNext.disabled = currentPage >= totalPages || perPageValue === 'all';
+            }
+        }
+
+        monitorApplyStripes();
+        monitorUpdateSelectedUI();
+    }
+
+    function monitorSortValue(row, col) {
+        var map = {
+            domain: 'data-sort-domain',
+            status: 'data-sort-status-label',
+            detail: 'data-sort-detail',
+            time: 'data-sort-time'
+        };
+        var attr = map[col];
+        if (!attr) return '';
+        var v = row.getAttribute(attr);
+        return v === null ? '' : v;
+    }
+
+    function monitorSortTable(col, dir) {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.checker-data-row'));
+        if (rows.length === 0) return;
+
+        var asc = dir === 'asc';
+
+        rows.sort(function (a, b) {
+            // Custom ordering for Status: for DESC we want DOWN first (worst-first).
+            if (col === 'status') {
+                var ra = String(monitorSortValue(a, col) || '').toUpperCase();
+                var rb = String(monitorSortValue(b, col) || '').toUpperCase();
+                var rank = { 'DOWN': 0, 'UP': 1 };
+                var na = Object.prototype.hasOwnProperty.call(rank, ra) ? rank[ra] : 2;
+                var nb = Object.prototype.hasOwnProperty.call(rank, rb) ? rank[rb] : 2;
+                // asc: UP first; desc: DOWN first
+                var cmpStatus = asc ? (nb - na) : (na - nb);
+                if (cmpStatus !== 0) return cmpStatus;
+                // stable-ish tie-breaker
+                var da = monitorSortValue(a, 'domain');
+                var db = monitorSortValue(b, 'domain');
+                return String(da).localeCompare(String(db), undefined, { sensitivity: 'base', numeric: true });
+            }
+
+            var va = monitorSortValue(a, col);
+            var vb = monitorSortValue(b, col);
+            var cmp = String(va).localeCompare(String(vb), undefined, { sensitivity: 'base', numeric: true });
+            return asc ? cmp : -cmp;
+        });
+
+        var emptyRow = tbody.querySelector('tr.checker-table-empty');
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+        if (emptyRow) {
+            tbody.appendChild(emptyRow);
+        }
+
+        currentPage = 1;
+        monitorRebuildView();
+    }
+
+    table.querySelectorAll('.checker-sort-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var col = btn.getAttribute('data-monitor-sort');
+            var dir = btn.getAttribute('data-monitor-dir');
+            if (col && dir) {
+                monitorSortTable(col, dir);
+            }
+        });
+    });
+
+    if (search) {
+        search.addEventListener('input', monitorRebuildView);
+    }
+    if (perPageSel) {
+        perPageSel.addEventListener('change', function () {
+            currentPage = 1;
+            monitorRebuildView();
+        });
+    }
+    if (pagePrev) {
+        pagePrev.addEventListener('click', function () {
+            if (currentPage > 1) {
+                currentPage -= 1;
+                monitorRebuildView();
+            }
+        });
+    }
+    if (pageNext) {
+        pageNext.addEventListener('click', function () {
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            var total = tbody.querySelectorAll('tr.checker-data-row').length;
+            var perPageValue = perPageSel ? perPageSel.value : '10';
+            var perPage = perPageValue === 'all' ? total : (parseInt(perPageValue, 10) || 10);
+            var totalPages = perPageValue === 'all' ? 1 : Math.max(1, Math.ceil(total / perPage));
+            if (currentPage < totalPages) {
+                currentPage += 1;
+                monitorRebuildView();
+            }
+        });
+    }
+
+    // Initial priority: show DOWN sites first by default.
+    monitorSortTable('status', 'desc');
+})();
+</script>
+
+<script>
+(function () {
+    var bulkToggle = document.getElementById('monitorBulkToggle');
+    var bulkDrawer = document.getElementById('monitorBulkDrawer');
+    if (!bulkToggle || !bulkDrawer) return;
+    bulkToggle.addEventListener('click', function () {
+        if (bulkDrawer.hasAttribute('hidden')) {
+            bulkDrawer.removeAttribute('hidden');
+            bulkToggle.setAttribute('aria-expanded', 'true');
+        } else {
+            bulkDrawer.setAttribute('hidden', '');
+            bulkToggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+})();
+</script>
+
+<?php
+    return ob_get_clean();
+}
+add_shortcode('site_uptime_monitor', 'domain_uptime_monitor_shortcode');

@@ -1,0 +1,2535 @@
+/**
+ * Google Sheet list (optional): when DRC_SHEET_SOURCE_URL is set, domains load from the sheet;
+ * the dashboard is view-only (no Add / Bulk / Delete). Redirect checks still run in WordPress.
+ *
+ * Override in wp-config.php with define( 'DRC_SHEET_SOURCE_URL', '...' ); or edit $drc_monitor_sheet_source below.
+ * Optional: DRC_SHEET_GID for a non-first tab; DRC_SHEET_SSL_INSECURE true if CSV fetch fails on SSL.
+ */
+$drc_monitor_sheet_source = 'https://docs.google.com/spreadsheets/d/1MhqMldSeSMMZ0QuFiCal0GHjoSRTeL-0VVRBJejMF8c/edit?usp=sharing';
+if ($drc_monitor_sheet_source !== '' && !defined('DRC_SHEET_SOURCE_URL')) {
+    define('DRC_SHEET_SOURCE_URL', $drc_monitor_sheet_source);
+}
+if (!defined('DRC_SHEET_SOURCE_URL')) {
+    define('DRC_SHEET_SOURCE_URL', '');
+}
+if (!defined('DRC_SHEET_GID')) {
+    define('DRC_SHEET_GID', '');
+}
+if (!defined('DRC_SHEET_SSL_INSECURE')) {
+    define('DRC_SHEET_SSL_INSECURE', false);
+}
+
+if (!function_exists('drc_table_name')) {
+
+    function drc_sheet_effective_source_url() {
+        $u = defined('DRC_SHEET_SOURCE_URL') ? (string) DRC_SHEET_SOURCE_URL : '';
+        /** @param string $u */
+        return apply_filters('drc_sheet_source_url', trim($u));
+    }
+
+    function drc_normalize_sheet_csv_url($url) {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return '';
+        }
+        if (preg_match('#/spreadsheets/d/e/#', $url)) {
+            return $url;
+        }
+        if (preg_match('~/export\?[^#]*format=csv~i', $url) || preg_match('~[?&]output=csv(\b|&)~i', $url)) {
+            return $url;
+        }
+        if (preg_match('#docs\.google\.com/spreadsheets/d/([a-zA-Z0-9_-]+)#', $url, $m)) {
+            $gid = '0';
+            if (defined('DRC_SHEET_GID') && (string) DRC_SHEET_GID !== '') {
+                $gid = (string) DRC_SHEET_GID;
+            } elseif (preg_match('~[?#&]gid=(\d+)~', $url, $gm)) {
+                $gid = $gm[1];
+            }
+            return 'https://docs.google.com/spreadsheets/d/' . $m[1] . '/export?format=csv&gid=' . rawurlencode($gid);
+        }
+        return $url;
+    }
+
+    function drc_is_sheet_source_mode() {
+        return drc_normalize_sheet_csv_url(drc_sheet_effective_source_url()) !== '';
+    }
+
+    function drc_sheet_csv_fetch_url() {
+        return drc_normalize_sheet_csv_url(drc_sheet_effective_source_url());
+    }
+
+    /**
+     * @return string[]
+     */
+    function drc_fetch_sheet_domain_urls($csv_url) {
+        if ($csv_url === '') {
+            return [];
+        }
+        $sslverify = !(defined('DRC_SHEET_SSL_INSECURE') && DRC_SHEET_SSL_INSECURE);
+        $req_args = [
+            'timeout' => 25,
+            'redirection' => 5,
+            'sslverify' => $sslverify,
+            'headers' => [
+                'Accept' => 'text/csv,text/plain,*/*;q=0.8',
+            ],
+        ];
+        $req_args = apply_filters('drc_sheet_remote_get_args', $req_args, $csv_url);
+        $res = wp_remote_get($csv_url, $req_args);
+        if (is_wp_error($res)) {
+            return [];
+        }
+        $code = (int) wp_remote_retrieve_response_code($res);
+        if ($code < 200 || $code >= 300) {
+            return [];
+        }
+        $body = wp_remote_retrieve_body($res);
+        if ($body === null || $body === '') {
+            return [];
+        }
+        $trimmed = ltrim($body);
+        if ($trimmed !== '' && ($trimmed[0] === '<' || stripos($trimmed, '<!DOCTYPE') === 0 || stripos($trimmed, '<html') === 0)) {
+            return [];
+        }
+        $lines = preg_split('/\r\n|\r|\n/', $body);
+        if (!empty($lines[0])) {
+            $lines[0] = preg_replace('/^\xEF\xBB\xBF/', '', $lines[0]);
+        }
+        $out = [];
+        $seen = [];
+        $header_labels = ['domain', 'url', 'website', 'site', 'domains', 'link', 'hostname'];
+        foreach ($lines as $i => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || (isset($line[0]) && $line[0] === '#')) {
+                continue;
+            }
+            $parts = str_getcsv($line);
+            $max_col = min(5, count($parts));
+            $picked = null;
+            for ($ci = 0; $ci < $max_col; $ci++) {
+                $cell = isset($parts[$ci]) ? trim((string) $parts[$ci]) : '';
+                if ($cell === '') {
+                    continue;
+                }
+                $low = strtolower($cell);
+                if ($i === 0 && in_array($low, $header_labels, true)) {
+                    continue;
+                }
+                $url = drc_normalize_domain($cell);
+                if ($url) {
+                    $picked = $url;
+                    break;
+                }
+            }
+            if ($picked === null) {
+                continue;
+            }
+            if (isset($seen[$picked])) {
+                continue;
+            }
+            $seen[$picked] = true;
+            $out[] = $picked;
+        }
+        return $out;
+    }
+
+    /**
+     * @return array{ok:bool, synced:int, fetched:int}
+     */
+    function drc_sync_domains_from_google_sheet($wpdb, $table_name, $force_fetch = false) {
+        $csv_url = drc_sheet_csv_fetch_url();
+        if ($csv_url === '') {
+            return ['ok' => false, 'synced' => 0, 'fetched' => 0];
+        }
+        $cache_key = 'drc_sheet_url_list_cache_v2';
+        $urls = null;
+        if (!$force_fetch) {
+            $cached = get_transient($cache_key);
+            if (is_array($cached) && isset($cached['urls'], $cached['t']) && (time() - (int) $cached['t']) < 90) {
+                $urls = $cached['urls'];
+            }
+        }
+        if ($urls === null) {
+            $urls = drc_fetch_sheet_domain_urls($csv_url);
+            if (is_array($urls) && !empty($urls)) {
+                set_transient($cache_key, ['urls' => $urls, 't' => time()], 120);
+            }
+        }
+        if (!is_array($urls) || empty($urls)) {
+            return ['ok' => false, 'synced' => 0, 'fetched' => is_array($urls) ? count($urls) : 0];
+        }
+        $n = count($urls);
+        $placeholders = implode(',', array_fill(0, $n, '%s'));
+        $wpdb->query($wpdb->prepare("DELETE FROM $table_name WHERE domain NOT IN ($placeholders)", $urls));
+        $existing = $wpdb->get_col("SELECT domain FROM $table_name");
+        $have = array_flip($existing ?: []);
+        $now = drc_ph_datetime_string();
+        foreach ($urls as $url) {
+            if (isset($have[$url])) {
+                continue;
+            }
+            $wpdb->insert($table_name, [
+                'domain' => $url,
+                'status' => '0',
+                'redirect_to' => '',
+                'last_checked' => $now,
+            ], ['%s', '%s', '%s', '%s']);
+            $have[$url] = true;
+        }
+        return ['ok' => true, 'synced' => $n, 'fetched' => $n];
+    }
+
+    function drc_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'domain_checker';
+    }
+
+    function drc_ensure_table() {
+        global $wpdb;
+        $table_name = drc_table_name();
+        $wpdb->query("CREATE TABLE IF NOT EXISTS $table_name (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            domain VARCHAR(255) UNIQUE,
+            status VARCHAR(10),
+            redirect_to TEXT,
+            last_checked DATETIME
+        )");
+    }
+
+    function drc_normalize_domain($url) {
+        $url = trim($url);
+        if (!preg_match('#^https?://#', $url)) {
+            $url = 'https://' . $url;
+        }
+        $parsed = parse_url($url);
+        if (!$parsed || empty($parsed['host'])) {
+            return false;
+        }
+
+        $host = strtolower($parsed['host']);
+        $host = preg_replace('/^www\./', '', $host);
+
+        return 'https://' . $host;
+    }
+
+    function drc_canonical_host_from_url($url) {
+        if (empty($url)) {
+            return '';
+        }
+        $url = trim($url);
+        if (!preg_match('#^https?://#', $url)) {
+            $url = 'https://' . $url;
+        }
+        $parsed = parse_url($url);
+        if (!$parsed || empty($parsed['host'])) {
+            return '';
+        }
+        $host = strtolower($parsed['host']);
+        return preg_replace('/^www\./', '', $host);
+    }
+
+    function drc_ph_datetime_string() {
+        try {
+            $tz = new DateTimeZone('Asia/Manila');
+            $now = new DateTime('now', $tz);
+            return $now->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            return date('Y-m-d H:i:s');
+        }
+    }
+
+    function drc_check_chain($url, $max_hops = 5) {
+        $current = $url;
+        $first_status = 0;
+        $first_redirect = '';
+        $external_redirect = '';
+        $base_host = drc_canonical_host_from_url($url);
+
+        for ($i = 0; $i < $max_hops; $i++) {
+            $ch = curl_init($current);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_NOBODY => false,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_TIMEOUT => 12,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+            ]);
+            curl_exec($ch);
+
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $redirect = (string) curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+            curl_close($ch);
+
+            if ($i === 0) {
+                $first_status = $status;
+                $first_redirect = $redirect;
+            }
+
+            if (!in_array($status, [301, 302, 303, 307, 308], true) || $redirect === '') {
+                break;
+            }
+
+            if ($base_host !== '' && drc_canonical_host_from_url($redirect) !== $base_host) {
+                $external_redirect = $redirect;
+                break;
+            }
+
+            $current = $redirect;
+        }
+
+        return [
+            'status' => $first_status,
+            'redirect' => $external_redirect !== '' ? $external_redirect : $first_redirect,
+        ];
+    }
+
+    function drc_upsert_domain($wpdb, $table_name, $url) {
+        if (!$url) {
+            return null;
+        }
+        $result = drc_check_chain($url, 5);
+        $status = (int) $result['status'];
+        $redirect = (string) $result['redirect'];
+
+        $now = drc_ph_datetime_string();
+
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM $table_name WHERE domain=%s",
+            $url
+        ));
+
+        if ($existing) {
+            $wpdb->update($table_name, [
+                'status' => $status,
+                'redirect_to' => $redirect,
+                'last_checked' => $now,
+            ], ['id' => $existing->id]);
+        } else {
+            $wpdb->insert($table_name, [
+                'domain' => $url,
+                'status' => $status,
+                'redirect_to' => $redirect,
+                'last_checked' => $now,
+            ]);
+        }
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE domain=%s",
+            $url
+        ));
+    }
+
+    function drc_status_sort_label($row) {
+        $code = (int) $row->status;
+        $redir = trim((string) $row->redirect_to);
+        $orig_h = drc_canonical_host_from_url($row->domain);
+        $redir_h = drc_canonical_host_from_url($redir);
+
+        if ($code === 301 && $redir !== '' && $orig_h !== '' && $redir_h !== '') {
+            return ($orig_h === $redir_h) ? 'Redirect Not Found' : 'Redirect Found';
+        }
+        if ($code === 302 && $redir !== '' && $orig_h !== '' && $redir_h !== '' && $orig_h === $redir_h) {
+            return 'Redirect Not Found';
+        }
+        if ($code === 302) {
+            return '302';
+        }
+
+        return (string) $row->status;
+    }
+
+    function drc_format_last_checked($last_checked) {
+        $last_checked = trim((string) $last_checked);
+        if ($last_checked === '') {
+            return '';
+        }
+        try {
+            $tz = new DateTimeZone('Asia/Manila');
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $last_checked, $tz);
+            if ($dt instanceof DateTime) {
+                $dt->setTimezone($tz);
+                return $dt->format('F j, Y g:i a');
+            }
+        } catch (Exception $e) {
+            // Fall through to strtotime fallback.
+        }
+        $ts = strtotime($last_checked);
+        if ($ts === false) {
+            return $last_checked;
+        }
+        $dt = new DateTime('@' . $ts);
+        $dt->setTimezone(new DateTimeZone('Asia/Manila'));
+        return $dt->format('F j, Y g:i a');
+    }
+
+    function drc_render_data_row_html($row, $view_only = false) {
+        $id = (int) $row->id;
+        $code = (int) $row->status;
+        $redir = trim((string) $row->redirect_to);
+        $orig_h = drc_canonical_host_from_url($row->domain);
+        $redir_h = drc_canonical_host_from_url($redir);
+        $status_sort_label = drc_status_sort_label($row);
+
+        ob_start();
+        ?>
+<tr class="checker-data-row" data-row-id="<?php echo esc_attr((string) $id); ?>"
+    data-sort-domain="<?php echo esc_attr($row->domain); ?>"
+    data-sort-status-label="<?php echo esc_attr($status_sort_label); ?>"
+    data-sort-redirect="<?php echo esc_attr($row->redirect_to ? $row->redirect_to : ''); ?>"
+    data-sort-time="<?php echo esc_attr($row->last_checked); ?>">
+    <?php if (!$view_only) : ?>
+    <td class="checker-cell-select">
+        <input class="checker-row-select" type="checkbox" value="<?php echo esc_attr((string) $id); ?>" aria-label="Select row">
+    </td>
+    <?php endif; ?>
+    <td class="checker-cell-domain"><?php echo esc_html($row->domain); ?></td>
+    <td><?php
+        if ($code === 301 && $redir !== '' && $orig_h !== '' && $redir_h !== '') {
+            if ($orig_h === $redir_h) {
+                echo "<span class='badge badge-redirect-not-found'>Redirect Not Found</span>";
+            } else {
+                echo "<span class='badge badge-redirect-found'>Redirect Found</span>";
+            }
+        } elseif ($code === 302 && $redir !== '' && $orig_h !== '' && $redir_h !== '' && $orig_h === $redir_h) {
+            echo "<span class='badge badge-redirect-not-found'>Redirect Not Found</span>";
+        } elseif ($code === 302) {
+            echo "<span class='badge badge-302'>302</span>";
+        } else {
+            echo "<span class='badge badge-other'>" . esc_html((string) $row->status) . "</span>";
+        }
+        ?></td>
+    <td class="checker-cell-redirect"><?php echo $row->redirect_to ? esc_html($row->redirect_to) : '—'; ?></td>
+    <td class="checker-cell-time"><?php echo esc_html(drc_format_last_checked($row->last_checked)); ?></td>
+    <?php if (!$view_only) : ?>
+    <td class="checker-cell-actions">
+        <a class="checker-delete" href="<?php echo esc_url(add_query_arg('delete_id', $id)); ?>" data-delete-id="<?php echo esc_attr((string) $id); ?>" title="Remove">×</a>
+    </td>
+    <?php endif; ?>
+</tr>
+        <?php
+        return trim(ob_get_clean());
+    }
+
+    function drc_render_table_rows_html($rows, $view_only = false) {
+        if (empty($rows) || !is_array($rows)) {
+            return '';
+        }
+        $html = [];
+        foreach ($rows as $row) {
+            $html[] = drc_render_data_row_html($row, $view_only);
+        }
+        return implode("\n", $html);
+    }
+
+    function drc_count_rows() {
+        global $wpdb;
+        drc_ensure_table();
+        return (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . drc_table_name());
+    }
+
+    function drc_run_check_all_domains($wpdb, $table_name) {
+        @set_time_limit(600);
+        $all_domains = $wpdb->get_col("SELECT domain FROM $table_name");
+        $checked = 0;
+        if (!empty($all_domains)) {
+            foreach ($all_domains as $saved_domain) {
+                $url = drc_normalize_domain($saved_domain);
+                if (!$url) {
+                    continue;
+                }
+                drc_upsert_domain($wpdb, $table_name, $url);
+                $checked++;
+            }
+        }
+        return $checked;
+    }
+
+    function drc_auto_check_interval_seconds() {
+        return 12 * HOUR_IN_SECONDS;
+    }
+
+    function drc_ph_now_timestamp() {
+        try {
+            $tz = new DateTimeZone('Asia/Manila');
+            $now = new DateTime('now', $tz);
+            return (int) $now->getTimestamp();
+        } catch (Exception $e) {
+            return time();
+        }
+    }
+
+    function drc_next_slot_timestamp($from_ts = null) {
+        $interval = drc_auto_check_interval_seconds();
+        $ts = $from_ts === null ? drc_ph_now_timestamp() : max(0, (int) $from_ts);
+        return (int) ((floor($ts / $interval) + 1) * $interval);
+    }
+
+    function drc_auto_check_slot($ts) {
+        $interval = drc_auto_check_interval_seconds();
+        $ts = max(0, (int) $ts);
+        return (int) floor($ts / $interval);
+    }
+
+    function drc_next_run_timestamp($wpdb, $table_name) {
+        $now_ts = drc_ph_now_timestamp();
+        $next_ts = drc_next_slot_timestamp($now_ts);
+        update_option('drc_next_auto_run_ts', $next_ts, false);
+        return $next_ts;
+    }
+
+    function drc_maybe_run_scheduled_check($wpdb, $table_name, $now_ts) {
+        $now_ts = (int) $now_ts;
+        $current_slot = drc_auto_check_slot($now_ts);
+        $last_checked_slot = (int) get_option('drc_last_auto_check_slot', -1);
+        if ($last_checked_slot >= $current_slot) {
+            return 0;
+        }
+
+        $lock_key = 'drc_auto_check_lock';
+        if (get_transient($lock_key)) {
+            return 0;
+        }
+        set_transient($lock_key, 1, drc_auto_check_interval_seconds());
+
+        try {
+            $fresh_slot = drc_auto_check_slot(time());
+            $fresh_last_slot = (int) get_option('drc_last_auto_check_slot', -1);
+            if ($fresh_last_slot >= $fresh_slot) {
+                return 0;
+            }
+            $checked = drc_run_check_all_domains($wpdb, $table_name);
+            update_option('drc_last_auto_check_ts', $now_ts, false);
+            update_option('drc_last_auto_check_slot', $fresh_slot, false);
+            update_option('drc_next_auto_run_ts', drc_next_slot_timestamp($now_ts), false);
+            return $checked;
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function drc_maybe_run_target_slot_check($wpdb, $table_name, $now_ts, $target_slot) {
+        $now_ts = (int) $now_ts;
+        $target_slot = (int) $target_slot;
+        if ($target_slot < 0) {
+            return 0;
+        }
+
+        $last_checked_slot = (int) get_option('drc_last_auto_check_slot', -1);
+        if ($last_checked_slot >= $target_slot) {
+            return 0;
+        }
+
+        $lock_key = 'drc_auto_check_lock';
+        if (get_transient($lock_key)) {
+            return 0;
+        }
+        set_transient($lock_key, 1, drc_auto_check_interval_seconds());
+
+        try {
+            $fresh_last_slot = (int) get_option('drc_last_auto_check_slot', -1);
+            if ($fresh_last_slot >= $target_slot) {
+                return 0;
+            }
+            $checked = drc_run_check_all_domains($wpdb, $table_name);
+            $effective_slot = max(drc_auto_check_slot($now_ts), $target_slot);
+            update_option('drc_last_auto_check_ts', $now_ts, false);
+            update_option('drc_last_auto_check_slot', $effective_slot, false);
+            update_option('drc_next_auto_run_ts', drc_next_slot_timestamp($now_ts), false);
+            return $checked;
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function drc_schedule_auto_check_event() {
+        $hook = 'drc_checker_auto_check_cron';
+        $recurrence = 'drc_every_12_hours';
+        $sched_key = 'drc_cron_recurrence_key';
+        if (get_option($sched_key, '') !== $recurrence) {
+            wp_clear_scheduled_hook($hook);
+            update_option($sched_key, $recurrence, false);
+        }
+        if (wp_next_scheduled($hook)) {
+            return;
+        }
+        $first_run = drc_next_slot_timestamp();
+        wp_schedule_event($first_run, $recurrence, $hook);
+    }
+
+    function drc_auto_check_cron_runner() {
+        global $wpdb;
+        drc_ensure_table();
+        $table_name = drc_table_name();
+        if (drc_is_sheet_source_mode()) {
+            drc_sync_domains_from_google_sheet($wpdb, $table_name, true);
+        }
+        $now_ts = drc_ph_now_timestamp();
+        drc_maybe_run_scheduled_check($wpdb, $table_name, $now_ts);
+        update_option('drc_next_auto_run_ts', drc_next_slot_timestamp($now_ts), false);
+    }
+
+    function drc_ajax_verify_nonce() {
+        if (empty($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'domain_redirect_ajax')) {
+            wp_send_json_error(['message' => 'Invalid security token.'], 403);
+        }
+    }
+
+    function drc_ajax_add() {
+        drc_ajax_verify_nonce();
+        if (drc_is_sheet_source_mode()) {
+            wp_send_json_error(['message' => 'Domain list is managed from Google Sheet.'], 403);
+        }
+        global $wpdb;
+        drc_ensure_table();
+        $table_name = drc_table_name();
+        $raw = isset($_POST['domain_url']) ? wp_unslash($_POST['domain_url']) : '';
+        $url = drc_normalize_domain($raw);
+        if (!$url) {
+            wp_send_json_error(['message' => 'Invalid domain.']);
+        }
+        $row = drc_upsert_domain($wpdb, $table_name, $url);
+        if (!$row) {
+            wp_send_json_error(['message' => 'Could not save domain.']);
+        }
+        wp_send_json_success([
+            'row_html' => drc_render_data_row_html($row, false),
+            'row_id' => (int) $row->id,
+            'count' => drc_count_rows(),
+        ]);
+    }
+
+    function drc_ajax_delete() {
+        drc_ajax_verify_nonce();
+        if (drc_is_sheet_source_mode()) {
+            wp_send_json_error(['message' => 'Domain list is managed from Google Sheet.'], 403);
+        }
+        global $wpdb;
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        if (!$id) {
+            wp_send_json_error(['message' => 'Invalid row.']);
+        }
+        drc_ensure_table();
+        $wpdb->delete(drc_table_name(), ['id' => $id], ['%d']);
+        wp_send_json_success(['count' => drc_count_rows()]);
+    }
+
+    function drc_ajax_delete_selected() {
+        drc_ajax_verify_nonce();
+        if (drc_is_sheet_source_mode()) {
+            wp_send_json_error(['message' => 'Domain list is managed from Google Sheet.'], 403);
+        }
+        global $wpdb;
+        $ids = isset($_POST['ids']) ? (array) $_POST['ids'] : [];
+        $ids = array_values(array_filter(array_map('absint', $ids)));
+        if (empty($ids)) {
+            wp_send_json_error(['message' => 'No rows selected.']);
+        }
+        drc_ensure_table();
+        $table = drc_table_name();
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $sql = "DELETE FROM $table WHERE id IN ($placeholders)";
+        $wpdb->query($wpdb->prepare($sql, $ids));
+
+        wp_send_json_success(['count' => drc_count_rows()]);
+    }
+
+    /**
+     * @return int Probed row count, or -1 if lock held.
+     */
+    function drc_force_probe_all_with_lock($wpdb, $table_name, $now_ts) {
+        $now_ts = (int) $now_ts;
+        $lock_key = 'drc_auto_check_lock';
+        if (get_transient($lock_key)) {
+            return -1;
+        }
+        set_transient($lock_key, 1, drc_auto_check_interval_seconds());
+        try {
+            $checked = drc_run_check_all_domains($wpdb, $table_name);
+            $slot = drc_auto_check_slot($now_ts);
+            update_option('drc_last_auto_check_ts', $now_ts, false);
+            update_option('drc_last_auto_check_slot', $slot, false);
+            update_option('drc_next_auto_run_ts', drc_next_slot_timestamp($now_ts), false);
+            return $checked;
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function drc_ajax_auto_check() {
+        drc_ajax_verify_nonce();
+        global $wpdb;
+        drc_ensure_table();
+        $table_name = drc_table_name();
+        $vo = drc_is_sheet_source_mode();
+        if ($vo) {
+            drc_sync_domains_from_google_sheet($wpdb, $table_name, false);
+        }
+        $server_now = drc_ph_now_timestamp();
+        $target_slot = isset($_POST['target_slot']) ? (int) wp_unslash($_POST['target_slot']) : -1;
+        if ($target_slot >= 0) {
+            $fp = drc_force_probe_all_with_lock($wpdb, $table_name, $server_now);
+            $checked = max(0, $fp);
+        } else {
+            $checked = drc_maybe_run_scheduled_check($wpdb, $table_name, $server_now);
+            if ($vo && $checked === 0) {
+                $iv = drc_auto_check_interval_seconds();
+                if ($server_now - (int) get_option('drc_sheet_ui_probe_ts', 0) >= $iv) {
+                    $fp = drc_force_probe_all_with_lock($wpdb, $table_name, $server_now);
+                    if ($fp >= 0) {
+                        update_option('drc_sheet_ui_probe_ts', $server_now, false);
+                    }
+                    if ($fp > 0) {
+                        $checked = $fp;
+                    }
+                }
+            }
+        }
+        $rows = $wpdb->get_results("SELECT * FROM $table_name ORDER BY id DESC");
+
+        wp_send_json_success([
+            'checked' => (int) $checked,
+            'count' => drc_count_rows(),
+            'next_run_ts' => (int) drc_next_run_timestamp($wpdb, $table_name),
+            'rows_html' => drc_render_table_rows_html($rows, $vo),
+        ]);
+    }
+
+    add_action('wp_ajax_drc_checker_add', 'drc_ajax_add');
+    add_action('wp_ajax_drc_checker_delete', 'drc_ajax_delete');
+    add_action('wp_ajax_drc_checker_delete_selected', 'drc_ajax_delete_selected');
+    add_action('wp_ajax_drc_checker_auto_check', 'drc_ajax_auto_check');
+    add_action('wp_ajax_nopriv_drc_checker_auto_check', 'drc_ajax_auto_check');
+    add_filter('cron_schedules', function ($schedules) {
+        $schedules['drc_every_12_hours'] = [
+            'interval' => drc_auto_check_interval_seconds(),
+            'display' => 'Every 12 Hours (DRC)',
+        ];
+        return $schedules;
+    });
+    add_action('init', 'drc_schedule_auto_check_event');
+    add_action('drc_checker_auto_check_cron', 'drc_auto_check_cron_runner');
+}
+
+function domain_redirect_dashboard_shortcode() {
+    global $wpdb;
+
+    date_default_timezone_set('Asia/Manila');
+
+    drc_ensure_table();
+    $table_name = drc_table_name();
+    $server_now = drc_ph_now_timestamp();
+    $next_run_ts = drc_next_run_timestamp($wpdb, $table_name);
+
+    $checker_bulk_notice = null;
+    $drc_sheet_mode = drc_is_sheet_source_mode();
+    if ($drc_sheet_mode) {
+        $synced = drc_sync_domains_from_google_sheet($wpdb, $table_name, false);
+        if (!$synced['ok'] && (int) $wpdb->get_var("SELECT COUNT(*) FROM $table_name") === 0) {
+            $checker_bulk_notice = 'Could not load domains from Google Sheet. Check sharing (Anyone with the link → Viewer), DRC_SHEET_SOURCE_URL, or DRC_SHEET_GID for the correct tab.';
+        }
+    }
+
+    // DELETE
+    if (!$drc_sheet_mode && isset($_GET['delete_id'])) {
+        $wpdb->delete($table_name, ['id' => intval($_GET['delete_id'])]);
+    }
+
+    // DELETE SELECTED (non-JS fallback)
+    if (
+        !$drc_sheet_mode
+        && isset($_POST['checker_delete_selected_submit'], $_POST['checker_delete_selected_nonce'])
+        && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['checker_delete_selected_nonce'])), 'domain_checker_delete_selected')
+    ) {
+        $ids = isset($_POST['checker_selected_ids']) ? (array) $_POST['checker_selected_ids'] : [];
+        $ids = array_values(array_filter(array_map('absint', $ids)));
+        if (!empty($ids)) {
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $wpdb->query($wpdb->prepare("DELETE FROM $table_name WHERE id IN ($placeholders)", $ids));
+        }
+    }
+
+    // ADD / UPDATE (single)
+    if (!$drc_sheet_mode && isset($_POST['domain_url']) && !isset($_POST['domain_bulk_submit'])) {
+        $url = drc_normalize_domain(wp_unslash($_POST['domain_url']));
+        drc_upsert_domain($wpdb, $table_name, $url);
+    }
+
+    // CHECK ALL DOMAINS
+    if (
+        isset($_POST['check_all_submit'])
+        && isset($_POST['check_all_nonce'])
+        && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['check_all_nonce'])), 'domain_checker_check_all')
+    ) {
+        if ($drc_sheet_mode) {
+            drc_sync_domains_from_google_sheet($wpdb, $table_name, false);
+        }
+        $is_auto_submit = isset($_POST['drc_auto_tick']) && (string) wp_unslash($_POST['drc_auto_tick']) === '1';
+        if ($is_auto_submit) {
+            $checked = drc_maybe_run_scheduled_check($wpdb, $table_name, $server_now);
+            if ($checked > 0) {
+                $checker_bulk_notice = sprintf('Auto-check updated %d domain(s).', $checked);
+            }
+        } else {
+            $checked = drc_run_check_all_domains($wpdb, $table_name);
+            update_option('drc_last_auto_check_ts', $server_now, false);
+            update_option('drc_last_auto_check_slot', drc_auto_check_slot($server_now), false);
+            update_option('drc_next_auto_run_ts', drc_next_slot_timestamp($server_now), false);
+            $checker_bulk_notice = sprintf('Checked latest status for %d domain(s).', $checked);
+        }
+    }
+
+    // BULK: paste + optional CSV file (.csv / .txt — Excel: Save As CSV)
+    if (
+        !$drc_sheet_mode
+        && isset($_POST['domain_bulk_submit'])
+        && isset($_POST['domain_bulk_nonce'])
+        && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['domain_bulk_nonce'])), 'domain_checker_bulk')
+    ) {
+        @set_time_limit(600);
+
+        $lines = [];
+        $raw_text = isset($_POST['bulk_domains_text']) ? wp_unslash($_POST['bulk_domains_text']) : '';
+        if ($raw_text !== '') {
+            $lines = array_merge($lines, preg_split('/\r\n|\r|\n/', $raw_text));
+        }
+
+        if (!empty($_FILES['bulk_csv']['tmp_name']) && is_uploaded_file($_FILES['bulk_csv']['tmp_name'])) {
+            $fname = isset($_FILES['bulk_csv']['name']) ? $_FILES['bulk_csv']['name'] : '';
+            $ext = strtolower(pathinfo($fname, PATHINFO_EXTENSION));
+            if (in_array($ext, ['csv', 'txt'], true) && empty($_FILES['bulk_csv']['error'])) {
+                $content = file_get_contents($_FILES['bulk_csv']['tmp_name']);
+                if ($content !== false && $content !== '') {
+                    $lines = array_merge($lines, preg_split('/\r\n|\r|\n/', $content));
+                }
+            }
+        }
+
+        if (!empty($lines)) {
+            $lines[0] = preg_replace('/^\xEF\xBB\xBF/', '', $lines[0]);
+        }
+
+        $seen = [];
+        $processed = 0;
+        $skipped = 0;
+        $max_bulk = 500;
+
+        foreach ($lines as $line) {
+            if ($processed >= $max_bulk) {
+                break;
+            }
+            $line = trim($line);
+            if ($line === '' || (isset($line[0]) && $line[0] === '#')) {
+                continue;
+            }
+            $parts = str_getcsv($line);
+            $cell = isset($parts[0]) ? trim($parts[0]) : '';
+            if ($cell === '') {
+                continue;
+            }
+            $url = drc_normalize_domain($cell);
+            if (!$url) {
+                $skipped++;
+                continue;
+            }
+            if (isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            drc_upsert_domain($wpdb, $table_name, $url);
+            $processed++;
+        }
+
+        if ($processed > 0 || $skipped > 0 || $raw_text !== '' || !empty($_FILES['bulk_csv']['tmp_name'])) {
+            $checker_bulk_notice = sprintf(
+                'Bulk import: %1$d domain(s) checked. %2$d line(s) skipped (invalid). Max %3$d per run. Duplicate domains in the same batch are ignored.',
+                $processed,
+                $skipped,
+                $max_bulk
+            );
+        }
+    }
+
+    // Recompute timing after handling POST actions so countdown uses fresh server state.
+    $server_now = drc_ph_now_timestamp();
+    $next_run_ts = drc_next_run_timestamp($wpdb, $table_name);
+
+    $rows = $wpdb->get_results("SELECT * FROM $table_name ORDER BY id DESC");
+    $row_count = is_array($rows) ? count($rows) : 0;
+
+    ob_start();
+?>
+<style>
+.checker-app {
+    --checker-surface: #ffffff;
+    --checker-surface-2: #f8fafc;
+    --checker-border: #e2e8f0;
+    --checker-text: #0f172a;
+    --checker-muted: #64748b;
+    --checker-accent: #2563eb;
+    --checker-accent-hover: #1d4ed8;
+    --checker-radius: 12px;
+    --checker-radius-sm: 8px;
+    --checker-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 24px rgba(15, 23, 42, 0.06);
+    --checker-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--checker-font);
+    color: var(--checker-text);
+    background: linear-gradient(145deg, #0f172a 0%, #1e293b 48%, #0f172a 100%);
+    padding: clamp(20px, 4vw, 32px);
+    border-radius: 20px;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.checker-app[data-drc-sheet-mode="1"] .checker-input-group,
+.checker-app[data-drc-sheet-mode="1"] .checker-bulk-toggle,
+.checker-app[data-drc-sheet-mode="1"] .checker-bulk-drawer,
+.checker-app[data-drc-sheet-mode="1"] .checker-cell-select,
+.checker-app[data-drc-sheet-mode="1"] th.checker-cell-select,
+.checker-app[data-drc-sheet-mode="1"] .checker-cell-actions,
+.checker-app[data-drc-sheet-mode="1"] th.checker-cell-actions,
+.checker-app[data-drc-sheet-mode="1"] .checker-delete-selected-btn,
+.checker-app[data-drc-sheet-mode="1"] .checker-selected-bar .checker-per-page-label,
+.checker-app[data-drc-sheet-mode="1"] a.checker-delete,
+.checker-app[data-drc-sheet-mode="1"] #checkerDeleteModal {
+    display: none !important;
+}
+
+.checker-app *,
+.checker-app *::before,
+.checker-app *::after {
+    box-sizing: border-box;
+}
+
+.checker-dash-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.checker-dash-top__text h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #f8fafc;
+}
+
+.checker-dash-top__text p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #94a3b8;
+    max-width: 36ch;
+    line-height: 1.45;
+}
+
+.checker-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(248, 250, 252, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.checker-stat strong {
+    color: #fff;
+    font-weight: 700;
+}
+
+.checker-stat-countdown {
+    display: inline-flex;
+    align-items: center;
+    padding-right: 8px;
+    margin-right: 2px;
+    border-right: 1px solid rgba(148, 163, 184, 0.35);
+    color: #cbd5e1;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.checker-dash-top__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.checker-check-all-btn {
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(15, 23, 42, 0.4);
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.checker-check-all-btn:hover {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: #94a3b8;
+}
+
+.checker-toolbar-grid {
+    --checker-bar-height: 54px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(200px, 280px);
+    gap: 12px;
+    align-items: stretch;
+    margin-bottom: 20px;
+}
+
+.checker-toolbar-grid .checker-input-group {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 100%;
+    align-self: stretch;
+}
+
+.checker-toolbar-grid .checker-search {
+    width: 100%;
+    max-width: 280px;
+    justify-self: end;
+    min-height: var(--checker-bar-height);
+    box-sizing: border-box;
+}
+
+.checker-toolbar-grid--sheet-only {
+    grid-template-columns: 1fr minmax(240px, 400px);
+    justify-items: stretch;
+}
+
+.checker-toolbar-grid--sheet-only .checker-search {
+    grid-column: 2;
+    justify-self: end;
+    width: 100%;
+    max-width: 400px;
+}
+
+.checker-bulk-toggle {
+    flex-shrink: 0;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0 20px;
+    min-height: var(--checker-bar-height);
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    border-radius: var(--checker-radius);
+    border: 1px solid var(--checker-border);
+    background: #fff;
+    color: #0a0a0a;
+    box-shadow: var(--checker-shadow);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.checker-bulk-toggle:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.checker-bulk-toggle[aria-expanded="true"] {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.checker-bulk-drawer {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+}
+
+.checker-bulk-drawer[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    .checker-toolbar-grid {
+        grid-template-columns: 1fr;
+    }
+    .checker-toolbar-grid .checker-search {
+        justify-self: stretch;
+        max-width: none;
+    }
+    .checker-toolbar-grid--sheet-only .checker-search {
+        grid-column: 1;
+        justify-self: stretch;
+        max-width: none;
+    }
+    .checker-bulk-toggle {
+        justify-self: start;
+    }
+}
+
+.checker-bulk-notice {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: var(--checker-radius-sm);
+    background: rgba(37, 99, 235, 0.15);
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    color: #e2e8f0;
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+.checker-bulk-panel {
+    background: #fff;
+    border: 1px solid var(--checker-border);
+    border-radius: var(--checker-radius);
+    box-shadow: var(--checker-shadow);
+    padding: 16px 18px;
+    margin-bottom: 0;
+    color: #0a0a0a;
+}
+
+.checker-bulk-hint {
+    font-size: 0.8125rem;
+    color: #404040;
+    margin: 0 0 12px;
+    line-height: 1.45;
+}
+
+.checker-bulk-hint strong {
+    color: #0a0a0a;
+    font-weight: 600;
+}
+
+.checker-bulk-panel .checker-per-page-label {
+    color: #171717;
+}
+
+.checker-bulk-textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px 14px;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.8125rem;
+    color: #0a0a0a;
+    background: #fff;
+    border: 1px solid #d4d4d4;
+    border-radius: var(--checker-radius-sm);
+    resize: vertical;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+.checker-bulk-textarea::placeholder {
+    color: #737373;
+}
+
+.checker-bulk-textarea:focus {
+    outline: none;
+    border-color: #737373;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
+.checker-bulk-file {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    font-size: 0.875rem;
+    margin-bottom: 14px;
+    color: #171717;
+}
+
+.checker-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.checker-bulk-submit {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    border-radius: var(--checker-radius-sm);
+    border: none;
+    background: var(--checker-accent);
+    color: #fff;
+    cursor: pointer;
+}
+
+.checker-bulk-submit:hover {
+    background: var(--checker-accent-hover);
+}
+
+.checker-input-group {
+    display: flex;
+    flex: 1 1 280px;
+    min-width: 0;
+    background: var(--checker-surface);
+    border-radius: var(--checker-radius);
+    padding: 4px;
+    box-shadow: var(--checker-shadow);
+    border: 1px solid var(--checker-border);
+}
+
+.checker-input-group input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    padding: 12px 14px;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    background: transparent;
+    color: var(--checker-text);
+}
+
+.checker-input-group input::placeholder {
+    color: #94a3b8;
+}
+
+.checker-input-group button {
+    flex-shrink: 0;
+    background: var(--checker-accent);
+    color: #fff;
+    border: none;
+    padding: 0 22px;
+    border-radius: var(--checker-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.checker-input-group button:hover {
+    background: var(--checker-accent-hover);
+}
+
+.checker-input-group button:active {
+    transform: scale(0.98);
+}
+
+.checker-search {
+    flex: 0 1 260px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--checker-surface);
+    border: 1px solid var(--checker-border);
+    border-radius: var(--checker-radius);
+    padding: 4px 4px 4px 14px;
+    box-shadow: var(--checker-shadow);
+}
+
+.checker-search::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    opacity: 0.45;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.checker-search input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    padding: 12px 12px 12px 0;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    background: transparent;
+    color: var(--checker-text);
+}
+
+.checker-table-wrap {
+    background: #000;
+    border-radius: var(--checker-radius);
+    border: 1px solid #262626;
+    box-shadow: var(--checker-shadow);
+    overflow: hidden;
+}
+
+.checker-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.checker-app table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.checker-app thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 14px 18px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #a3a3a3;
+    background: #000;
+    border-bottom: 1px solid #404040;
+    white-space: nowrap;
+}
+
+.checker-app tbody td {
+    padding: 14px 18px;
+    vertical-align: middle;
+    border-bottom: 1px solid #262626;
+}
+
+.checker-app tbody tr.checker-row-light td {
+    background: #fff;
+    color: #334155;
+    border-bottom-color: #e5e5e5;
+}
+
+.checker-app tbody tr.checker-row-dark td {
+    background: #000;
+    color: #e5e5e5;
+    border-bottom-color: #333;
+}
+
+.checker-app tbody tr.checker-data-row:last-child td {
+    border-bottom: none;
+}
+
+.checker-app tbody tr {
+    transition: background 0.12s ease;
+}
+
+.checker-app tbody tr.checker-row-light:hover td {
+    background: #f4f4f5;
+}
+
+.checker-app tbody tr.checker-row-dark:hover td {
+    background: #0a0a0a;
+}
+
+.checker-cell-domain {
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #0f172a;
+    word-break: break-all;
+}
+
+.checker-app tbody tr.checker-row-dark .checker-cell-domain {
+    color: #fafafa;
+}
+
+.checker-cell-redirect {
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.75rem;
+    color: #475569;
+    word-break: break-all;
+    max-width: 280px;
+}
+
+.checker-app tbody tr.checker-row-dark .checker-cell-redirect {
+    color: #a3a3a3;
+}
+
+.checker-cell-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--checker-muted);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.checker-app tbody tr.checker-row-dark .checker-cell-time {
+    color: #737373;
+}
+
+.checker-cell-actions {
+    width: 52px;
+    text-align: center;
+}
+
+.checker-app thead th.checker-cell-actions {
+    text-align: center;
+}
+
+.checker-th-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.checker-th-label {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.3;
+}
+
+.checker-th-sort {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.checker-sort-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 16px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid #525252;
+    border-radius: 3px;
+    background: #171717;
+    color: #d4d4d4;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.checker-sort-btn:hover {
+    background: #262626;
+    color: #fff;
+    border-color: #737373;
+}
+
+.checker-sort-btn:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+}
+
+.checker-sort-btn:active {
+    background: #404040;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+}
+
+.badge-302 { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
+.badge-other { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-redirect-not-found { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-redirect-found { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+
+.checker-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--checker-radius-sm);
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+}
+
+.checker-delete:hover {
+    color: #dc2626;
+    background: #fef2f2;
+}
+
+.checker-app tbody tr.checker-row-dark .checker-delete {
+    color: #737373;
+}
+
+.checker-app tbody tr.checker-row-dark .checker-delete:hover {
+    color: #fca5a5;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.checker-empty {
+    padding: 48px 24px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.9375rem;
+}
+
+.checker-app tbody tr.checker-table-empty td.checker-empty {
+    background: #fff;
+    border-bottom: none;
+}
+
+.checker-cell-select {
+    width: 44px;
+    text-align: center;
+}
+
+.checker-app thead th.checker-cell-select {
+    text-align: center;
+}
+
+.checker-row-select,
+.checker-select-all {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--checker-accent);
+    cursor: pointer;
+}
+
+.checker-selected-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.checker-delete-selected-btn {
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    background: rgba(127, 29, 29, 0.65);
+    color: #fef2f2;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.checker-delete-selected-btn:hover:not(:disabled) {
+    background: rgba(153, 27, 27, 0.9);
+    border-color: #fca5a5;
+}
+
+.checker-delete-selected-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.checker-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(16px, 4vw, 32px);
+    font-family: var(--checker-font);
+}
+
+.checker-delete-modal[hidden] {
+    display: none;
+}
+
+.checker-delete-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(8px);
+}
+
+.checker-delete-modal__dialog {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    border-radius: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+    background: linear-gradient(145deg, #0f172a 0%, #1e293b 48%, #0f172a 100%);
+}
+
+.checker-delete-modal__head {
+    padding: 22px 22px 12px;
+    background: transparent;
+    border-bottom: none;
+}
+
+.checker-delete-modal__title {
+    margin: 0;
+    font-size: clamp(1.15rem, 2.2vw, 1.35rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    color: #f8fafc;
+}
+
+.checker-delete-modal__body {
+    padding: 0 22px 20px;
+    background: transparent;
+    color: #94a3b8;
+}
+
+.checker-delete-modal__text {
+    margin: 0 0 14px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #94a3b8;
+    max-width: 38ch;
+}
+
+.checker-delete-modal__domain {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: var(--checker-radius-sm);
+    background: rgba(248, 250, 252, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #e2e8f0;
+    word-break: break-all;
+}
+
+.checker-delete-modal__foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px 22px;
+    background: rgba(15, 23, 42, 0.35);
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.checker-delete-modal__btn {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.checker-delete-modal__btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.checker-delete-modal__btn--cancel {
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+}
+
+.checker-delete-modal__btn--cancel:hover:not(:disabled) {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: #94a3b8;
+    color: #fff;
+}
+
+.checker-delete-modal__btn--danger {
+    background: rgba(127, 29, 29, 0.85);
+    border-color: rgba(248, 113, 113, 0.35);
+    color: #fef2f2;
+}
+
+.checker-delete-modal__btn--danger:hover:not(:disabled) {
+    background: #991b1b;
+    border-color: #fca5a5;
+}
+
+.checker-pagination-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(248, 250, 252, 0.06);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: var(--checker-radius);
+}
+
+.checker-pagination-bar__left {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-self: start;
+}
+
+.checker-pagination-bar__right {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-self: end;
+    justify-content: flex-end;
+}
+
+.checker-pagination-bar__center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    grid-column: 2;
+}
+
+.checker-pagination-bar__spacer {
+    grid-column: 3;
+}
+
+.checker-per-page-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #cbd5e1;
+}
+
+.checker-per-page-select {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 8px 32px 8px 12px;
+    border-radius: var(--checker-radius-sm);
+    border: 1px solid var(--checker-border);
+    background: #fff;
+    color: #0f172a;
+    cursor: pointer;
+}
+
+.checker-page-btn {
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--checker-radius-sm);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(15, 23, 42, 0.5);
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.checker-page-btn:hover:not(:disabled) {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: #64748b;
+}
+
+.checker-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.checker-page-info {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    text-align: center;
+    white-space: nowrap;
+}
+</style>
+
+<div class="checker-app" id="checkerAppRoot" data-drc-ajax="<?php echo esc_url(admin_url('admin-ajax.php')); ?>" data-drc-nonce="<?php echo esc_attr(wp_create_nonce('domain_redirect_ajax')); ?>" data-drc-sheet-mode="<?php echo $drc_sheet_mode ? '1' : '0'; ?>">
+
+    <header class="checker-dash-top">
+        <div class="checker-dash-top__text">
+            <h1>Domain redirect checker</h1>
+            <p>Monitor HTTP responses and spot cross-domain 301s from one place.</p>
+        </div>
+        <div class="checker-dash-top__meta">
+            <span class="checker-stat"><strong id="checkerStatCount"><?php echo (int) $row_count; ?></strong> tracked</span>
+            <span class="checker-stat">
+                <span class="checker-stat-countdown" id="checkerAutoCountdown" data-next-run-ts="<?php echo esc_attr((string) (int) $next_run_ts); ?>" data-server-now="<?php echo esc_attr((string) (int) $server_now); ?>" data-auto-interval-sec="<?php echo esc_attr((string) (int) drc_auto_check_interval_seconds()); ?>">0:00:00</span>
+                auto recheck
+            </span>
+            <form method="post" style="margin:0;" id="checkerAutoCheckForm">
+                <?php wp_nonce_field('domain_checker_check_all', 'check_all_nonce'); ?>
+                <input type="hidden" name="drc_auto_tick" id="checkerAutoTickInput" value="0">
+                <button type="submit" name="check_all_submit" value="1" class="checker-check-all-btn">Check all domains</button>
+            </form>
+        </div>
+    </header>
+
+    <?php if ($checker_bulk_notice !== null) : ?>
+    <div class="checker-bulk-notice" role="status"><?php echo esc_html($checker_bulk_notice); ?></div>
+    <?php endif; ?>
+
+    <div class="checker-toolbar-grid<?php echo $drc_sheet_mode ? ' checker-toolbar-grid--sheet-only' : ''; ?>">
+        <?php if (!$drc_sheet_mode) : ?>
+        <form method="post" class="checker-input-group" id="checkerAddDomainForm">
+            <input type="text" name="domain_url" id="checkerAddDomainInput" placeholder="example.com or https://…" required autocomplete="off">
+            <button type="submit" id="checkerAddDomainSubmit">Add domain</button>
+        </form>
+        <button type="button" class="checker-bulk-toggle" id="checkerBulkToggle" aria-expanded="<?php echo $checker_bulk_notice !== null ? 'true' : 'false'; ?>" aria-controls="checkerBulkDrawer">Bulk import</button>
+        <?php endif; ?>
+        <div class="checker-search">
+            <input type="text" id="searchDomain" placeholder="Filter table…" autocomplete="off">
+        </div>
+        <?php if (!$drc_sheet_mode) : ?>
+        <div id="checkerBulkDrawer" class="checker-bulk-drawer"<?php echo $checker_bulk_notice !== null ? '' : ' hidden'; ?>>
+            <div class="checker-bulk-panel">
+                <p class="checker-bulk-hint">Upload a <strong>.csv</strong> or <strong>.txt</strong> file, or paste domains below (one per line). For Excel, use <strong>Save As → CSV (UTF-8)</strong>. Each row uses the <strong>first column</strong> as the domain. Duplicates in the same batch are skipped. Up to <strong>500</strong> domains per run.</p>
+                <form method="post" enctype="multipart/form-data" class="checker-bulk-form">
+                    <?php wp_nonce_field('domain_checker_bulk', 'domain_bulk_nonce'); ?>
+                    <textarea class="checker-bulk-textarea" name="bulk_domains_text" placeholder="example.com&#10;https://another.test&#10;site.org,ignored-extra-column" autocomplete="off"></textarea>
+                    <label class="checker-per-page-label" for="bulk_csv" style="display:block;margin-bottom:6px;">CSV / text file</label>
+                    <input class="checker-bulk-file" type="file" id="bulk_csv" name="bulk_csv" accept=".csv,.txt,text/csv,text/plain">
+                    <div class="checker-bulk-actions">
+                        <button type="submit" name="domain_bulk_submit" value="1" class="checker-bulk-submit">Import &amp; check all</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="checker-table-wrap">
+        <div class="checker-table-scroll">
+        <table id="domainTable" data-drc-empty-colspan="<?php echo $drc_sheet_mode ? '4' : '6'; ?>">
+            <thead>
+            <tr>
+                <?php if (!$drc_sheet_mode) : ?>
+                <th class="checker-cell-select" scope="col">
+                    <input id="checkerSelectAll" class="checker-select-all" type="checkbox" aria-label="Select all visible rows">
+                </th>
+                <?php endif; ?>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Domain</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-checker-sort="domain" data-checker-dir="asc" aria-label="Sort domain ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-checker-sort="domain" data-checker-dir="desc" aria-label="Sort domain descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Status</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-checker-sort="status" data-checker-dir="asc" aria-label="Sort status ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-checker-sort="status" data-checker-dir="desc" aria-label="Sort status descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Redirect</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-checker-sort="redirect" data-checker-dir="asc" aria-label="Sort redirect ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-checker-sort="redirect" data-checker-dir="desc" aria-label="Sort redirect descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <th scope="col">
+                    <div class="checker-th-inner">
+                        <span class="checker-th-label">Last checked</span>
+                        <span class="checker-th-sort">
+                            <button type="button" class="checker-sort-btn" data-checker-sort="time" data-checker-dir="asc" aria-label="Sort date ascending">▲</button>
+                            <button type="button" class="checker-sort-btn" data-checker-sort="time" data-checker-dir="desc" aria-label="Sort date descending">▼</button>
+                        </span>
+                    </div>
+                </th>
+                <?php if (!$drc_sheet_mode) : ?>
+                <th class="checker-cell-actions" scope="col">Action</th>
+                <?php endif; ?>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($rows)): ?>
+            <tr class="checker-table-empty">
+                <td colspan="<?php echo $drc_sheet_mode ? '4' : '6'; ?>" class="checker-empty"><?php echo $drc_sheet_mode ? 'No domains loaded from the sheet or CSV could not be fetched.' : 'No domains yet. Add one above to start checking.'; ?></td>
+            </tr>
+            <?php else: foreach ($rows as $row): echo drc_render_data_row_html($row, $drc_sheet_mode); endforeach; endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="checker-pagination-bar" id="checkerPaginationBar" aria-label="Table pagination">
+        <?php if (!$drc_sheet_mode) : ?>
+        <div class="checker-pagination-bar__left">
+            <span class="checker-selected-bar">
+                <button type="button" class="checker-delete-selected-btn" id="checkerDeleteSelectedBtn" disabled>Delete selected</button>
+                <span class="checker-per-page-label" id="checkerSelectedCountLabel" aria-live="polite"></span>
+            </span>
+        </div>
+        <?php else : ?>
+        <div class="checker-pagination-bar__left" aria-hidden="true"></div>
+        <?php endif; ?>
+        <div class="checker-pagination-bar__center">
+            <button type="button" class="checker-page-btn" id="checkerPagePrev">Previous</button>
+            <span class="checker-page-info" id="checkerPageInfo" aria-live="polite"></span>
+            <button type="button" class="checker-page-btn" id="checkerPageNext">Next</button>
+        </div>
+        <div class="checker-pagination-bar__right">
+            <label class="checker-per-page-label" for="checkerPerPage">Rows per page</label>
+            <select id="checkerPerPage" class="checker-per-page-select">
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="all">All Domains</option>
+            </select>
+        </div>
+    </div>
+
+    <?php if (!$drc_sheet_mode) : ?>
+    <div id="checkerDeleteModal" class="checker-delete-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="checkerDeleteModalTitle">
+        <div class="checker-delete-modal__backdrop" id="checkerDeleteModalBackdrop" tabindex="-1"></div>
+        <div class="checker-delete-modal__dialog">
+            <div class="checker-delete-modal__head">
+                <h2 id="checkerDeleteModalTitle" class="checker-delete-modal__title">Remove domain</h2>
+            </div>
+            <div class="checker-delete-modal__body">
+                <p class="checker-delete-modal__text">Remove this domain from your tracked list? You can add it again later.</p>
+                <p class="checker-delete-modal__domain" id="checkerDeleteModalDomain"></p>
+            </div>
+            <div class="checker-delete-modal__foot">
+                <button type="button" class="checker-delete-modal__btn checker-delete-modal__btn--cancel" id="checkerDeleteModalCancel">Cancel</button>
+                <button type="button" class="checker-delete-modal__btn checker-delete-modal__btn--danger" id="checkerDeleteModalConfirm">Remove</button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+</div>
+
+<script>
+(function () {
+    var table = document.getElementById('domainTable');
+    var search = document.getElementById('searchDomain');
+    var pagBar = document.getElementById('checkerPaginationBar');
+    var perPageSel = document.getElementById('checkerPerPage');
+    var pagePrev = document.getElementById('checkerPagePrev');
+    var pageNext = document.getElementById('checkerPageNext');
+    var pageInfo = document.getElementById('checkerPageInfo');
+    var selectAll = document.getElementById('checkerSelectAll');
+    var deleteSelectedBtn = document.getElementById('checkerDeleteSelectedBtn');
+    var selectedCountLabel = document.getElementById('checkerSelectedCountLabel');
+    if (!table) return;
+
+    var currentPage = 1;
+
+    var appRoot = document.getElementById('checkerAppRoot');
+    var ajaxUrl = appRoot ? appRoot.getAttribute('data-drc-ajax') : '';
+    var ajaxNonce = appRoot ? appRoot.getAttribute('data-drc-nonce') : '';
+    var addForm = document.getElementById('checkerAddDomainForm');
+    var addInput = document.getElementById('checkerAddDomainInput');
+    var addSubmit = document.getElementById('checkerAddDomainSubmit');
+    var statCount = document.getElementById('checkerStatCount');
+    var autoCheckForm = document.getElementById('checkerAutoCheckForm');
+    var autoCountdown = document.getElementById('checkerAutoCountdown');
+    var autoCountdownTimer = null;
+    var autoSubmitLock = false;
+    var countdownSkewMs = 0;
+    var autoIntervalSec = 43200;
+    if (autoCountdown) {
+        var _iv = parseInt(autoCountdown.getAttribute('data-auto-interval-sec') || '0', 10);
+        if (!isNaN(_iv) && _iv > 0) {
+            autoIntervalSec = _iv;
+        }
+        var serverNowTs = parseInt(autoCountdown.getAttribute('data-server-now') || '0', 10);
+        if (!isNaN(serverNowTs) && serverNowTs > 0) {
+            countdownSkewMs = Date.now() - (serverNowTs * 1000);
+        }
+    }
+
+    function checkerClientNowTs() {
+        return Math.floor((Date.now() - countdownSkewMs) / 1000);
+    }
+
+    function checkerFormatCountdown(totalSec) {
+        var sec = Math.max(0, parseInt(totalSec, 10) || 0);
+        if (sec >= 3600) {
+            var h = Math.floor(sec / 3600);
+            var m = Math.floor((sec % 3600) / 60);
+            var s = sec % 60;
+            return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        }
+        var mm = Math.floor(sec / 60);
+        var ss = sec % 60;
+        return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+    }
+
+    function checkerRequestAutoCheck(targetSlot) {
+        if (!autoCountdown || !ajaxUrl || !ajaxNonce || autoSubmitLock) return;
+        autoSubmitLock = true;
+        var body = new URLSearchParams();
+        body.set('action', 'drc_checker_auto_check');
+        body.set('nonce', ajaxNonce);
+        if (typeof targetSlot === 'number' && targetSlot >= 0) {
+            body.set('target_slot', String(targetSlot));
+        }
+
+        fetch(ajaxUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res && res.success && res.data) {
+                    var data = res.data;
+                    if (typeof data.count !== 'undefined') {
+                        checkerUpdateStatCount(parseInt(data.count, 10) || 0);
+                    }
+                    if (typeof data.next_run_ts !== 'undefined') {
+                        var nextTs = parseInt(data.next_run_ts, 10) || 0;
+                        if (nextTs > checkerClientNowTs()) {
+                            autoCountdown.setAttribute('data-next-run-ts', String(nextTs));
+                        } else {
+                            autoCountdown.setAttribute('data-next-run-ts', String(checkerClientNowTs() + autoIntervalSec));
+                        }
+                    } else {
+                        autoCountdown.setAttribute('data-next-run-ts', String(checkerClientNowTs() + autoIntervalSec));
+                    }
+                    if (typeof data.rows_html === 'string') {
+                        var tbody = table.querySelector('tbody');
+                        if (tbody) {
+                            if (data.rows_html.trim() === '') {
+                                tbody.innerHTML = '';
+                                checkerEnsureEmptyPlaceholder();
+                            } else {
+                                tbody.innerHTML = data.rows_html;
+                            }
+                            currentPage = 1;
+                            checkerRebuildView();
+                            checkerUpdateSelectedUI();
+                        }
+                    }
+                } else {
+                    if (autoCheckForm) {
+                        var autoTickInput2 = autoCheckForm.querySelector('input[name="drc_auto_tick"]');
+                        if (!autoTickInput2) {
+                            autoTickInput2 = document.createElement('input');
+                            autoTickInput2.type = 'hidden';
+                            autoTickInput2.name = 'drc_auto_tick';
+                            autoCheckForm.appendChild(autoTickInput2);
+                        }
+                        autoTickInput2.value = '1';
+                        autoCheckForm.submit();
+                        return;
+                    }
+                    autoCountdown.setAttribute('data-next-run-ts', String(checkerClientNowTs() + autoIntervalSec));
+                }
+                autoSubmitLock = false;
+                checkerUpdateAutoCountdown();
+            })
+            .catch(function () {
+                if (autoCheckForm) {
+                    var autoTickInput3 = autoCheckForm.querySelector('input[name="drc_auto_tick"]');
+                    if (!autoTickInput3) {
+                        autoTickInput3 = document.createElement('input');
+                        autoTickInput3.type = 'hidden';
+                        autoTickInput3.name = 'drc_auto_tick';
+                        autoCheckForm.appendChild(autoTickInput3);
+                    }
+                    autoTickInput3.value = '1';
+                    autoCheckForm.submit();
+                    return;
+                }
+                autoCountdown.setAttribute('data-next-run-ts', String(checkerClientNowTs() + autoIntervalSec));
+                autoSubmitLock = false;
+            });
+    }
+
+    function checkerUpdateAutoCountdown() {
+        if (!autoCountdown) return;
+        var nextRunTs = parseInt(autoCountdown.getAttribute('data-next-run-ts') || '0', 10);
+        if (isNaN(nextRunTs) || nextRunTs <= 0) return;
+        var nowTs = checkerClientNowTs();
+        var remaining = nextRunTs - nowTs;
+        autoCountdown.textContent = checkerFormatCountdown(remaining);
+        if (remaining <= 0) {
+            autoCountdown.textContent = '00:00';
+            // Move target forward immediately to avoid repeat triggers while request is in flight.
+            autoCountdown.setAttribute('data-next-run-ts', String(nowTs + autoIntervalSec));
+            var targetSlot = Math.floor(nextRunTs / autoIntervalSec);
+            checkerRequestAutoCheck(targetSlot);
+        }
+    }
+
+    if (autoCountdown) {
+        checkerUpdateAutoCountdown();
+        autoCountdownTimer = window.setInterval(checkerUpdateAutoCountdown, 1000);
+        // Safety poll: asks server regularly so due runs still fire even if the browser timer drifts.
+        window.setInterval(function () {
+            if (document.visibilityState === 'hidden') return;
+            checkerRequestAutoCheck(-1);
+        }, 15000);
+    }
+
+    function checkerSelectedIds() {
+        var ids = [];
+        table.querySelectorAll('tbody tr.checker-data-row input.checker-row-select:checked').forEach(function (cb) {
+            ids.push(cb.value);
+        });
+        return ids;
+    }
+
+    function checkerUpdateSelectedUI() {
+        var ids = checkerSelectedIds();
+        if (deleteSelectedBtn) deleteSelectedBtn.disabled = ids.length === 0;
+        if (selectedCountLabel) selectedCountLabel.textContent = ids.length ? (ids.length + ' selected') : '';
+
+        if (selectAll) {
+            var visibleCbs = [];
+            table.querySelectorAll('tbody tr.checker-data-row').forEach(function (row) {
+                if (row.style.display === 'none') return;
+                var cb = row.querySelector('input.checker-row-select');
+                if (cb) visibleCbs.push(cb);
+            });
+            if (visibleCbs.length === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else {
+                var checkedCount = visibleCbs.filter(function (cb) { return cb.checked; }).length;
+                selectAll.checked = checkedCount === visibleCbs.length;
+                selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCbs.length;
+            }
+        }
+    }
+
+    function checkerUpdateStatCount(n) {
+        if (statCount) statCount.textContent = String(n);
+    }
+
+    function checkerRemoveEmptyPlaceholder() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var emptyRow = tbody.querySelector('tr.checker-table-empty');
+        if (emptyRow) emptyRow.remove();
+    }
+
+    function checkerEnsureEmptyPlaceholder() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        if (tbody.querySelectorAll('tr.checker-data-row').length) return;
+        if (tbody.querySelector('tr.checker-table-empty')) return;
+        var tr = document.createElement('tr');
+        tr.className = 'checker-table-empty';
+        var td = document.createElement('td');
+        var colspan = 6;
+        if (table.getAttribute('data-drc-empty-colspan')) {
+            colspan = parseInt(table.getAttribute('data-drc-empty-colspan'), 10) || 6;
+        }
+        td.colSpan = colspan;
+        td.className = 'checker-empty';
+        var sheetMode = appRoot && appRoot.getAttribute('data-drc-sheet-mode') === '1';
+        td.textContent = sheetMode ? 'No domains loaded from the sheet or CSV could not be fetched.' : 'No domains yet. Add one above to start checking.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+
+    function drcParseRowHtml(html) {
+        var wrap = document.createElement('tbody');
+        wrap.innerHTML = html.trim();
+        return wrap.firstElementChild;
+    }
+
+    if (ajaxUrl && ajaxNonce && addForm && addInput) {
+        addForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var val = addInput.value.trim();
+            if (!val) return;
+            if (addSubmit) addSubmit.disabled = true;
+            var body = new URLSearchParams();
+            body.set('action', 'drc_checker_add');
+            body.set('nonce', ajaxNonce);
+            body.set('domain_url', val);
+            fetch(ajaxUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (addSubmit) addSubmit.disabled = false;
+                    if (!res || !res.success) {
+                        var msg = (res && res.data && res.data.message) ? res.data.message : 'Request failed.';
+                        window.alert(msg);
+                        return;
+                    }
+                    var rowEl = drcParseRowHtml(res.data.row_html);
+                    if (!rowEl) return;
+                    var tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    checkerRemoveEmptyPlaceholder();
+                    var rid = String(res.data.row_id || rowEl.getAttribute('data-row-id') || '');
+                    if (rid) {
+                        var old = tbody.querySelector('tr.checker-data-row[data-row-id="' + rid + '"]');
+                        if (old) old.remove();
+                    }
+                    tbody.insertBefore(rowEl, tbody.firstChild);
+                    addInput.value = '';
+                    checkerUpdateStatCount(res.data.count);
+                    currentPage = 1;
+                    checkerRebuildView();
+                    checkerUpdateSelectedUI();
+                })
+                .catch(function () {
+                    if (addSubmit) addSubmit.disabled = false;
+                    window.alert('Network error.');
+                });
+        });
+    }
+
+    var deleteModal = document.getElementById('checkerDeleteModal');
+    var deleteModalBackdrop = document.getElementById('checkerDeleteModalBackdrop');
+    var deleteModalDomain = document.getElementById('checkerDeleteModalDomain');
+    var deleteModalTitle = document.getElementById('checkerDeleteModalTitle');
+    var deleteModalText = deleteModal ? deleteModal.querySelector('.checker-delete-modal__text') : null;
+    var deleteModalCancel = document.getElementById('checkerDeleteModalCancel');
+    var deleteModalConfirm = document.getElementById('checkerDeleteModalConfirm');
+    var pendingDelete = null;
+
+    function checkerConfigureDeleteModal(title, text, domainLine, confirmLabel) {
+        if (deleteModalTitle && title) deleteModalTitle.textContent = title;
+        if (deleteModalText && text) deleteModalText.textContent = text;
+        if (deleteModalDomain) deleteModalDomain.textContent = domainLine || '—';
+        if (deleteModalConfirm && confirmLabel) deleteModalConfirm.textContent = confirmLabel;
+    }
+
+    function checkerCloseDeleteModal() {
+        pendingDelete = null;
+        if (deleteModal) {
+            deleteModal.setAttribute('hidden', '');
+            deleteModal.setAttribute('aria-hidden', 'true');
+        }
+        if (deleteModalCancel) deleteModalCancel.disabled = false;
+        if (deleteModalConfirm) deleteModalConfirm.disabled = false;
+        document.removeEventListener('keydown', checkerDeleteModalKeydown);
+    }
+
+    function checkerDeleteModalKeydown(ev) {
+        if (ev.key === 'Escape') {
+            ev.preventDefault();
+            checkerCloseDeleteModal();
+        }
+    }
+
+    function checkerOpenDeleteModal(link, id, domainLabel) {
+        if (!deleteModal || !deleteModalDomain) return;
+        pendingDelete = { kind: 'single', link: link, id: id };
+        checkerConfigureDeleteModal(
+            'Remove domain',
+            'Remove this domain from your tracked list? You can add it again later.',
+            domainLabel || '—',
+            'Remove'
+        );
+        deleteModal.removeAttribute('hidden');
+        deleteModal.setAttribute('aria-hidden', 'false');
+        document.addEventListener('keydown', checkerDeleteModalKeydown);
+        if (deleteModalCancel) deleteModalCancel.focus();
+    }
+
+    function checkerRunPendingDelete() {
+        if (!pendingDelete || !ajaxUrl || !ajaxNonce) return;
+        var kind = pendingDelete.kind || 'single';
+        var link = pendingDelete.link || null;
+        var id = pendingDelete.id || null;
+        var ids = pendingDelete.ids || null;
+        checkerCloseDeleteModal();
+        var body = new URLSearchParams();
+        body.set('action', kind === 'bulk' ? 'drc_checker_delete_selected' : 'drc_checker_delete');
+        body.set('nonce', ajaxNonce);
+        if (kind === 'bulk') {
+            (ids || []).forEach(function (x) { body.append('ids[]', x); });
+        } else {
+            body.set('id', id);
+        }
+        if (link) link.style.pointerEvents = 'none';
+        fetch(ajaxUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (link) link.style.pointerEvents = '';
+                if (!res || !res.success) {
+                    var msg = (res && res.data && res.data.message) ? res.data.message : 'Could not delete.';
+                    window.alert(msg);
+                    return;
+                }
+                if (kind === 'bulk') {
+                    (ids || []).forEach(function (x) {
+                        var trb = table.querySelector('tbody tr.checker-data-row[data-row-id=\"' + String(x) + '\"]');
+                        if (trb) trb.remove();
+                    });
+                } else if (link) {
+                    var tr = link.closest('tr.checker-data-row');
+                    if (tr) tr.remove();
+                }
+                checkerEnsureEmptyPlaceholder();
+                checkerUpdateStatCount(res.data.count);
+                checkerRebuildView();
+                checkerUpdateSelectedUI();
+            })
+            .catch(function () {
+                link.style.pointerEvents = '';
+                window.alert('Network error.');
+            });
+    }
+
+    if (deleteModalCancel) {
+        deleteModalCancel.addEventListener('click', checkerCloseDeleteModal);
+    }
+    if (deleteModalBackdrop) {
+        deleteModalBackdrop.addEventListener('click', checkerCloseDeleteModal);
+    }
+    if (deleteModalConfirm) {
+        deleteModalConfirm.addEventListener('click', function () {
+            if (!pendingDelete) return;
+            if (deleteModalCancel) deleteModalCancel.disabled = true;
+            deleteModalConfirm.disabled = true;
+            checkerRunPendingDelete();
+        });
+    }
+
+    if (ajaxUrl && ajaxNonce) {
+        table.addEventListener('click', function (e) {
+            var link = e.target.closest('a.checker-delete');
+            if (!link || !table.contains(link)) return;
+            e.preventDefault();
+            var id = link.getAttribute('data-delete-id');
+            if (!id) return;
+            var delRow = link.closest('tr.checker-data-row');
+            var domainCell = delRow ? delRow.querySelector('.checker-cell-domain') : null;
+            var domainLabel = domainCell ? domainCell.textContent.trim() : '';
+            if (deleteModal && deleteModalDomain) {
+                checkerOpenDeleteModal(link, id, domainLabel);
+            } else {
+                if (!window.confirm(domainLabel ? 'Remove ' + domainLabel + ' from the list?' : 'Remove this domain from the list?')) return;
+                pendingDelete = { link: link, id: id };
+                checkerRunPendingDelete();
+            }
+        });
+    }
+
+    table.addEventListener('change', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('checker-row-select')) {
+            checkerUpdateSelectedUI();
+        }
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            var want = !!selectAll.checked;
+            table.querySelectorAll('tbody tr.checker-data-row').forEach(function (row) {
+                if (row.style.display === 'none') return;
+                var cb = row.querySelector('input.checker-row-select');
+                if (cb) cb.checked = want;
+            });
+            checkerUpdateSelectedUI();
+        });
+    }
+
+    if (deleteSelectedBtn && ajaxUrl && ajaxNonce) {
+        deleteSelectedBtn.addEventListener('click', function () {
+            var ids = checkerSelectedIds();
+            if (!ids.length) return;
+            if (deleteModal && deleteModalDomain) {
+                pendingDelete = { kind: 'bulk', ids: ids.slice() };
+                checkerConfigureDeleteModal(
+                    ids.length === 1 ? 'Remove selected domain' : 'Remove selected domains',
+                    ids.length === 1
+                        ? 'Remove the selected domain from your tracked list?'
+                        : ('Remove ' + ids.length + ' selected domains from your tracked list?'),
+                    ids.length === 1 ? '1 domain selected' : (ids.length + ' domains selected'),
+                    ids.length === 1 ? 'Remove' : 'Remove all'
+                );
+                deleteModal.removeAttribute('hidden');
+                deleteModal.setAttribute('aria-hidden', 'false');
+                document.addEventListener('keydown', checkerDeleteModalKeydown);
+                if (deleteModalCancel) deleteModalCancel.focus();
+            } else {
+                // fallback
+                if (!window.confirm(ids.length === 1 ? 'Delete the selected domain?' : ('Delete ' + ids.length + ' selected domains?'))) return;
+                pendingDelete = { kind: 'bulk', ids: ids.slice() };
+                checkerRunPendingDelete();
+            }
+        });
+    }
+
+    function checkerApplyStripes() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var n = 0;
+        tbody.querySelectorAll('tr.checker-data-row').forEach(function (row) {
+            row.classList.remove('checker-row-light', 'checker-row-dark');
+            if (row.style.display === 'none') return;
+            n += 1;
+            row.classList.add(n % 2 === 1 ? 'checker-row-light' : 'checker-row-dark');
+        });
+    }
+
+    function checkerRebuildView() {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        var allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr.checker-data-row'));
+        var filterActive = search && search.value.trim() !== '';
+
+        if (filterActive) {
+            if (pagBar) pagBar.style.display = 'none';
+            var ft = search.value.toLowerCase().trim();
+            allRows.forEach(function (row) {
+                row.style.display = row.innerText.toLowerCase().includes(ft) ? '' : 'none';
+            });
+        } else {
+            var total = allRows.length;
+            var perPageValue = perPageSel ? perPageSel.value : '10';
+            var perPage = perPageValue === 'all' ? total : (parseInt(perPageValue, 10) || 10);
+
+            if (pagBar) {
+                pagBar.style.display = total === 0 ? 'none' : 'grid';
+            }
+
+            if (total > 0) {
+                var totalPages = perPageValue === 'all' ? 1 : Math.max(1, Math.ceil(total / perPage));
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+
+                allRows.forEach(function (row, i) {
+                    var onPage = i >= (currentPage - 1) * perPage && i < currentPage * perPage;
+                    row.style.display = onPage ? '' : 'none';
+                });
+
+                if (pagBar && pageInfo) {
+                    var start = perPageValue === 'all' ? 1 : ((currentPage - 1) * perPage + 1);
+                    var end = perPageValue === 'all' ? total : Math.min(currentPage * perPage, total);
+                    pageInfo.textContent = 'Showing ' + start + '–' + end + ' of ' + total + ' · Page ' + currentPage + ' / ' + totalPages;
+                }
+                if (pagePrev) pagePrev.disabled = currentPage <= 1 || perPageValue === 'all';
+                if (pageNext) pageNext.disabled = currentPage >= totalPages || perPageValue === 'all';
+            }
+        }
+
+
+        checkerApplyStripes();
+        checkerUpdateSelectedUI();
+    }
+
+    function checkerSortValue(row, col) {
+        var map = {
+            domain: 'data-sort-domain',
+            status: 'data-sort-status-label',
+            redirect: 'data-sort-redirect',
+            time: 'data-sort-time'
+        };
+        var attr = map[col];
+        if (!attr) return '';
+        var v = row.getAttribute(attr);
+        return v === null ? '' : v;
+    }
+
+    function checkerSortTable(col, dir) {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.checker-data-row'));
+        if (rows.length === 0) return;
+
+        var asc = dir === 'asc';
+
+        rows.sort(function (a, b) {
+            var va = checkerSortValue(a, col);
+            var vb = checkerSortValue(b, col);
+            var cmp = String(va).localeCompare(String(vb), undefined, { sensitivity: 'base', numeric: true });
+            return asc ? cmp : -cmp;
+        });
+
+        var emptyRow = tbody.querySelector('tr.checker-table-empty');
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+        if (emptyRow) {
+            tbody.appendChild(emptyRow);
+        }
+
+        currentPage = 1;
+        checkerRebuildView();
+    }
+
+    table.querySelectorAll('.checker-sort-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var col = btn.getAttribute('data-checker-sort');
+            var dir = btn.getAttribute('data-checker-dir');
+            if (col && dir) {
+                checkerSortTable(col, dir);
+            }
+        });
+    });
+
+    if (search) {
+        search.addEventListener('input', checkerRebuildView);
+    }
+    if (perPageSel) {
+        perPageSel.addEventListener('change', function () {
+            currentPage = 1;
+            checkerRebuildView();
+        });
+    }
+    if (pagePrev) {
+        pagePrev.addEventListener('click', function () {
+            if (currentPage > 1) {
+                currentPage -= 1;
+                checkerRebuildView();
+            }
+        });
+    }
+    if (pageNext) {
+        pageNext.addEventListener('click', function () {
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            var total = tbody.querySelectorAll('tr.checker-data-row').length;
+            var perPageValue = perPageSel ? perPageSel.value : '10';
+            var perPage = perPageValue === 'all' ? total : (parseInt(perPageValue, 10) || 10);
+            var totalPages = perPageValue === 'all' ? 1 : Math.max(1, Math.ceil(total / perPage));
+            if (currentPage < totalPages) {
+                currentPage += 1;
+                checkerRebuildView();
+            }
+        });
+    }
+
+    checkerRebuildView();
+    checkerUpdateSelectedUI();
+})();
+</script>
+
+<script>
+(function () {
+    var bulkToggle = document.getElementById('checkerBulkToggle');
+    var bulkDrawer = document.getElementById('checkerBulkDrawer');
+    if (!bulkToggle || !bulkDrawer) return;
+    bulkToggle.addEventListener('click', function () {
+        if (bulkDrawer.hasAttribute('hidden')) {
+            bulkDrawer.removeAttribute('hidden');
+            bulkToggle.setAttribute('aria-expanded', 'true');
+        } else {
+            bulkDrawer.setAttribute('hidden', '');
+            bulkToggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+})();
+</script>
+
+<?php
+    return ob_get_clean();
+}
+add_shortcode('domain_redirect_dashboard', 'domain_redirect_dashboard_shortcode');
