@@ -74,6 +74,16 @@
       },
       {
         "standing_place": 8,
+        "standing_team": "Chennai Super Kings",
+        "standing_MP": 5,
+        "standing_W": 2,
+        "standing_L": 3,
+        "standing_Pts": 4,
+        "standing_NRR": "-0.846",
+        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/csk.png"
+      },
+      {
+        "standing_place": 9,
         "standing_team": "Mumbai Indians",
         "standing_MP": 4,
         "standing_W": 1,
@@ -83,23 +93,13 @@
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/mumbai-indians.png"
       },
       {
-        "standing_place": 9,
-        "standing_team": "Chennai Super Kings",
-        "standing_MP": 4,
-        "standing_W": 1,
-        "standing_L": 3,
-        "standing_Pts": 2,
-        "standing_NRR": "-1.532",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/csk.png"
-      },
-      {
         "standing_place": 10,
         "standing_team": "Kolkata Knight Riders",
-        "standing_MP": 4,
+        "standing_MP": 5,
         "standing_W": 0,
-        "standing_L": 3,
+        "standing_L": 4,
         "standing_Pts": 1,
-        "standing_NRR": "-1.315",
+        "standing_NRR": "-1.383",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/kkr.png"
       }
     ]
