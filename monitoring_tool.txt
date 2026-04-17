@@ -22,6 +22,13 @@ if (!defined('DUM_SHEET_GID')) {
 if (!defined('DUM_SHEET_SSL_INSECURE')) {
     define('DUM_SHEET_SSL_INSECURE', false);
 }
+/** Optional tuning for large lists (e.g. 800+ sites) to avoid PHP / gateway timeouts. */
+if (!defined('DUM_CHECK_BATCH_SIZE')) {
+    define('DUM_CHECK_BATCH_SIZE', 15);
+}
+if (!defined('DUM_CHECK_TIME_BUDGET')) {
+    define('DUM_CHECK_TIME_BUDGET', 38);
+}
 
 if (!function_exists('dum_table_name')) {
 
@@ -448,21 +455,98 @@ if (!function_exists('dum_table_name')) {
         return implode("\n", $html);
     }
 
-    function dum_run_check_all_domains($wpdb, $table_name) {
-        @set_time_limit(600);
-        $all_domains = $wpdb->get_col("SELECT domain FROM $table_name");
+    function dum_check_batch_size() {
+        $n = (int) apply_filters('dum_check_batch_size', (int) DUM_CHECK_BATCH_SIZE);
+        return max(3, min(80, $n));
+    }
+
+    function dum_check_request_time_budget() {
+        $t = (float) apply_filters('dum_check_request_time_budget', (float) DUM_CHECK_TIME_BUDGET);
+        return max(5.0, min(120.0, $t));
+    }
+
+    /**
+     * Probe up to $limit rows with id > $after_id (stable cursor for batching).
+     *
+     * @return array{checked:int,last_id:int,done:bool}
+     */
+    function dum_process_probe_batch($wpdb, $table_name, $after_id, $limit) {
+        $after_id = (int) $after_id;
+        $limit = (int) $limit;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, domain FROM $table_name WHERE id > %d ORDER BY id ASC LIMIT %d",
+            $after_id,
+            $limit
+        ));
+        if (empty($rows)) {
+            return ['checked' => 0, 'last_id' => $after_id, 'done' => true];
+        }
         $checked = 0;
-        if (!empty($all_domains)) {
-            foreach ($all_domains as $saved_domain) {
-                $url = dum_normalize_domain($saved_domain);
-                if (!$url) {
-                    continue;
-                }
-                dum_upsert_domain($wpdb, $table_name, $url);
-                $checked++;
+        $last_id = $after_id;
+        foreach ($rows as $row) {
+            $last_id = (int) $row->id;
+            $url = dum_normalize_domain($row->domain);
+            if (!$url) {
+                continue;
+            }
+            dum_upsert_domain($wpdb, $table_name, $url);
+            $checked++;
+        }
+        $done = count($rows) < $limit;
+        return ['checked' => $checked, 'last_id' => $last_id, 'done' => $done];
+    }
+
+    /**
+     * Run as many batches as fit in $budget_seconds (wall clock).
+     *
+     * @return array{checked:int,done:bool,resume_after_id:int}
+     */
+    function dum_run_probe_until_budget($wpdb, $table_name, $start_after_id, $budget_seconds) {
+        $deadline = microtime(true) + max(2.0, (float) $budget_seconds);
+        $after_id = (int) $start_after_id;
+        $total_checked = 0;
+        $batch_size = dum_check_batch_size();
+        while (microtime(true) < $deadline) {
+            $b = dum_process_probe_batch($wpdb, $table_name, $after_id, $batch_size);
+            $total_checked += (int) $b['checked'];
+            $after_id = (int) $b['last_id'];
+            if (!empty($b['done'])) {
+                return [
+                    'checked' => $total_checked,
+                    'done' => true,
+                    'resume_after_id' => 0,
+                ];
             }
         }
-        return $checked;
+        return [
+            'checked' => $total_checked,
+            'done' => false,
+            'resume_after_id' => $after_id,
+        ];
+    }
+
+    /**
+     * Full table probe (CLI / legacy POST). Loops time slices to avoid one huge gateway window.
+     */
+    function dum_run_check_all_domains($wpdb, $table_name) {
+        @set_time_limit(0);
+        if (function_exists('ignore_user_abort')) {
+            ignore_user_abort(true);
+        }
+        $ini = (int) ini_get('max_execution_time');
+        $slice = $ini > 0 ? max(20.0, (float) $ini - 12) : 90.0;
+        $slice = min($slice, 120.0);
+        $after = 0;
+        $total = 0;
+        while (true) {
+            $r = dum_run_probe_until_budget($wpdb, $table_name, $after, $slice);
+            $total += (int) $r['checked'];
+            if (!empty($r['done'])) {
+                break;
+            }
+            $after = (int) $r['resume_after_id'];
+        }
+        return $total;
     }
 
     function dum_auto_check_interval_seconds() {
@@ -500,6 +584,9 @@ if (!function_exists('dum_table_name')) {
 
     function dum_maybe_run_scheduled_check($wpdb, $table_name, $now_ts) {
         $now_ts = (int) $now_ts;
+        if (get_transient('dum_scheduled_probe_state')) {
+            return 0;
+        }
         $current_slot = dum_auto_check_slot($now_ts);
         $last_checked_slot = (int) get_option('dum_last_auto_check_slot', -1);
         if ($last_checked_slot >= $current_slot) {
@@ -510,7 +597,7 @@ if (!function_exists('dum_table_name')) {
         if (get_transient($lock_key)) {
             return 0;
         }
-        set_transient($lock_key, 1, dum_auto_check_interval_seconds());
+        set_transient($lock_key, 1, 2 * HOUR_IN_SECONDS);
 
         try {
             $fresh_slot = dum_auto_check_slot(time());
@@ -518,14 +605,74 @@ if (!function_exists('dum_table_name')) {
             if ($fresh_last_slot >= $fresh_slot) {
                 return 0;
             }
-            $checked = dum_run_check_all_domains($wpdb, $table_name);
-            update_option('dum_last_auto_check_ts', $now_ts, false);
-            update_option('dum_last_auto_check_slot', $fresh_slot, false);
-            update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+            $budget = dum_check_request_time_budget();
+            $r = dum_run_probe_until_budget($wpdb, $table_name, 0, $budget);
+            if (!empty($r['done'])) {
+                update_option('dum_last_auto_check_ts', $now_ts, false);
+                update_option('dum_last_auto_check_slot', $fresh_slot, false);
+                update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+                return (int) $r['checked'];
+            }
+            set_transient('dum_scheduled_probe_state', [
+                'active' => 1,
+                'after_id' => (int) $r['resume_after_id'],
+                'checked_total' => (int) $r['checked'],
+                'target_slot' => $fresh_slot,
+                'now_ts' => $now_ts,
+            ], 6 * HOUR_IN_SECONDS);
+            if (!wp_next_scheduled('dum_checker_scheduled_probe_resume')) {
+                wp_schedule_single_event(time() + 60, 'dum_checker_scheduled_probe_resume');
+            }
+            return (int) $r['checked'];
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    function dum_continue_scheduled_probe_job($wpdb, $table_name) {
+        $state = get_transient('dum_scheduled_probe_state');
+        if (!is_array($state) || empty($state['active'])) {
+            return 0;
+        }
+        $lock_key = 'dum_auto_check_lock';
+        if (get_transient($lock_key)) {
+            if (!wp_next_scheduled('dum_checker_scheduled_probe_resume')) {
+                wp_schedule_single_event(time() + 90, 'dum_checker_scheduled_probe_resume');
+            }
+            return 0;
+        }
+        set_transient($lock_key, 1, 2 * HOUR_IN_SECONDS);
+        try {
+            $after = (int) ($state['after_id'] ?? 0);
+            $r = dum_run_probe_until_budget($wpdb, $table_name, $after, dum_check_request_time_budget());
+            $checked = (int) $r['checked'];
+            $state['checked_total'] = (int) ($state['checked_total'] ?? 0) + $checked;
+            $state['after_id'] = (int) $r['resume_after_id'];
+
+            if (!empty($r['done'])) {
+                delete_transient('dum_scheduled_probe_state');
+                $now_ts = (int) ($state['now_ts'] ?? dum_ph_now_timestamp());
+                $fresh_slot = (int) ($state['target_slot'] ?? dum_auto_check_slot($now_ts));
+                update_option('dum_last_auto_check_ts', $now_ts, false);
+                update_option('dum_last_auto_check_slot', $fresh_slot, false);
+                update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
+                wp_clear_scheduled_hook('dum_checker_scheduled_probe_resume');
+            } else {
+                set_transient('dum_scheduled_probe_state', $state, 6 * HOUR_IN_SECONDS);
+                if (!wp_next_scheduled('dum_checker_scheduled_probe_resume')) {
+                    wp_schedule_single_event(time() + 60, 'dum_checker_scheduled_probe_resume');
+                }
+            }
             return $checked;
         } finally {
             delete_transient($lock_key);
         }
+    }
+
+    function dum_on_scheduled_probe_resume() {
+        global $wpdb;
+        dum_ensure_table();
+        dum_continue_scheduled_probe_job($wpdb, dum_table_name());
     }
 
     function dum_maybe_run_target_slot_check($wpdb, $table_name, $now_ts, $target_slot) {
@@ -586,6 +733,7 @@ if (!function_exists('dum_table_name')) {
         if (dum_is_sheet_source_mode()) {
             dum_sync_domains_from_google_sheet($wpdb, $table_name, true);
         }
+        dum_continue_scheduled_probe_job($wpdb, $table_name);
         $now_ts = dum_ph_now_timestamp();
         dum_maybe_run_scheduled_check($wpdb, $table_name, $now_ts);
         update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
@@ -657,32 +805,6 @@ if (!function_exists('dum_table_name')) {
         wp_send_json_success(['count' => dum_count_rows()]);
     }
 
-    /**
-     * Full HTTP re-check for every row. Used when the browser countdown fires so the tab always
-     * gets fresh status even if WP-Cron already ran this 10-minute slot (slot dedupe would skip otherwise).
-     */
-    /**
-     * @return int Number of URLs probed, or -1 if another process holds the lock.
-     */
-    function dum_force_probe_all_with_lock($wpdb, $table_name, $now_ts) {
-        $now_ts = (int) $now_ts;
-        $lock_key = 'dum_auto_check_lock';
-        if (get_transient($lock_key)) {
-            return -1;
-        }
-        set_transient($lock_key, 1, dum_auto_check_interval_seconds());
-        try {
-            $checked = dum_run_check_all_domains($wpdb, $table_name);
-            $slot = dum_auto_check_slot($now_ts);
-            update_option('dum_last_auto_check_ts', $now_ts, false);
-            update_option('dum_last_auto_check_slot', $slot, false);
-            update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($now_ts), false);
-            return $checked;
-        } finally {
-            delete_transient($lock_key);
-        }
-    }
-
     function dum_ajax_auto_check() {
         dum_ajax_verify_nonce();
         global $wpdb;
@@ -694,33 +816,73 @@ if (!function_exists('dum_table_name')) {
         }
         $server_now = dum_ph_now_timestamp();
         $target_slot = isset($_POST['target_slot']) ? (int) wp_unslash($_POST['target_slot']) : -1;
-        if ($target_slot >= 0) {
-            // Countdown tick: always re-probe (slot dedupe would often skip after WP-Cron ran first).
-            $fp = dum_force_probe_all_with_lock($wpdb, $table_name, $server_now);
-            $checked = max(0, $fp);
+        $manual_full = isset($_POST['manual_full']) && (string) wp_unslash($_POST['manual_full']) === '1';
+        $budget = dum_check_request_time_budget();
+        $checked = 0;
+        $probe_done = true;
+        $probe_after_id = 0;
+        $sheet_probe_continue = false;
+
+        if ($manual_full) {
+            $after = isset($_POST['probe_after_id']) ? (int) wp_unslash($_POST['probe_after_id']) : 0;
+            $r = dum_run_probe_until_budget($wpdb, $table_name, $after, $budget);
+            $checked = (int) $r['checked'];
+            $probe_done = !empty($r['done']);
+            $probe_after_id = $probe_done ? 0 : (int) $r['resume_after_id'];
+            if ($probe_done) {
+                update_option('dum_last_auto_check_ts', $server_now, false);
+                update_option('dum_last_auto_check_slot', dum_auto_check_slot($server_now), false);
+                update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($server_now), false);
+            }
+        } elseif ($target_slot >= 0) {
+            $after = isset($_POST['probe_after_id']) ? (int) wp_unslash($_POST['probe_after_id']) : 0;
+            $r = dum_run_probe_until_budget($wpdb, $table_name, $after, $budget);
+            $checked = (int) $r['checked'];
+            $probe_done = !empty($r['done']);
+            $probe_after_id = $probe_done ? 0 : (int) $r['resume_after_id'];
+            if ($probe_done) {
+                $slot = dum_auto_check_slot($server_now);
+                update_option('dum_last_auto_check_ts', $server_now, false);
+                update_option('dum_last_auto_check_slot', $slot, false);
+                update_option('dum_next_auto_run_ts', dum_next_slot_timestamp($server_now), false);
+            }
         } else {
             $checked = dum_maybe_run_scheduled_check($wpdb, $table_name, $server_now);
-            // Google Sheet view: 15s AJAX poll — still run a full probe at least once per interval if slot logic skipped.
             if ($vo && $checked === 0) {
                 $iv = dum_auto_check_interval_seconds();
-                if ($server_now - (int) get_option('dum_sheet_ui_probe_ts', 0) >= $iv) {
-                    $fp = dum_force_probe_all_with_lock($wpdb, $table_name, $server_now);
-                    if ($fp >= 0) {
+                $sheet_after = isset($_POST['sheet_probe_after_id']) ? (int) wp_unslash($_POST['sheet_probe_after_id']) : 0;
+                $due = ($server_now - (int) get_option('dum_sheet_ui_probe_ts', 0) >= $iv) || $sheet_after > 0;
+                if ($due) {
+                    $r = dum_run_probe_until_budget($wpdb, $table_name, $sheet_after, $budget);
+                    $checked = (int) $r['checked'];
+                    $probe_done = !empty($r['done']);
+                    $probe_after_id = $probe_done ? 0 : (int) $r['resume_after_id'];
+                    $sheet_probe_continue = !$probe_done;
+                    if ($probe_done) {
                         update_option('dum_sheet_ui_probe_ts', $server_now, false);
-                    }
-                    if ($fp > 0) {
-                        $checked = $fp;
                     }
                 }
             }
         }
+
         $rows = $wpdb->get_results("SELECT * FROM $table_name ORDER BY last_checked DESC");
+
+        $omit_rows_html = false;
+        if ($manual_full || $target_slot >= 0) {
+            $omit_rows_html = !$probe_done;
+        } elseif ($vo && $sheet_probe_continue) {
+            $omit_rows_html = true;
+        }
 
         wp_send_json_success([
             'checked' => (int) $checked,
             'count' => dum_count_rows(),
             'next_run_ts' => (int) dum_next_run_timestamp($wpdb, $table_name),
-            'rows_html' => dum_render_table_rows_html($rows, $vo),
+            'rows_omitted' => $omit_rows_html,
+            'rows_html' => $omit_rows_html ? '' : dum_render_table_rows_html($rows, $vo),
+            'probe_done' => $probe_done,
+            'probe_after_id' => $probe_after_id,
+            'sheet_probe_continue' => $sheet_probe_continue,
         ]);
     }
 
@@ -738,6 +900,7 @@ if (!function_exists('dum_table_name')) {
     });
     add_action('init', 'dum_schedule_auto_check_event');
     add_action('dum_checker_auto_check_cron', 'dum_auto_check_cron_runner');
+    add_action('dum_checker_scheduled_probe_resume', 'dum_on_scheduled_probe_resume');
 }
 
 function domain_uptime_monitor_shortcode() {
@@ -2005,6 +2168,9 @@ function domain_uptime_monitor_shortcode() {
         }
     }
 
+    var sheetProbeAfterId = 0;
+    var monitorCheckAllBtn = autoCheckForm ? autoCheckForm.querySelector('button[name="monitor_check_all_submit"]') : null;
+
     function monitorClientNowTs() {
         return Math.floor((Date.now() - countdownSkewMs) / 1000);
     }
@@ -2022,14 +2188,128 @@ function domain_uptime_monitor_shortcode() {
         return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
     }
 
+    function monitorApplyAutoCheckPayload(data) {
+        if (typeof data.count !== 'undefined') {
+            monitorUpdateStatCount(parseInt(data.count, 10) || 0);
+        }
+        if (autoCountdown) {
+            if (typeof data.next_run_ts !== 'undefined') {
+                var nextTs = parseInt(data.next_run_ts, 10) || 0;
+                if (nextTs > monitorClientNowTs()) {
+                    autoCountdown.setAttribute('data-next-run-ts', String(nextTs));
+                } else {
+                    autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+                }
+            } else {
+                autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+            }
+        }
+        if (data.rows_omitted !== true && typeof data.rows_html === 'string') {
+            var tbody = table.querySelector('tbody');
+            if (tbody) {
+                if (data.rows_html.trim() === '') {
+                    tbody.innerHTML = '';
+                    monitorEnsureEmptyPlaceholder();
+                } else {
+                    tbody.innerHTML = data.rows_html;
+                }
+                currentPage = 1;
+                monitorRebuildView();
+                monitorUpdateSelectedUI();
+            }
+        }
+    }
+
+    function monitorRunProbeChunks(isManual, targetSlot, startAfter) {
+        if (!autoCountdown || !ajaxUrl || !ajaxNonce || autoSubmitLock) return;
+        autoSubmitLock = true;
+        function finishOk() {
+            autoSubmitLock = false;
+            monitorUpdateAutoCountdown();
+            if (monitorCheckAllBtn) {
+                monitorCheckAllBtn.disabled = false;
+                var lbl = monitorCheckAllBtn.getAttribute('data-dum-check-label');
+                if (lbl) monitorCheckAllBtn.textContent = lbl;
+            }
+        }
+        function failFallback() {
+            if (autoCheckForm) {
+                if (isManual) {
+                    if (monitorCheckAllBtn) {
+                        monitorCheckAllBtn.disabled = false;
+                        var lbl0 = monitorCheckAllBtn.getAttribute('data-dum-check-label');
+                        if (lbl0) monitorCheckAllBtn.textContent = lbl0;
+                    }
+                    autoCheckForm.submit();
+                    return;
+                }
+                var autoTickInput2 = autoCheckForm.querySelector('input[name="dum_auto_tick"]');
+                if (!autoTickInput2) {
+                    autoTickInput2 = document.createElement('input');
+                    autoTickInput2.type = 'hidden';
+                    autoTickInput2.name = 'dum_auto_tick';
+                    autoCheckForm.appendChild(autoTickInput2);
+                }
+                autoTickInput2.value = '1';
+                autoCheckForm.submit();
+                return;
+            }
+            if (autoCountdown) {
+                autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
+            }
+            autoSubmitLock = false;
+            monitorUpdateAutoCountdown();
+        }
+        function step(aid) {
+            var body = new URLSearchParams();
+            body.set('action', 'dum_checker_auto_check');
+            body.set('nonce', ajaxNonce);
+            body.set('probe_after_id', String(aid));
+            if (isManual) {
+                body.set('manual_full', '1');
+            } else {
+                body.set('target_slot', String(targetSlot));
+            }
+            fetch(ajaxUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success || !res.data) {
+                        failFallback();
+                        return;
+                    }
+                    var data = res.data;
+                    monitorApplyAutoCheckPayload(data);
+                    var done = data.probe_done !== false && data.probe_done !== '0';
+                    if (!done) {
+                        step(parseInt(data.probe_after_id, 10) || 0);
+                        return;
+                    }
+                    finishOk();
+                })
+                .catch(function () {
+                    failFallback();
+                });
+        }
+        step(startAfter || 0);
+    }
+
     function monitorRequestAutoCheck(targetSlot) {
         if (!autoCountdown || !ajaxUrl || !ajaxNonce || autoSubmitLock) return;
+        if (typeof targetSlot === 'number' && targetSlot >= 0) {
+            monitorRunProbeChunks(false, targetSlot, 0);
+            return;
+        }
         autoSubmitLock = true;
         var body = new URLSearchParams();
         body.set('action', 'dum_checker_auto_check');
         body.set('nonce', ajaxNonce);
-        if (typeof targetSlot === 'number' && targetSlot >= 0) {
-            body.set('target_slot', String(targetSlot));
+        if (sheetProbeAfterId > 0) {
+            body.set('sheet_probe_after_id', String(sheetProbeAfterId));
         }
 
         fetch(ajaxUrl, {
@@ -2042,33 +2322,15 @@ function domain_uptime_monitor_shortcode() {
             .then(function (res) {
                 if (res && res.success && res.data) {
                     var data = res.data;
-                    if (typeof data.count !== 'undefined') {
-                        monitorUpdateStatCount(parseInt(data.count, 10) || 0);
+                    monitorApplyAutoCheckPayload(data);
+                    if (data.sheet_probe_continue) {
+                        sheetProbeAfterId = parseInt(data.probe_after_id, 10) || 0;
+                        autoSubmitLock = false;
+                        monitorUpdateAutoCountdown();
+                        monitorRequestAutoCheck(-1);
+                        return;
                     }
-                    if (typeof data.next_run_ts !== 'undefined') {
-                        var nextTs = parseInt(data.next_run_ts, 10) || 0;
-                        if (nextTs > monitorClientNowTs()) {
-                            autoCountdown.setAttribute('data-next-run-ts', String(nextTs));
-                        } else {
-                            autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
-                        }
-                    } else {
-                        autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
-                    }
-                    if (typeof data.rows_html === 'string') {
-                        var tbody = table.querySelector('tbody');
-                        if (tbody) {
-                            if (data.rows_html.trim() === '') {
-                                tbody.innerHTML = '';
-                                monitorEnsureEmptyPlaceholder();
-                            } else {
-                                tbody.innerHTML = data.rows_html;
-                            }
-                            currentPage = 1;
-                            monitorRebuildView();
-                            monitorUpdateSelectedUI();
-                        }
-                    }
+                    sheetProbeAfterId = 0;
                 } else {
                     if (autoCheckForm) {
                         var autoTickInput2 = autoCheckForm.querySelector('input[name="dum_auto_tick"]');
@@ -2103,6 +2365,24 @@ function domain_uptime_monitor_shortcode() {
                 autoCountdown.setAttribute('data-next-run-ts', String(monitorClientNowTs() + autoIntervalSec));
                 autoSubmitLock = false;
             });
+    }
+
+    if (autoCheckForm) {
+        autoCheckForm.addEventListener('submit', function (e) {
+            var tick = document.getElementById('monitorAutoTickInput');
+            if (tick && tick.value === '1') return;
+            var sub = e.submitter || autoCheckForm.querySelector('button[name="monitor_check_all_submit"]');
+            if (!sub || sub.name !== 'monitor_check_all_submit') return;
+            e.preventDefault();
+            if (monitorCheckAllBtn) {
+                if (!monitorCheckAllBtn.getAttribute('data-dum-check-label')) {
+                    monitorCheckAllBtn.setAttribute('data-dum-check-label', monitorCheckAllBtn.textContent);
+                }
+                monitorCheckAllBtn.disabled = true;
+                monitorCheckAllBtn.textContent = 'Checking…';
+            }
+            monitorRunProbeChunks(true, -1, 0);
+        });
     }
 
     function monitorUpdateAutoCountdown() {

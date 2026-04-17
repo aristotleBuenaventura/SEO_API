@@ -34,6 +34,16 @@
       },
       {
         "standing_place": 4,
+        "standing_team": "Gujarat Titans",
+        "standing_MP": 5,
+        "standing_W": 3,
+        "standing_L": 2,
+        "standing_Pts": 6,
+        "standing_NRR": "0.018",
+        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/gujarat-titans.png"
+      },
+      {
+        "standing_place": 5,
         "standing_team": "Sunrisers Hyderabad",
         "standing_MP": 5,
         "standing_W": 2,
@@ -43,7 +53,7 @@
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/sunrisers-hyderabad.png"
       },
       {
-        "standing_place": 5,
+        "standing_place": 6,
         "standing_team": "Delhi Capitals",
         "standing_MP": 4,
         "standing_W": 2,
@@ -51,16 +61,6 @@
         "standing_Pts": 4,
         "standing_NRR": "0.322",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/delhi-capitals.png"
-      },
-      {
-        "standing_place": 6,
-        "standing_team": "Gujarat Titans",
-        "standing_MP": 4,
-        "standing_W": 2,
-        "standing_L": 2,
-        "standing_Pts": 4,
-        "standing_NRR": "-0.029",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/gujarat-titans.png"
       },
       {
         "standing_place": 7,
@@ -95,11 +95,11 @@
       {
         "standing_place": 10,
         "standing_team": "Kolkata Knight Riders",
-        "standing_MP": 5,
+        "standing_MP": 6,
         "standing_W": 0,
-        "standing_L": 4,
+        "standing_L": 5,
         "standing_Pts": 1,
-        "standing_NRR": "-1.383",
+        "standing_NRR": "-1.149",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/kkr.png"
       }
     ]
