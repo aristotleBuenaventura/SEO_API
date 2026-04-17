@@ -466,7 +466,7 @@ if (!function_exists('dum_table_name')) {
     }
 
     function dum_auto_check_interval_seconds() {
-        return 5 * MINUTE_IN_SECONDS;
+        return 10 * MINUTE_IN_SECONDS;
     }
 
     function dum_ph_now_timestamp() {
@@ -564,11 +564,19 @@ if (!function_exists('dum_table_name')) {
 
     function dum_schedule_auto_check_event() {
         $hook = 'dum_checker_auto_check_cron';
-        if (wp_next_scheduled($hook)) {
-            return;
+        $schedule = 'dum_every_ten_minutes';
+        $next = wp_next_scheduled($hook);
+        if ($next) {
+            $current = wp_get_schedule($hook);
+            if ($current && $current !== $schedule) {
+                wp_unschedule_event($next, $hook);
+                $next = false;
+            }
         }
-        $first_run = dum_next_slot_timestamp();
-        wp_schedule_event($first_run, 'dum_every_five_minutes', $hook);
+        if (!$next) {
+            $first_run = dum_next_slot_timestamp();
+            wp_schedule_event($first_run, $schedule, $hook);
+        }
     }
 
     function dum_auto_check_cron_runner() {
@@ -651,7 +659,7 @@ if (!function_exists('dum_table_name')) {
 
     /**
      * Full HTTP re-check for every row. Used when the browser countdown fires so the tab always
-     * gets fresh status even if WP-Cron already ran this 5-minute slot (slot dedupe would skip otherwise).
+     * gets fresh status even if WP-Cron already ran this 10-minute slot (slot dedupe would skip otherwise).
      */
     /**
      * @return int Number of URLs probed, or -1 if another process holds the lock.
@@ -722,9 +730,9 @@ if (!function_exists('dum_table_name')) {
     add_action('wp_ajax_dum_checker_auto_check', 'dum_ajax_auto_check');
     add_action('wp_ajax_nopriv_dum_checker_auto_check', 'dum_ajax_auto_check');
     add_filter('cron_schedules', function ($schedules) {
-        $schedules['dum_every_five_minutes'] = [
+        $schedules['dum_every_ten_minutes'] = [
             'interval' => dum_auto_check_interval_seconds(),
-            'display' => 'Every 5 Minutes (DUM)',
+            'display' => 'Every 10 Minutes (DUM)',
         ];
         return $schedules;
     });
@@ -1800,11 +1808,15 @@ function domain_uptime_monitor_shortcode() {
             <p>Check whether each domain responds over HTTP. UP means the server returned a valid HTTP status; DOWN means timeout, connection error, or no response.</p>
         </div>
         <div class="checker-dash-top__meta">
-            <span class="checker-stat"><span class="checker-stat-countdown" id="monitorAutoCountdown" data-next-run-ts="<?php echo esc_attr((string) (int) $next_run_ts); ?>" data-server-now="<?php echo esc_attr((string) (int) $server_now); ?>" aria-live="polite">05:00</span><strong id="monitorStatCount"><?php echo (int) $row_count; ?></strong> tracked</span>
+            <span class="checker-stat"><strong id="monitorStatCount"><?php echo (int) $row_count; ?></strong> tracked</span>
+            <span class="checker-stat">
+                <span class="checker-stat-countdown" id="monitorAutoCountdown" data-next-run-ts="<?php echo esc_attr((string) (int) $next_run_ts); ?>" data-server-now="<?php echo esc_attr((string) (int) $server_now); ?>" data-auto-interval-sec="<?php echo esc_attr((string) (int) dum_auto_check_interval_seconds()); ?>" aria-live="polite">0:00:00</span>
+                auto recheck
+            </span>
             <form method="post" style="margin:0;" id="monitorAutoCheckForm">
                 <?php wp_nonce_field('domain_uptime_check_all', 'monitor_check_all_nonce'); ?>
                 <input type="hidden" name="dum_auto_tick" id="monitorAutoTickInput" value="0">
-                <button type="submit" name="monitor_check_all_submit" value="1" class="checker-check-all-btn">Check all sites</button>
+                <button type="submit" name="monitor_check_all_submit" value="1" class="checker-check-all-btn">Check all domains</button>
             </form>
         </div>
     </header>
@@ -1981,9 +1993,12 @@ function domain_uptime_monitor_shortcode() {
     var autoCountdownTimer = null;
     var autoSubmitLock = false;
     var countdownSkewMs = 0;
-    var autoIntervalSec = 300;
-
+    var autoIntervalSec = 600;
     if (autoCountdown) {
+        var _iv = parseInt(autoCountdown.getAttribute('data-auto-interval-sec') || '0', 10);
+        if (!isNaN(_iv) && _iv > 0) {
+            autoIntervalSec = _iv;
+        }
         var serverNowTs = parseInt(autoCountdown.getAttribute('data-server-now') || '0', 10);
         if (!isNaN(serverNowTs) && serverNowTs > 0) {
             countdownSkewMs = Date.now() - (serverNowTs * 1000);
@@ -1996,6 +2011,12 @@ function domain_uptime_monitor_shortcode() {
 
     function monitorFormatCountdown(totalSec) {
         var sec = Math.max(0, parseInt(totalSec, 10) || 0);
+        if (sec >= 3600) {
+            var h = Math.floor(sec / 3600);
+            var m = Math.floor((sec % 3600) / 60);
+            var s = sec % 60;
+            return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        }
         var mm = Math.floor(sec / 60);
         var ss = sec % 60;
         return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
@@ -2093,6 +2114,7 @@ function domain_uptime_monitor_shortcode() {
         autoCountdown.textContent = monitorFormatCountdown(remaining);
         if (remaining <= 0) {
             autoCountdown.textContent = '00:00';
+            // Move target forward immediately to avoid repeat triggers while request is in flight.
             autoCountdown.setAttribute('data-next-run-ts', String(nowTs + autoIntervalSec));
             var targetSlot = Math.floor(nextRunTs / autoIntervalSec);
             monitorRequestAutoCheck(targetSlot);
