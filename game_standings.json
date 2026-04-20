@@ -5,11 +5,11 @@
       {
         "standing_place": 1,
         "standing_team": "Kings XI Punjab",
-        "standing_MP": 5,
-        "standing_W": 4,
+        "standing_MP": 6,
+        "standing_W": 5,
         "standing_L": 0,
-        "standing_Pts": 9,
-        "standing_NRR": "1.067",
+        "standing_Pts": 11,
+        "standing_NRR": "1.420",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/punjab-kings.png"
       },
       {
@@ -25,11 +25,11 @@
       {
         "standing_place": 3,
         "standing_team": "Rajasthan Royals",
-        "standing_MP": 5,
+        "standing_MP": 6,
         "standing_W": 4,
-        "standing_L": 1,
+        "standing_L": 2,
         "standing_Pts": 8,
-        "standing_NRR": "0.889",
+        "standing_NRR": "0.599",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/rajasthan-royals.png"
       },
       {
@@ -75,15 +75,25 @@
       {
         "standing_place": 8,
         "standing_team": "Lucknow Super Giants",
-        "standing_MP": 5,
+        "standing_MP": 6,
         "standing_W": 2,
-        "standing_L": 3,
+        "standing_L": 4,
         "standing_Pts": 4,
-        "standing_NRR": "-0.804",
+        "standing_NRR": "-1.173",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/lsg.png"
       },
       {
         "standing_place": 9,
+        "standing_team": "Kolkata Knight Riders",
+        "standing_MP": 7,
+        "standing_W": 1,
+        "standing_L": 5,
+        "standing_Pts": 3,
+        "standing_NRR": "-0.879",
+        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/kkr.png"
+      },
+      {
+        "standing_place": 10,
         "standing_team": "Mumbai Indians",
         "standing_MP": 5,
         "standing_W": 1,
@@ -91,16 +101,6 @@
         "standing_Pts": 2,
         "standing_NRR": "-1.076",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/mumbai-indians.png"
-      },
-      {
-        "standing_place": 10,
-        "standing_team": "Kolkata Knight Riders",
-        "standing_MP": 6,
-        "standing_W": 0,
-        "standing_L": 5,
-        "standing_Pts": 1,
-        "standing_NRR": "-1.149",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/kkr.png"
       }
     ]
   }
