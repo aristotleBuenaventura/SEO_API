@@ -3,10 +3,12 @@ function cross_sell_popup_shortcode($atts) {
     ob_start();
 
     $atts = shortcode_atts([
-        'current' => ''
+        'current' => '',
+        'lang' => ''
     ], $atts);
 
     $current_site = strtolower($atts['current']);
+    $lang = strtolower($atts['lang']);
 
     $json_url = 'https://raw.githubusercontent.com/aristotleBuenaventura/SEO_API/main/sell_sites.json';
 
@@ -29,7 +31,12 @@ function cross_sell_popup_shortcode($atts) {
         return ob_get_clean();
     }
 
-    $popup_bg = $data['popup_bg'] ?? '';
+    // ✅ Background selection
+    $popup_bg_default = $data['popup_bg'] ?? '';
+    $popup_bg_bn = $data['popup_bg_bn'] ?? $popup_bg_default;
+
+    $popup_bg = ($lang === 'bn') ? $popup_bg_bn : $popup_bg_default;
+
     $sites = $data['sites'] ?? [];
 
     $filtered = [];
@@ -184,6 +191,7 @@ function cross_sell_popup_shortcode($atts) {
     document.addEventListener("DOMContentLoaded", function() {
         var popup = document.getElementById("crossSellPopup");
         var closeBtn = document.querySelector(".close-popup");
+        var overlay = document.querySelector(".popup-overlay");
 
         function closePopup() {
             if (popup) {
@@ -197,7 +205,7 @@ function cross_sell_popup_shortcode($atts) {
                 popup.classList.remove("is-hidden");
                 popup.style.display = "flex";
             }
-        }, 20000);
+        }, 5000);
 
         if (closeBtn) {
             closeBtn.addEventListener("click", function(e) {
@@ -209,6 +217,11 @@ function cross_sell_popup_shortcode($atts) {
                 e.preventDefault();
                 closePopup();
             }, { passive: false });
+        }
+
+        if (overlay) {
+            overlay.addEventListener("click", closePopup);
+            overlay.addEventListener("touchend", closePopup);
         }
     });
     </script>
