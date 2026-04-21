@@ -1,0 +1,129 @@
+function cross_sell_popup_shortcode($atts) {
+
+    ob_start();
+
+    $atts = shortcode_atts([
+        'current' => ''
+    ], $atts);
+
+    $current_site = strtolower($atts['current']);
+
+    $logo_base = 'https://stg.casinomcwph.net/wp-content/uploads/2026/04/';
+
+    $sites = [
+        ['name'=>'mcw','url'=>'https://mcwlink.co/mcwbangladeshcocommac1'],
+        ['name'=>'mxw','url'=>'https://mcwlink.net/megacricketworldlive1'],
+        ['name'=>'banglabet','url'=>'https://bbtlink.co/banglabet88net'],
+        ['name'=>'bengalbet','url'=>'https://bnglnk.com/bengalbet88app1'],
+        ['name'=>'khelaghor','url'=>'https://kglnk.com/khgseoaffbd1'],
+        ['name'=>'deshislots','url'=>'https://deshislotslnk.co/deshislotscommac1'],
+        ['name'=>'banglawin','url'=>'https://bngwlnk.com/banglawin88com1'],
+        ['name'=>'tkbaazi','url'=>'https://tkbzlnk.com/tkbaazicommac1'],
+        ['name'=>'banglaplus','url'=>'https://bnplus88lnk.com/banglapluscommac1'],
+        ['name'=>'joywin88','url'=>'https://joywn88lnk.com/joywin88commac1'],
+    ];
+    ?>
+
+    <div id="crossSellPopup" style="display:none;">
+        <div class="popup-overlay"></div>
+
+        <div class="popup-content">
+            <span class="close-popup">&times;</span>
+            <h2>🔥 Try Our Partner Sites</h2>
+
+            <div class="logo-grid">
+                <?php foreach ($sites as $site): 
+                    if ($site['name'] === $current_site) continue;
+
+                    $logo = $logo_base . $site['name'] . '.gif';
+                ?>
+                    <a href="<?php echo esc_url($site['url']); ?>">
+                        <img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($site['name']); ?>">
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    #crossSellPopup {
+        position: fixed;
+        top:0; left:0;
+        width:100%; height:100%;
+        z-index:9999;
+    }
+
+    .popup-overlay {
+        position:absolute;
+        width:100%; height:100%;
+        background:rgba(0,0,0,0.7);
+    }
+
+    .popup-content {
+        position:relative;
+        max-width:650px;
+        margin:8% auto;
+        background:#0b2a5b;
+        padding:25px;
+        border-radius:15px;
+        text-align:center;
+        color:#fff;
+    }
+
+    .logo-grid {
+        display:grid;
+        grid-template-columns:repeat(4, 1fr);
+        gap:15px;
+        margin-top:20px;
+    }
+
+    .logo-grid img {
+        width:100%;
+        border-radius:50%;
+        background:#fff;
+        padding:10px;
+        transition:0.3s;
+    }
+
+    .logo-grid img:hover {
+        transform:scale(1.1);
+    }
+
+    .close-popup {
+        position:absolute;
+        right:12px;
+        top:10px;
+        cursor:pointer;
+        font-size:22px;
+    }
+
+    @media(max-width:600px){
+        .logo-grid {
+            grid-template-columns:repeat(3, 1fr);
+        }
+    }
+    </style>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+
+        // ALWAYS show after 20s (every refresh)
+        setTimeout(function(){
+            document.getElementById("crossSellPopup").style.display = "block";
+        }, 5000);
+
+        document.addEventListener("click", function(e){
+            if (e.target.classList.contains("close-popup")) {
+                document.getElementById("crossSellPopup").style.display = "none";
+            }
+        });
+
+    });
+    </script>
+
+    <?php
+
+    return ob_get_clean();
+}
+
+add_shortcode('cross_sell_popup', 'cross_sell_popup_shortcode');
