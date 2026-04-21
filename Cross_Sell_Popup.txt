@@ -9,6 +9,7 @@ function cross_sell_popup_shortcode($atts) {
     $current_site = strtolower($atts['current']);
 
     $logo_base = 'https://stg.casinomcwph.net/wp-content/uploads/2026/04/';
+    $popup_bg  = 'https://stg.casinomcwph.net/wp-content/uploads/2026/04/Popup_background.png';
 
     $sites = [
         ['name'=>'mcw','url'=>'https://mcwlink.co/mcwbangladeshcocommac1'],
@@ -22,6 +23,16 @@ function cross_sell_popup_shortcode($atts) {
         ['name'=>'banglaplus','url'=>'https://bnplus88lnk.com/banglapluscommac1'],
         ['name'=>'joywin88','url'=>'https://joywn88lnk.com/joywin88commac1'],
     ];
+
+    $filtered = [];
+    foreach ($sites as $site) {
+        if ($site['name'] === $current_site) {
+            continue;
+        }
+        $filtered[] = $site;
+    }
+    $row1 = array_slice($filtered, 0, 4);
+    $row2 = array_slice($filtered, 4, 5);
     ?>
 
     <div id="crossSellPopup" style="display:none;">
@@ -29,18 +40,26 @@ function cross_sell_popup_shortcode($atts) {
 
         <div class="popup-content">
             <span class="close-popup">&times;</span>
-            <h2>🔥 Try Our Partner Sites</h2>
 
-            <div class="logo-grid">
-                <?php foreach ($sites as $site): 
-                    if ($site['name'] === $current_site) continue;
-
-                    $logo = $logo_base . $site['name'] . '.gif';
-                ?>
-                    <a href="<?php echo esc_url($site['url']); ?>">
-                        <img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($site['name']); ?>">
-                    </a>
-                <?php endforeach; ?>
+            <div class="popup-logo-panel">
+                <div class="logo-row logo-row-1">
+                    <?php foreach ($row1 as $site):
+                        $logo = $logo_base . $site['name'] . '.gif';
+                    ?>
+                        <a href="<?php echo esc_url($site['url']); ?>">
+                            <img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($site['name']); ?>">
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <div class="logo-row logo-row-2">
+                    <?php foreach ($row2 as $site):
+                        $logo = $logo_base . $site['name'] . '.gif';
+                    ?>
+                        <a href="<?php echo esc_url($site['url']); ?>">
+                            <img src="<?php echo esc_url($logo); ?>" alt="<?php echo esc_attr($site['name']); ?>">
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </div>
     </div>
@@ -61,45 +80,92 @@ function cross_sell_popup_shortcode($atts) {
 
     .popup-content {
         position:relative;
-        max-width:650px;
-        margin:8% auto;
-        background:#0b2a5b;
-        padding:25px;
-        border-radius:15px;
+        max-width:min(92vw, 520px);
+        margin:6% auto;
+        padding:0;
+        border-radius:12px;
+        overflow:hidden;
         text-align:center;
         color:#fff;
+        background:#0b2a5b url("<?php echo esc_url($popup_bg); ?>") center top / cover no-repeat;
+        min-height:min(88vw, 520px);
+        display:flex;
+        flex-direction:column;
+        justify-content:flex-end;
+        box-sizing:border-box;
     }
 
-    .logo-grid {
-        display:grid;
-        grid-template-columns:repeat(4, 1fr);
-        gap:15px;
-        margin-top:20px;
-    }
-
-    .logo-grid img {
+    .popup-logo-panel {
         width:100%;
-        border-radius:50%;
-        background:#fff;
-        padding:10px;
-        transition:0.3s;
+        padding:12% 6% 18%;
+        box-sizing:border-box;
     }
 
-    .logo-grid img:hover {
-        transform:scale(1.1);
+    .logo-row {
+        display:grid;
+        gap:10px;
+        justify-content:center;
+        align-items:center;
+        margin:0 auto;
+        width:100%;
+        max-width:100%;
+    }
+
+    .logo-row-1 {
+        grid-template-columns:repeat(4, 1fr);
+        margin-bottom:10px;
+    }
+
+    .logo-row-2 {
+        grid-template-columns:repeat(5, 1fr);
+    }
+
+    .logo-row a {
+        display:block;
+    }
+
+    .logo-row img {
+        width:100%;
+        max-width:72px;
+        margin:0 auto;
+        border-radius:50%;
+        background:rgba(255,255,255,0.92);
+        padding:6px;
+        box-sizing:border-box;
+        transition:transform 0.3s;
+        box-shadow:0 0 0 1px rgba(212,175,55,0.35);
+    }
+
+    .logo-row img:hover {
+        transform:scale(1.08);
     }
 
     .close-popup {
         position:absolute;
-        right:12px;
-        top:10px;
+        right:10px;
+        top:8px;
+        z-index:2;
         cursor:pointer;
-        font-size:22px;
+        font-size:26px;
+        line-height:1;
+        color:#fff;
+        text-shadow:0 0 6px rgba(0,0,0,0.6);
     }
 
     @media(max-width:600px){
-        .logo-grid {
-            grid-template-columns:repeat(3, 1fr);
+        .popup-content {
+            margin:10% auto;
+            min-height:min(95vw, 480px);
+        }
+        .popup-logo-panel {
+            padding:14% 4% 20%;
+        }
+        .logo-row {
+            gap:6px;
+        }
+        .logo-row img {
+            max-width:52px;
+            padding:4px;
         }
     }
     </style>
