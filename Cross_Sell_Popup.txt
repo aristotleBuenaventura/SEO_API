@@ -100,8 +100,14 @@ function cross_sell_popup_shortcode($atts) {
 
     .popup-logo-panel {
         width:100%;
-        padding:16% 6% 8%;
+        padding:12% 6% 8%;
         box-sizing:border-box;
+    }
+
+    @media (min-width: 769px) {
+        .popup-logo-panel {
+            transform: translateY(-24px);
+        }
     }
 
     .logo-row {
