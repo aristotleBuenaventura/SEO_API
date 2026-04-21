@@ -33,11 +33,11 @@ function cross_sell_popup_shortcode($atts) {
     $row2 = array_slice($filtered, 4, 5);
     ?>
 
-    <div id="crossSellPopup" style="display:none;">
+    <div id="crossSellPopup" class="is-hidden" style="display:none;">
         <div class="popup-overlay"></div>
 
         <div class="popup-content">
-            <span class="close-popup">&times;</span>
+            <button type="button" class="close-popup" aria-label="Close popup">&times;</button>
 
             <div class="popup-logo-panel">
                 <div class="logo-row logo-row-1">
@@ -68,29 +68,34 @@ function cross_sell_popup_shortcode($atts) {
         height:100%;
         z-index:9999;
     }
+    #crossSellPopup.is-hidden {
+        display:none !important;
+    }
 
     .popup-overlay {
         position:absolute;
         width:100%;
         height:100%;
         background:rgba(0,0,0,0.7);
+        z-index:1;
     }
 
     .popup-content {
         position:relative;
-        max-width:min(92vw, 520px);
+        width:min(92vw, 650px);
         margin:6% auto;
         padding:0;
         border-radius:12px;
         overflow:hidden;
         text-align:center;
         color:#fff;
-        background:#0b2a5b url("<?php echo esc_url($popup_bg); ?>") center top / cover no-repeat;
-        min-height:min(88vw, 520px);
+        background:#0b2a5b url("<?php echo esc_url($popup_bg); ?>") center center / 100% 100% no-repeat;
+        aspect-ratio:650 / 668;
         display:flex;
         flex-direction:column;
         justify-content:flex-end;
         box-sizing:border-box;
+        z-index:2;
     }
 
     .popup-logo-panel {
@@ -132,15 +137,26 @@ function cross_sell_popup_shortcode($atts) {
 
     .close-popup {
         position:absolute;
-        right:10px;
-        top:5px;
+        right:8px;
+        top:8px;
         cursor:pointer;
-        font-size:28px;
+        font-size:34px;
+        line-height:1;
+        width:44px;
+        height:44px;
+        border:0;
+        border-radius:50%;
+        background:transparent;
         color:#fff;
+        z-index:99999;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        pointer-events:auto;
+        touch-action:manipulation;
     }
 
     @media (max-width: 768px) {
-
         #crossSellPopup {
             display: flex !important;
             align-items: center;
@@ -149,6 +165,7 @@ function cross_sell_popup_shortcode($atts) {
 
         .popup-content {
             margin: 0 !important;
+            width:min(92vw, 650px);
         }
 
         .popup-logo-panel {
@@ -168,18 +185,36 @@ function cross_sell_popup_shortcode($atts) {
 
     <script>
     document.addEventListener("DOMContentLoaded", function() {
+        var popup = document.getElementById("crossSellPopup");
+        var closeBtn = document.querySelector(".close-popup");
+
+        function closePopup() {
+            if (popup) {
+                popup.classList.add("is-hidden");
+                popup.style.display = "none";
+            }
+        }
 
         setTimeout(function(){
-            document.getElementById("crossSellPopup").style.display = "block";
+            if (popup) {
+                popup.classList.remove("is-hidden");
+                popup.style.display = "flex";
+            }
         }, 5000);
 
-        document.addEventListener("click", function(e){
+        if (closeBtn) {
+            closeBtn.addEventListener("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closePopup();
+            });
 
-            if (e.target.closest(".close-popup")) {
-                document.getElementById("crossSellPopup").style.display = "none";
-            }
-
-        });
+            closeBtn.addEventListener("touchend", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closePopup();
+            }, { passive: false });
+        }
 
     });
     </script>
