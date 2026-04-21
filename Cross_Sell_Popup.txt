@@ -25,9 +25,7 @@ function cross_sell_popup_shortcode($atts) {
 
     $filtered = [];
     foreach ($sites as $site) {
-        if ($site['name'] === $current_site) {
-            continue;
-        }
+        if ($site['name'] === $current_site) continue;
         $filtered[] = $site;
     }
 
@@ -64,14 +62,17 @@ function cross_sell_popup_shortcode($atts) {
     <style>
     #crossSellPopup {
         position: fixed;
-        top:0; left:0;
-        width:100%; height:100%;
+        top:0;
+        left:0;
+        width:100%;
+        height:100%;
         z-index:9999;
     }
 
     .popup-overlay {
         position:absolute;
-        width:100%; height:100%;
+        width:100%;
+        height:100%;
         background:rgba(0,0,0,0.7);
     }
 
@@ -137,6 +138,32 @@ function cross_sell_popup_shortcode($atts) {
         font-size:28px;
         color:#fff;
     }
+
+    @media (max-width: 768px) {
+
+        #crossSellPopup {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .popup-content {
+            margin: 0 !important;
+        }
+
+        .popup-logo-panel {
+            padding: 18% 6% 10%;
+        }
+
+        .logo-row img {
+            max-width: 58px;
+        }
+
+        .logo-row-1,
+        .logo-row-2 {
+            gap: 8px;
+        }
+    }
     </style>
 
     <script>
@@ -147,9 +174,11 @@ function cross_sell_popup_shortcode($atts) {
         }, 5000);
 
         document.addEventListener("click", function(e){
-            if (e.target.classList.contains("close-popup")) {
+
+            if (e.target.closest(".close-popup")) {
                 document.getElementById("crossSellPopup").style.display = "none";
             }
+
         });
 
     });
