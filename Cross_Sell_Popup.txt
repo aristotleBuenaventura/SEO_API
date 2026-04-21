@@ -9,7 +9,7 @@ function cross_sell_popup_shortcode($atts) {
     $current_site = strtolower($atts['current']);
 
     $logo_base = 'https://stg.casinomcwph.net/wp-content/uploads/2026/04/';
-    $popup_bg  = 'https://stg.casinomcwph.net/wp-content/uploads/2026/04/Popup_background.png';
+    $popup_bg  = 'https://stg.casinomcwph.net/wp-content/uploads/2026/04/Popup_backgrounds.png';
 
     $sites = [
         ['name'=>'mcw','url'=>'https://mcwlink.co/mcwbangladeshcocommac1'],
@@ -142,14 +142,21 @@ function cross_sell_popup_shortcode($atts) {
 
     .close-popup {
         position:absolute;
-        right:10px;
-        top:8px;
+        right:clamp(4px, 1.4%, 12px);
+        top:clamp(2px, 0.7%, 8px);
         z-index:2;
         cursor:pointer;
-        font-size:26px;
+        font-size:clamp(24px, 5.6vw, 32px);
         line-height:1;
         color:#fff;
         text-shadow:0 0 6px rgba(0,0,0,0.6);
+        display:inline-flex;
+        align-items:flex-start;
+        justify-content:flex-end;
+        width:48px;
+        height:48px;
+        box-sizing:border-box;
+        padding:2px 4px 0 0;
     }
 
     @media(max-width:600px){
@@ -166,6 +173,13 @@ function cross_sell_popup_shortcode($atts) {
         .logo-row img {
             max-width:52px;
             padding:4px;
+        }
+        .close-popup {
+            right:clamp(2px, 1.2%, 10px);
+            top:clamp(1px, 0.6%, 6px);
+            font-size:clamp(22px, 5.8vw, 28px);
+            width:44px;
+            height:44px;
         }
     }
     </style>
