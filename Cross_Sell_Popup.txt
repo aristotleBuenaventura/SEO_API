@@ -120,7 +120,7 @@ function cross_sell_popup_shortcode($atts) {
 
     @media (min-width: 769px) {
         .popup-logo-panel {
-            padding:10% 6% 12%;
+            padding:8% 6% 16%;
         }
     }
 
