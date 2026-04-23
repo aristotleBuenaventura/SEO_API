@@ -14,6 +14,16 @@
       },
       {
         "standing_place": 2,
+        "standing_team": "Rajasthan Royals",
+        "standing_MP": 7,
+        "standing_W": 5,
+        "standing_L": 2,
+        "standing_Pts": 10,
+        "standing_NRR": "0.790",
+        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/rajasthan-royals.png"
+      },
+      {
+        "standing_place": 3,
         "standing_team": "Royal Challengers Bengaluru",
         "standing_MP": 6,
         "standing_W": 4,
@@ -23,7 +33,7 @@
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/rcb.png"
       },
       {
-        "standing_place": 3,
+        "standing_place": 4,
         "standing_team": "Sunrisers Hyderabad",
         "standing_MP": 7,
         "standing_W": 4,
@@ -31,16 +41,6 @@
         "standing_Pts": 8,
         "standing_NRR": "0.820",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/sunrisers-hyderabad.png"
-      },
-      {
-        "standing_place": 4,
-        "standing_team": "Rajasthan Royals",
-        "standing_MP": 6,
-        "standing_W": 4,
-        "standing_L": 2,
-        "standing_Pts": 8,
-        "standing_NRR": "0.599",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/rajasthan-royals.png"
       },
       {
         "standing_place": 5,
@@ -59,7 +59,7 @@
         "standing_W": 3,
         "standing_L": 3,
         "standing_Pts": 6,
-        "standing_NRR": "-0.821",
+        "standing_NRR": "0.821",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/gujarat-titans.png"
       },
       {
@@ -85,11 +85,11 @@
       {
         "standing_place": 9,
         "standing_team": "Lucknow Super Giants",
-        "standing_MP": 6,
+        "standing_MP": 7,
         "standing_W": 2,
-        "standing_L": 4,
+        "standing_L": 5,
         "standing_Pts": 4,
-        "standing_NRR": "-1.173",
+        "standing_NRR": "-1.277",
         "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/lsg.png"
       },
       {
