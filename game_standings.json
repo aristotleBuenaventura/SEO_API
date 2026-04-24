@@ -9,8 +9,7 @@
         "standing_W": 5,
         "standing_L": 0,
         "standing_Pts": 11,
-        "standing_NRR": "1.420",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/punjab-kings.png"
+        "standing_NRR": "1.420"
       },
       {
         "standing_place": 2,
@@ -19,8 +18,7 @@
         "standing_W": 5,
         "standing_L": 2,
         "standing_Pts": 10,
-        "standing_NRR": "0.790",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/rajasthan-royals.png"
+        "standing_NRR": "0.790"
       },
       {
         "standing_place": 3,
@@ -29,8 +27,7 @@
         "standing_W": 4,
         "standing_L": 2,
         "standing_Pts": 8,
-        "standing_NRR": "1.171",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/rcb.png"
+        "standing_NRR": "1.171"
       },
       {
         "standing_place": 4,
@@ -39,48 +36,43 @@
         "standing_W": 4,
         "standing_L": 3,
         "standing_Pts": 8,
-        "standing_NRR": "0.820",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/sunrisers-hyderabad.png"
+        "standing_NRR": "0.820"
       },
       {
         "standing_place": 5,
+        "standing_team": "Chennai Super Kings",
+        "standing_MP": 7,
+        "standing_W": 3,
+        "standing_L": 4,
+        "standing_Pts": 6,
+        "standing_NRR": "0.118"
+      },
+      {
+        "standing_place": 6,
         "standing_team": "Delhi Capitals",
         "standing_MP": 6,
         "standing_W": 3,
         "standing_L": 3,
         "standing_Pts": 6,
-        "standing_NRR": "-0.130",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/delhi-capitals.png"
+        "standing_NRR": "-0.130"
       },
       {
-        "standing_place": 6,
+        "standing_place": 7,
         "standing_team": "Gujarat Titans",
         "standing_MP": 6,
         "standing_W": 3,
         "standing_L": 3,
         "standing_Pts": 6,
-        "standing_NRR": "0.821",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/gujarat-titans.png"
-      },
-      {
-        "standing_place": 7,
-        "standing_team": "Mumbai Indians",
-        "standing_MP": 6,
-        "standing_W": 2,
-        "standing_L": 4,
-        "standing_Pts": 4,
-        "standing_NRR": "0.067",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/mumbai-indians.png"
+        "standing_NRR": "-0.821"
       },
       {
         "standing_place": 8,
-        "standing_team": "Chennai Super Kings",
-        "standing_MP": 6,
+        "standing_team": "Mumbai Indians",
+        "standing_MP": 7,
         "standing_W": 2,
-        "standing_L": 4,
+        "standing_L": 5,
         "standing_Pts": 4,
-        "standing_NRR": "-0.780",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/csk.png"
+        "standing_NRR": "-0.736"
       },
       {
         "standing_place": 9,
@@ -89,8 +81,7 @@
         "standing_W": 2,
         "standing_L": 5,
         "standing_Pts": 4,
-        "standing_NRR": "-1.277",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/lsg.png"
+        "standing_NRR": "-1.277"
       },
       {
         "standing_place": 10,
@@ -99,8 +90,7 @@
         "standing_W": 1,
         "standing_L": 5,
         "standing_Pts": 3,
-        "standing_NRR": "-0.879",
-        "team_logo": "https://apiv2.allsportsapi.com/logo-cricket/kkr.png"
+        "standing_NRR": "-0.879"
       }
     ]
   }
