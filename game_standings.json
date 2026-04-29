@@ -5,11 +5,11 @@
       {
         "standing_place": 1,
         "standing_team": "Kings XI Punjab",
-        "standing_MP": 7,
+        "standing_MP": 8,
         "standing_W": 6,
-        "standing_L": 0,
+        "standing_L": 1,
         "standing_Pts": 13,
-        "standing_NRR": "1.333"
+        "standing_NRR": "1.043"
       },
       {
         "standing_place": 2,
@@ -23,20 +23,20 @@
       {
         "standing_place": 3,
         "standing_team": "Sunrisers Hyderabad",
-        "standing_MP": 8,
-        "standing_W": 5,
+        "standing_MP": 9,
+        "standing_W": 6,
         "standing_L": 3,
-        "standing_Pts": 10,
-        "standing_NRR": "0.815"
+        "standing_Pts": 12,
+        "standing_NRR": "0.832"
       },
       {
         "standing_place": 4,
         "standing_team": "Rajasthan Royals",
-        "standing_MP": 8,
-        "standing_W": 5,
+        "standing_MP": 9,
+        "standing_W": 6,
         "standing_L": 3,
-        "standing_Pts": 10,
-        "standing_NRR": "0.602"
+        "standing_Pts": 12,
+        "standing_NRR": "0.617"
       },
       {
         "standing_place": 5,
@@ -77,11 +77,11 @@
       {
         "standing_place": 9,
         "standing_team": "Mumbai Indians",
-        "standing_MP": 7,
+        "standing_MP": 8,
         "standing_W": 2,
-        "standing_L": 5,
+        "standing_L": 6,
         "standing_Pts": 4,
-        "standing_NRR": "-0.736"
+        "standing_NRR": "-0.784"
       },
       {
         "standing_place": 10,
