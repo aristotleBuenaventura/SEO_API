@@ -14,11 +14,11 @@
       {
         "standing_place": 2,
         "standing_team": "Royal Challengers Bengaluru",
-        "standing_MP": 8,
+        "standing_MP": 9,
         "standing_W": 6,
-        "standing_L": 2,
+        "standing_L": 3,
         "standing_Pts": 12,
-        "standing_NRR": "1.919"
+        "standing_NRR": "1.420"
       },
       {
         "standing_place": 3,
@@ -41,11 +41,11 @@
       {
         "standing_place": 5,
         "standing_team": "Gujarat Titans",
-        "standing_MP": 8,
-        "standing_W": 4,
+        "standing_MP": 9,
+        "standing_W": 5,
         "standing_L": 4,
-        "standing_Pts": 8,
-        "standing_NRR": "-0.475"
+        "standing_Pts": 10,
+        "standing_NRR": "-0.192"
       },
       {
         "standing_place": 6,
