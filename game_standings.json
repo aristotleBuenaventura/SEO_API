@@ -32,11 +32,11 @@
       {
         "standing_place": 4,
         "standing_team": "Rajasthan Royals",
-        "standing_MP": 9,
+        "standing_MP": 10,
         "standing_W": 6,
-        "standing_L": 3,
+        "standing_L": 4,
         "standing_Pts": 12,
-        "standing_NRR": "0.617"
+        "standing_NRR": "0.510"
       },
       {
         "standing_place": 5,
@@ -49,21 +49,21 @@
       },
       {
         "standing_place": 6,
+        "standing_team": "Delhi Capitals",
+        "standing_MP": 9,
+        "standing_W": 4,
+        "standing_L": 5,
+        "standing_Pts": 8,
+        "standing_NRR": "-0.895"
+      },
+      {
+        "standing_place": 7,
         "standing_team": "Chennai Super Kings",
         "standing_MP": 8,
         "standing_W": 3,
         "standing_L": 5,
         "standing_Pts": 6,
         "standing_NRR": "-0.121"
-      },
-      {
-        "standing_place": 7,
-        "standing_team": "Delhi Capitals",
-        "standing_MP": 8,
-        "standing_W": 3,
-        "standing_L": 5,
-        "standing_Pts": 6,
-        "standing_NRR": "-1.060"
       },
       {
         "standing_place": 8,
