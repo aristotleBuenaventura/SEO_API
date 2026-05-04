@@ -383,7 +383,9 @@ if (!function_exists('drc_table_name')) {
         <input class="checker-row-select" type="checkbox" value="<?php echo esc_attr((string) $id); ?>" aria-label="Select row">
     </td>
     <?php endif; ?>
-    <td class="checker-cell-domain"><?php echo esc_html($row->domain); ?></td>
+    <td class="checker-cell-domain">
+        <a class="checker-domain-link" href="<?php echo esc_url($row->domain); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html($row->domain); ?></a>
+    </td>
     <td><?php
         if ($code === 301 && $redir !== '' && $orig_h !== '' && $redir_h !== '') {
             if ($orig_h === $redir_h) {
@@ -1334,6 +1336,18 @@ function domain_redirect_dashboard_shortcode() {
 
 .checker-app tbody tr.checker-row-dark .checker-cell-domain {
     color: #fafafa;
+}
+
+.checker-app .checker-domain-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.checker-app .checker-domain-link:hover,
+.checker-app .checker-domain-link:focus-visible {
+    color: var(--checker-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
 .checker-cell-redirect {
