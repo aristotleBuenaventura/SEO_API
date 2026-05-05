@@ -77,20 +77,20 @@
       {
         "standing_place": 9,
         "standing_team": "Mumbai Indians",
-        "standing_MP": 9,
-        "standing_W": 2,
+        "standing_MP": 10,
+        "standing_W": 3,
         "standing_L": 7,
-        "standing_Pts": 4,
-        "standing_NRR": "-0.803"
+        "standing_Pts": 6,
+        "standing_NRR": "-0.649"
       },
       {
         "standing_place": 10,
         "standing_team": "Lucknow Super Giants",
-        "standing_MP": 8,
+        "standing_MP": 9,
         "standing_W": 2,
-        "standing_L": 6,
+        "standing_L": 7,
         "standing_Pts": 4,
-        "standing_NRR": "-1.106"
+        "standing_NRR": "-1.076"
       }
     ]
   }
