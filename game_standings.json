@@ -4,30 +4,30 @@
     "total": [
       {
         "standing_place": 1,
-        "standing_team": "Kings XI Punjab",
-        "standing_MP": 9,
-        "standing_W": 6,
-        "standing_L": 2,
-        "standing_Pts": 13,
-        "standing_NRR": "0.855"
+        "standing_team": "Sunrisers Hyderabad",
+        "standing_MP": 11,
+        "standing_W": 7,
+        "standing_L": 4,
+        "standing_Pts": 14,
+        "standing_NRR": "0.737"
       },
       {
         "standing_place": 2,
-        "standing_team": "Royal Challengers Bengaluru",
-        "standing_MP": 9,
+        "standing_team": "Kings XI Punjab",
+        "standing_MP": 10,
         "standing_W": 6,
         "standing_L": 3,
-        "standing_Pts": 12,
-        "standing_NRR": "1.420"
+        "standing_Pts": 13,
+        "standing_NRR": "0.571"
       },
       {
         "standing_place": 3,
-        "standing_team": "Sunrisers Hyderabad",
+        "standing_team": "Royal Challengers Bengaluru",
         "standing_MP": 10,
         "standing_W": 6,
         "standing_L": 4,
         "standing_Pts": 12,
-        "standing_NRR": "0.644"
+        "standing_NRR": "1.234"
       },
       {
         "standing_place": 4,
@@ -50,20 +50,20 @@
       {
         "standing_place": 6,
         "standing_team": "Chennai Super Kings",
-        "standing_MP": 9,
-        "standing_W": 4,
+        "standing_MP": 10,
+        "standing_W": 5,
         "standing_L": 5,
-        "standing_Pts": 8,
-        "standing_NRR": "0.005"
+        "standing_Pts": 10,
+        "standing_NRR": "0.151"
       },
       {
         "standing_place": 7,
         "standing_team": "Delhi Capitals",
-        "standing_MP": 9,
+        "standing_MP": 10,
         "standing_W": 4,
-        "standing_L": 5,
+        "standing_L": 6,
         "standing_Pts": 8,
-        "standing_NRR": "-0.895"
+        "standing_NRR": "-0.949"
       },
       {
         "standing_place": 8,
@@ -86,11 +86,11 @@
       {
         "standing_place": 10,
         "standing_team": "Lucknow Super Giants",
-        "standing_MP": 9,
-        "standing_W": 2,
+        "standing_MP": 10,
+        "standing_W": 3,
         "standing_L": 7,
-        "standing_Pts": 4,
-        "standing_NRR": "-1.076"
+        "standing_Pts": 6,
+        "standing_NRR": "-0.934"
       }
     ]
   }
