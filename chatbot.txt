@@ -1,0 +1,97 @@
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    function clearWPBotStorage() {
+        Object.keys(localStorage).forEach(function (key) {
+            if (
+                key.toLowerCase().includes("wp") ||
+                key.toLowerCase().includes("chat")
+            ) {
+                localStorage.removeItem(key);
+            }
+        });
+
+        Object.keys(sessionStorage).forEach(function (key) {
+            if (
+                key.toLowerCase().includes("wp") ||
+                key.toLowerCase().includes("chat")
+            ) {
+                sessionStorage.removeItem(key);
+            }
+        });
+    }
+
+    function replaceLanguageWithHeaderText() {
+        const header = document.querySelector(".wp-chatbot-header");
+        if (!header) return;
+
+        // Remove language dropdown
+        const langSelect = document.getElementById("wpbot_language");
+        if (langSelect) {
+            langSelect.remove();
+        }
+
+        // Avoid duplicates
+        if (document.querySelector(".wpbot-header-label")) return;
+
+        // Create label
+        let label = document.createElement("div");
+        label.className = "wpbot-header-label";
+        label.textContent = "Banglabet 24/7 CS";
+
+        label.style.color = "#000";
+        label.style.fontSize = "14px";
+        label.style.fontWeight = "600";
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        label.style.marginLeft = "10px";
+
+        // Insert at beginning of header
+        header.prepend(label);
+    }
+
+    function hardResetChat() {
+        let tries = 0;
+
+        let interval = setInterval(function () {
+
+            let msgContainer = document.getElementById("wp-chatbot-messages-container");
+            let resetBtn = document.getElementById("wp-chatbot-desktop-reload");
+
+            if (msgContainer) {
+                msgContainer.innerHTML = "";
+            }
+
+            if (resetBtn) {
+                resetBtn.click();
+                clearInterval(interval);
+            }
+
+            tries++;
+            if (tries > 50) clearInterval(interval);
+
+        }, 100);
+    }
+
+    function autoOpen() {
+        setTimeout(function () {
+
+            let chatBall = document.getElementById("wp-chatbot-ball");
+            let chatBoard = document.getElementById("wp-chatbot-board-container");
+
+            if (!chatBall || !chatBoard) return;
+
+            if (!chatBoard.classList.contains("active-chat-board")) {
+                chatBall.click();
+            }
+
+        }, 5000);
+    }
+
+    clearWPBotStorage();
+    replaceLanguageWithHeaderText();
+    hardResetChat();
+    autoOpen();
+
+});
+</script>
