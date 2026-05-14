@@ -4,42 +4,51 @@
     "total": [
       {
         "standing_place": 1,
-        "standing_team": "Sunrisers Hyderabad",
-        "standing_MP": 11,
-        "standing_W": 7,
+        "standing_team": "Royal Challengers Bengaluru",
+        "standing_MP": 12,
+        "standing_W": 8,
         "standing_L": 4,
-        "standing_Pts": 14,
-        "standing_NRR": "0.737"
+        "standing_Pts": 16,
+        "standing_NRR": "1.053"
       },
       {
         "standing_place": 2,
         "standing_team": "Gujarat Titans",
-        "standing_MP": 11,
-        "standing_W": 7,
+        "standing_MP": 12,
+        "standing_W": 8,
         "standing_L": 4,
-        "standing_Pts": 14,
-        "standing_NRR": "0.228"
+        "standing_Pts": 16,
+        "standing_NRR": "0.551"
       },
       {
         "standing_place": 3,
-        "standing_team": "Kings XI Punjab",
-        "standing_MP": 10,
-        "standing_W": 6,
-        "standing_L": 3,
-        "standing_Pts": 13,
-        "standing_NRR": "0.571"
+        "standing_team": "Sunrisers Hyderabad",
+        "standing_MP": 12,
+        "standing_W": 7,
+        "standing_L": 5,
+        "standing_Pts": 14,
+        "standing_NRR": "0.331"
       },
       {
         "standing_place": 4,
-        "standing_team": "Royal Challengers Bengaluru",
-        "standing_MP": 10,
+        "standing_team": "Kings XI Punjab",
+        "standing_MP": 11,
         "standing_W": 6,
         "standing_L": 4,
-        "standing_Pts": 12,
-        "standing_NRR": "1.234"
+        "standing_Pts": 13,
+        "standing_NRR": "0.428"
       },
       {
         "standing_place": 5,
+        "standing_team": "Chennai Super Kings",
+        "standing_MP": 11,
+        "standing_W": 6,
+        "standing_L": 5,
+        "standing_Pts": 12,
+        "standing_NRR": "0.185"
+      },
+      {
+        "standing_place": 6,
         "standing_team": "Rajasthan Royals",
         "standing_MP": 11,
         "standing_W": 6,
@@ -48,49 +57,40 @@
         "standing_NRR": "0.082"
       },
       {
-        "standing_place": 6,
-        "standing_team": "Chennai Super Kings",
-        "standing_MP": 10,
-        "standing_W": 5,
-        "standing_L": 5,
-        "standing_Pts": 10,
-        "standing_NRR": "0.151"
-      },
-      {
         "standing_place": 7,
-        "standing_team": "Kolkata Knight Riders",
-        "standing_MP": 10,
-        "standing_W": 4,
-        "standing_L": 5,
-        "standing_Pts": 9,
-        "standing_NRR": "-0.169"
+        "standing_team": "Delhi Capitals",
+        "standing_MP": 12,
+        "standing_W": 5,
+        "standing_L": 7,
+        "standing_Pts": 10,
+        "standing_NRR": "-0.993"
       },
       {
         "standing_place": 8,
-        "standing_team": "Delhi Capitals",
+        "standing_team": "Kolkata Knight Riders",
         "standing_MP": 11,
         "standing_W": 4,
-        "standing_L": 7,
-        "standing_Pts": 8,
-        "standing_NRR": "-1.154"
+        "standing_L": 6,
+        "standing_Pts": 9,
+        "standing_NRR": "-0.198"
       },
       {
         "standing_place": 9,
         "standing_team": "Mumbai Indians",
-        "standing_MP": 10,
+        "standing_MP": 11,
         "standing_W": 3,
-        "standing_L": 7,
+        "standing_L": 8,
         "standing_Pts": 6,
-        "standing_NRR": "-0.649"
+        "standing_NRR": "-0.585"
       },
       {
         "standing_place": 10,
         "standing_team": "Lucknow Super Giants",
-        "standing_MP": 10,
+        "standing_MP": 11,
         "standing_W": 3,
-        "standing_L": 7,
+        "standing_L": 8,
         "standing_Pts": 6,
-        "standing_NRR": "-0.934"
+        "standing_NRR": "-0.907"
       }
     ]
   }
