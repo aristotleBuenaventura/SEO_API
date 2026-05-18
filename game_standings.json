@@ -5,20 +5,36 @@
       {
         "standing_place": 1,
         "standing_team": "Royal Challengers Bengaluru",
+<<<<<<< Updated upstream
         "standing_MP": 12,
         "standing_W": 8,
         "standing_L": 4,
         "standing_Pts": 16,
         "standing_NRR": "1.053"
+=======
+        "standing_MP": 13,
+        "standing_W": 9,
+        "standing_L": 4,
+        "standing_Pts": 18,
+        "standing_NRR": "1.065"
+>>>>>>> Stashed changes
       },
       {
         "standing_place": 2,
         "standing_team": "Gujarat Titans",
+<<<<<<< Updated upstream
         "standing_MP": 12,
         "standing_W": 8,
         "standing_L": 4,
         "standing_Pts": 16,
         "standing_NRR": "0.551"
+=======
+        "standing_MP": 13,
+        "standing_W": 8,
+        "standing_L": 5,
+        "standing_Pts": 16,
+        "standing_NRR": "0.400"
+>>>>>>> Stashed changes
       },
       {
         "standing_place": 3,
@@ -32,11 +48,19 @@
       {
         "standing_place": 4,
         "standing_team": "Kings XI Punjab",
+<<<<<<< Updated upstream
         "standing_MP": 11,
         "standing_W": 6,
         "standing_L": 4,
         "standing_Pts": 13,
         "standing_NRR": "0.428"
+=======
+        "standing_MP": 13,
+        "standing_W": 6,
+        "standing_L": 6,
+        "standing_Pts": 13,
+        "standing_NRR": "0.227"
+>>>>>>> Stashed changes
       },
       {
         "standing_place": 5,
@@ -50,13 +74,14 @@
       {
         "standing_place": 6,
         "standing_team": "Rajasthan Royals",
-        "standing_MP": 11,
+        "standing_MP": 12,
         "standing_W": 6,
-        "standing_L": 5,
+        "standing_L": 6,
         "standing_Pts": 12,
-        "standing_NRR": "0.082"
+        "standing_NRR": "0.027"
       },
       {
+<<<<<<< Updated upstream
         "standing_place": 7,
         "standing_team": "Delhi Capitals",
         "standing_MP": 12,
@@ -64,33 +89,75 @@
         "standing_L": 7,
         "standing_Pts": 10,
         "standing_NRR": "-0.993"
+=======
+        "standing_place": 6,
+        "standing_team": "Chennai Super Kings",
+        "standing_MP": 12,
+        "standing_W": 6,
+        "standing_L": 6,
+        "standing_Pts": 12,
+        "standing_NRR": "0.027"
+      },
+      {
+        "standing_place": 7,
+        "standing_team": "Delhi Capitals",
+        "standing_MP": 13,
+        "standing_W": 6,
+        "standing_L": 7,
+        "standing_Pts": 12,
+        "standing_NRR": "-0.871"
+>>>>>>> Stashed changes
       },
       {
         "standing_place": 8,
         "standing_team": "Kolkata Knight Riders",
+<<<<<<< Updated upstream
         "standing_MP": 11,
         "standing_W": 4,
         "standing_L": 6,
         "standing_Pts": 9,
         "standing_NRR": "-0.198"
+=======
+        "standing_MP": 12,
+        "standing_W": 5,
+        "standing_L": 6,
+        "standing_Pts": 11,
+        "standing_NRR": "-0.038"
+>>>>>>> Stashed changes
       },
       {
         "standing_place": 9,
         "standing_team": "Mumbai Indians",
+<<<<<<< Updated upstream
         "standing_MP": 11,
         "standing_W": 3,
         "standing_L": 8,
         "standing_Pts": 6,
         "standing_NRR": "-0.585"
+=======
+        "standing_MP": 12,
+        "standing_W": 4,
+        "standing_L": 8,
+        "standing_Pts": 8,
+        "standing_NRR": "-0.504"
+>>>>>>> Stashed changes
       },
       {
         "standing_place": 10,
         "standing_team": "Lucknow Super Giants",
+<<<<<<< Updated upstream
         "standing_MP": 11,
         "standing_W": 3,
         "standing_L": 8,
         "standing_Pts": 6,
         "standing_NRR": "-0.907"
+=======
+        "standing_MP": 12,
+        "standing_W": 4,
+        "standing_L": 8,
+        "standing_Pts": 8,
+        "standing_NRR": "-0.701"
+>>>>>>> Stashed changes
       }
     ]
   }
