@@ -49,6 +49,15 @@
       },
       {
         "standing_place": 6,
+        "standing_team": "Kolkata Knight Riders",
+        "standing_MP": 13,
+        "standing_W": 6,
+        "standing_L": 6,
+        "standing_Pts": 13,
+        "standing_NRR": "0.011"
+      },
+      {
+        "standing_place": 7,
         "standing_team": "Chennai Super Kings",
         "standing_MP": 13,
         "standing_W": 6,
@@ -57,7 +66,7 @@
         "standing_NRR": "-0.016"
       },
       {
-        "standing_place": 7,
+        "standing_place": 8,
         "standing_team": "Delhi Capitals",
         "standing_MP": 13,
         "standing_W": 6,
@@ -66,22 +75,13 @@
         "standing_NRR": "-0.871"
       },
       {
-        "standing_place": 8,
-        "standing_team": "Kolkata Knight Riders",
-        "standing_MP": 12,
-        "standing_W": 5,
-        "standing_L": 6,
-        "standing_Pts": 11,
-        "standing_NRR": "-0.038"
-      },
-      {
         "standing_place": 9,
         "standing_team": "Mumbai Indians",
-        "standing_MP": 12,
+        "standing_MP": 13,
         "standing_W": 4,
-        "standing_L": 8,
+        "standing_L": 9,
         "standing_Pts": 8,
-        "standing_NRR": "-0.504"
+        "standing_NRR": "-0.510"
       },
       {
         "standing_place": 10,
