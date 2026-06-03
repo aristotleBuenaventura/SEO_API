@@ -1,5 +1,3 @@
-<?php
-
 /**
  * =========================
  * FIFA WORLD CUP 2026 API
@@ -279,12 +277,12 @@ function fifa_worldcup_2026_shortcode() {
 
     /* MOVE ARROWS TO EDGES */
     #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
-        left: -8px;
-    }
+    	left: 8px;
+	}
 
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-next {
-        right: -8px;
-    }
+	#<?php echo esc_attr($unique_id); ?> .swiper-button-next {
+		right: 8px;
+	}
 
     /* SMALLER ICON SIZE */
     #<?php echo esc_attr($unique_id); ?> .swiper-button-next:after,
