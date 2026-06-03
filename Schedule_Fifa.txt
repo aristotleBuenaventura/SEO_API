@@ -139,7 +139,7 @@ function fifa_worldcup_2026_shortcode() {
                 </div>
 
                 <div class="fixture-teams">
-                    <?php echo esc_html("$home vs $away"); ?>
+                    FIFA World Cup 2026
                 </div>
 
                 <div class="fixture-venue">
