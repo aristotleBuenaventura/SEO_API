@@ -193,6 +193,9 @@ function fifa_wc_knockout_round_key($league_round) {
         return null;
     }
 
+    if (preg_match('/\b(round of 32|1\/16|16th.?final|round of thirty-two)\b/', $lr)) {
+        return 'r32';
+    }
     if (preg_match('/\b(round of 16|1\/8|8th.?final|round of sixteen)\b/', $lr)) {
         return 'r16';
     }
@@ -289,6 +292,7 @@ function fifa_wc_format_ko_date($date_str) {
 function fifa_wc_build_knockout_bracket($fixtures) {
 
     $columns = [
+        'r32'   => ['label' => 'Round of 32', 'matches' => []],
         'r16'   => ['label' => 'Round of 16', 'matches' => []],
         'qf'    => ['label' => 'Quarter-finals', 'matches' => []],
         'sf'    => ['label' => 'Semi-finals', 'matches' => []],
@@ -323,7 +327,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v2';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v7';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -378,6 +382,8 @@ function fifa_wc_standings_grouped_shortcode() {
     <style>
     #<?php echo esc_attr($uid); ?>{
         box-sizing:border-box;
+        width:100%;
+        max-width:100%;
         font-family:Helvetica,Arial,sans-serif;
         color:#000;
         background:#fff;
@@ -385,6 +391,52 @@ function fifa_wc_standings_grouped_shortcode() {
     }
     #<?php echo esc_attr($uid); ?> *{
         box-sizing:border-box;
+    }
+    #<?php echo esc_attr($uid); ?> .wc-tabs{
+        display:flex;
+        align-items:stretch;
+        gap:0;
+        width:100%;
+        margin:0 0 24px;
+        padding:0;
+        border-top:1px solid #e3e3e3;
+        border-bottom:1px solid #e3e3e3;
+        background:#fff;
+    }
+    #<?php echo esc_attr($uid); ?> .wc-tab{
+        flex:1 1 50%;
+        width:50%;
+        margin:0;
+        padding:14px 12px;
+        border:none;
+        background:transparent;
+        font-family:inherit;
+        font-size:15px;
+        font-weight:600;
+        color:#555;
+        text-align:center;
+        cursor:pointer;
+        line-height:1.2;
+        position:relative;
+    }
+    #<?php echo esc_attr($uid); ?> .wc-tab.is-active{
+        color:#111;
+        font-weight:700;
+    }
+    #<?php echo esc_attr($uid); ?> .wc-tab.is-active::after{
+        content:"";
+        position:absolute;
+        left:0;
+        right:0;
+        bottom:0;
+        height:3px;
+        background:#111;
+    }
+    #<?php echo esc_attr($uid); ?> .wc-tab-panel{
+        display:none;
+    }
+    #<?php echo esc_attr($uid); ?> .wc-tab-panel.is-active{
+        display:block;
     }
     #<?php echo esc_attr($uid); ?> .wc-groups-list{
         display:flex;
@@ -480,34 +532,28 @@ function fifa_wc_standings_grouped_shortcode() {
         font-weight:700;
         color:#000;
     }
+    #<?php echo esc_attr($uid); ?> .wc-tab-panel-knockout,
     #<?php echo esc_attr($uid); ?> .wc-knockout{
-        margin-top:48px;
-        padding-top:8px;
+        width:100%;
+        margin:0;
+        padding:0;
     }
     #<?php echo esc_attr($uid); ?> .wc-bracket{
         display:flex;
         align-items:stretch;
         gap:0;
-        overflow-x:auto;
+        width:100%;
         padding:8px 0 16px;
-        -webkit-overflow-scrolling:touch;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-col{
-        flex:0 0 200px;
-        min-width:200px;
+        flex:1 1 0;
+        min-width:0;
         display:flex;
         flex-direction:column;
         position:relative;
     }
-    #<?php echo esc_attr($uid); ?> .wc-ko-col:not(:last-child)::after{
-        content:"";
-        position:absolute;
-        top:36px;
-        right:-12px;
-        width:24px;
-        bottom:24px;
+    #<?php echo esc_attr($uid); ?> .wc-ko-col:not(:last-child){
         border-right:1px solid #d8d8d8;
-        pointer-events:none;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-col-title{
         text-align:center;
@@ -523,7 +569,18 @@ function fifa_wc_standings_grouped_shortcode() {
         flex-direction:column;
         justify-content:space-around;
         gap:10px;
-        padding:0 8px 8px;
+        padding:0 12px 8px;
+        width:100%;
+    }
+    @media (max-width:768px){
+        #<?php echo esc_attr($uid); ?> .wc-bracket{
+            overflow-x:auto;
+            -webkit-overflow-scrolling:touch;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-col{
+            flex:0 0 168px;
+            min-width:168px;
+        }
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-card{
         background:#ececec;
@@ -589,6 +646,13 @@ function fifa_wc_standings_grouped_shortcode() {
     }
     </style>
 
+    <div class="wc-tabs" role="tablist">
+        <button type="button" class="wc-tab is-active" role="tab" aria-selected="true" data-wc-tab="group">Group Stage</button>
+        <button type="button" class="wc-tab" role="tab" aria-selected="false" data-wc-tab="knockout">Knockout stage</button>
+    </div>
+
+    <div class="wc-tab-panel wc-tab-panel-group is-active" role="tabpanel">
+
     <div class="wc-groups-list">
 
     <?php foreach ($groups as $group_name => $teams): ?>
@@ -634,6 +698,10 @@ function fifa_wc_standings_grouped_shortcode() {
     <?php endforeach; ?>
 
     </div>
+
+    </div>
+
+    <div class="wc-tab-panel wc-tab-panel-knockout" role="tabpanel">
 
     <div class="wc-knockout">
         <div class="wc-bracket">
@@ -685,6 +753,34 @@ function fifa_wc_standings_grouped_shortcode() {
             <?php endforeach; ?>
         </div>
     </div>
+
+    </div>
+
+    <script>
+    (function () {
+        var root = document.getElementById(<?php echo wp_json_encode($uid); ?>);
+        if (!root) return;
+        var tabs = root.querySelectorAll('.wc-tab');
+        var panels = {
+            group: root.querySelector('.wc-tab-panel-group'),
+            knockout: root.querySelector('.wc-tab-panel-knockout')
+        };
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var key = tab.getAttribute('data-wc-tab');
+                if (!key || !panels[key]) return;
+                tabs.forEach(function (t) {
+                    var active = t === tab;
+                    t.classList.toggle('is-active', active);
+                    t.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+                Object.keys(panels).forEach(function (k) {
+                    panels[k].classList.toggle('is-active', k === key);
+                });
+            });
+        });
+    })();
+    </script>
 
     </div>
 
