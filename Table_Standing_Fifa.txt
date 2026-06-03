@@ -2,9 +2,9 @@ function fifa_wc_config() {
 
     return [
         'league_id'     => 28,
-        'season'        => '2022',
-        'fixtures_from' => '2022-11-20',
-        'fixtures_to'   => '2022-12-20',
+        'season'        => '2026',
+        'fixtures_from' => '2026-06-01',
+        'fixtures_to'   => '2026-07-31',
     ];
 }
 
@@ -55,12 +55,53 @@ function fifa_wc_fixtures_api() {
 }
 
 
+function fifa_wc_standings_api() {
+
+    $cfg = fifa_wc_config();
+
+    $url = 'https://apiv2.allsportsapi.com/football/?met=Standings'
+        . '&APIkey=' . fifa_wc_api_key()
+        . '&leagueId=' . $cfg['league_id'];
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING       => 'gzip,deflate',
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) {
+        return [];
+    }
+
+    $json = json_decode($response, true);
+
+    return $json['result']['total'] ?? [];
+}
+
+
 function fifa_wc_filter_fixtures_by_season($fixtures, $season) {
 
     $season = (string) $season;
 
     return array_values(array_filter($fixtures, function ($fixture) use ($season) {
         return ($fixture['league_season'] ?? '') === $season;
+    }));
+}
+
+
+function fifa_wc_filter_standings_by_season($standings, $season) {
+
+    $season = (string) $season;
+
+    return array_values(array_filter($standings, function ($row) use ($season) {
+        return ($row['league_season'] ?? '') === $season;
     }));
 }
 
@@ -369,7 +410,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v9';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v10';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -377,7 +418,11 @@ function fifa_wc_standings_grouped_shortcode() {
     }
 
     $fixtures = fifa_wc_filter_fixtures_by_season(fifa_wc_fixtures_api(), $cfg['season']);
-    $data     = fifa_wc_standings_from_fixtures($fixtures, $cfg['season']);
+    $data     = fifa_wc_filter_standings_by_season(fifa_wc_standings_api(), $cfg['season']);
+
+    if (empty($data)) {
+        $data = fifa_wc_standings_from_fixtures($fixtures, $cfg['season']);
+    }
 
     if (empty($data)) {
         return '<p>No standings available yet.</p>';
