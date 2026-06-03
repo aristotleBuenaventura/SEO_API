@@ -1,0 +1,230 @@
+
+function fifa_wc_standings_api() {
+
+    $APIkey = "75d4149d2873e1afd455cebbd0ec25255cea79295120d9726c22fdca3ed306be";
+
+    $url = "https://apiv2.allsportsapi.com/football/?met=Standings"
+        . "&APIkey={$APIkey}"
+        . "&leagueId=28";
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING => "gzip,deflate"
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) return [];
+
+    $json = json_decode($response, true);
+
+    return $json['result']['total'] ?? [];
+}
+
+
+function fifa_wc_standings_grouped_shortcode() {
+
+    $cache_key = "fifa_wc_2026_standings_grouped";
+    $cached = get_transient($cache_key);
+
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $data = fifa_wc_standings_api();
+
+    if (empty($data)) {
+        return "<p>No standings available yet.</p>";
+    }
+
+    // GROUP BY league_round
+    $groups = [];
+
+    foreach ($data as $team) {
+
+        $group = $team['league_round'] ?? 'Unknown Group';
+
+        if (!isset($groups[$group])) {
+            $groups[$group] = [];
+        }
+
+        $groups[$group][] = $team;
+    }
+
+    ksort($groups);
+
+    ob_start();
+    ?>
+
+    <div class="fifa-standings-wrapper">
+
+        <style>
+
+        .fifa-standings-wrapper{
+            max-width:1200px;
+            margin:auto;
+            font-family:Arial;
+        }
+
+        .group-box{
+            margin-bottom:25px;
+            border:1px solid #ddd;
+            border-radius:10px;
+            overflow:hidden;
+            background:#fff;
+        }
+
+        .group-title{
+            background:#111;
+            color:#fff;
+            padding:10px 14px;
+            font-weight:700;
+            font-size:14px;
+        }
+
+        table{
+            width:100%;
+            border-collapse:collapse;
+            table-layout:fixed;
+        }
+
+        th, td{
+            font-size:12px;
+            padding:6px;
+            text-align:center;
+            border-bottom:1px solid #eee;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+
+        th{
+            background:#f5f5f5;
+            font-weight:700;
+        }
+
+        .team-cell{
+            display:flex;
+            align-items:center;
+            gap:6px;
+            text-align:left;
+            overflow:hidden;
+        }
+
+        .team-cell img{
+            width:18px;
+            height:18px;
+            object-fit:contain;
+        }
+
+        .team-name{
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+
+        .legend{
+            display:grid;
+            grid-template-columns:repeat(4,1fr);
+            gap:6px;
+            font-size:11px;
+            padding:10px;
+            color:#444;
+        }
+
+        @media(max-width:768px){
+            th,td{font-size:10px}
+            .legend{grid-template-columns:repeat(2,1fr)}
+        }
+
+        </style>
+
+        <?php foreach ($groups as $group_name => $teams): ?>
+
+            <div class="group-box">
+
+                <div class="group-title">
+                    <?php echo esc_html($group_name); ?>
+                </div>
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">TEAM</th>
+                            <th>P</th>
+                            <th>W</th>
+                            <th>D</th>
+                            <th>L</th>
+                            <th>F</th>
+                            <th>A</th>
+                            <th>GD</th>
+                            <th>PTS</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <?php foreach ($teams as $t): ?>
+
+                        <tr>
+
+                            <td>
+                                <div class="team-cell">
+                                    <img src="<?php echo esc_url($t['team_logo'] ?? '/wp-content/uploads/2025/09/tba.webp'); ?>">
+                                    <span class="team-name">
+                                        <?php echo esc_html($t['standing_team'] ?? 'TBA'); ?>
+                                    </span>
+                                </div>
+                            </td>
+
+                            <td><?php echo esc_html($t['standing_P'] ?? 0); ?></td>
+                            <td><?php echo esc_html($t['standing_W'] ?? 0); ?></td>
+                            <td><?php echo esc_html($t['standing_D'] ?? 0); ?></td>
+                            <td><?php echo esc_html($t['standing_L'] ?? 0); ?></td>
+                            <td><?php echo esc_html($t['standing_F'] ?? 0); ?></td>
+                            <td><?php echo esc_html($t['standing_A'] ?? 0); ?></td>
+                            <td><?php echo esc_html($t['standing_GD'] ?? 0); ?></td>
+                            <td><b><?php echo esc_html($t['standing_PTS'] ?? 0); ?></b></td>
+
+                        </tr>
+
+                    <?php endforeach; ?>
+
+                    </tbody>
+
+                </table>
+
+                <div class="legend">
+                    <div><b>P</b>: Matches Played</div>
+                    <div><b>W</b>: Wins</div>
+                    <div><b>D</b>: Draws</div>
+                    <div><b>L</b>: Losses</div>
+                    <div><b>F</b>: Goals For</div>
+                    <div><b>A</b>: Goals Against</div>
+                    <div><b>GD</b>: Goal Difference</div>
+                    <div><b>PTS</b>: Points</div>
+                </div>
+
+            </div>
+
+        <?php endforeach; ?>
+
+    </div>
+
+    <?php
+
+    $output = ob_get_clean();
+
+    set_transient($cache_key, $output, 30 * MINUTE_IN_SECONDS);
+
+    return $output;
+}
+
+add_shortcode('fifa_wc_standings_2026', 'fifa_wc_standings_grouped_shortcode');
