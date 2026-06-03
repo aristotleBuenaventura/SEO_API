@@ -1,3 +1,4 @@
+
 /**
  * =========================
  * FIFA WORLD CUP 2026 API
@@ -101,11 +102,6 @@ function fifa_worldcup_2026_shortcode() {
                 $home_logo = fifa_team_logo($v->home_team_logo ?? '', $home);
                 $away_logo = fifa_team_logo($v->away_team_logo ?? '', $away);
 
-                /**
-                 * =========================
-                 * SCORE LOGIC FIX
-                 * =========================
-                 */
                 if (!empty($v->event_final_result) && $v->event_final_result !== "-") {
                     $score = $v->event_final_result;
                 } else {
@@ -124,16 +120,21 @@ function fifa_worldcup_2026_shortcode() {
 
                 <div class="fixture-body">
 
+                    <!-- HOME -->
                     <div class="team">
                         <img src="<?php echo esc_url($home_logo); ?>" width="55" height="55">
+                        <div class="country-name"><?php echo esc_html($home); ?></div>
                     </div>
 
+                    <!-- SCORE / STATUS -->
                     <div class="fixture-score">
                         <?php echo esc_html($score); ?>
                     </div>
 
+                    <!-- AWAY -->
                     <div class="team">
                         <img src="<?php echo esc_url($away_logo); ?>" width="55" height="55">
+                        <div class="country-name"><?php echo esc_html($away); ?></div>
                     </div>
 
                 </div>
@@ -161,7 +162,7 @@ function fifa_worldcup_2026_shortcode() {
         padding: 20px 0;
     }
 
-    /* ✅ FIX: equal height cards (no shrinking issue) */
+    /* CARD */
     #<?php echo esc_attr($unique_id); ?> .fifa-card {
         background: #fff;
         border-radius: 10px;
@@ -174,9 +175,10 @@ function fifa_worldcup_2026_shortcode() {
         flex-direction: column;
         justify-content: space-between;
 
-        min-height: 190px;
+        min-height: 200px;
     }
 
+    /* DATE */
     #<?php echo esc_attr($unique_id); ?> .fixture-date {
         font-size: 12px;
         font-weight: 700;
@@ -187,6 +189,7 @@ function fifa_worldcup_2026_shortcode() {
         text-overflow: ellipsis;
     }
 
+    /* BODY */
     #<?php echo esc_attr($unique_id); ?> .fixture-body {
         display: flex;
         justify-content: space-between;
@@ -194,26 +197,47 @@ function fifa_worldcup_2026_shortcode() {
         margin: 10px 0;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .fixture-score {
-        font-size: 20px;
-        font-weight: 800;
-        color: #111;
-        min-width: 70px;
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    /* TEAM BLOCK */
+    #<?php echo esc_attr($unique_id); ?> .team {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        width: 90px;
     }
 
     #<?php echo esc_attr($unique_id); ?> .team img {
         object-fit: contain;
     }
 
+    /* COUNTRY NAME */
+    #<?php echo esc_attr($unique_id); ?> .country-name {
+        font-size: 11px;
+        font-weight: 600;
+        color: #333;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    /* SCORE / STATUS */
+    #<?php echo esc_attr($unique_id); ?> .fixture-score {
+        font-size: 16px;
+        font-weight: 800;
+        color: #111;
+        min-width: 120px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* FIXTURE LABEL */
     #<?php echo esc_attr($unique_id); ?> .fixture-teams {
         font-size: 13px;
         font-weight: 600;
         margin-top: 6px;
     }
 
+    /* VENUE */
     #<?php echo esc_attr($unique_id); ?> .fixture-venue {
         font-size: 11px;
         color: #666;
@@ -221,6 +245,7 @@ function fifa_worldcup_2026_shortcode() {
         min-height: 14px;
     }
 
+    /* NAV */
     #<?php echo esc_attr($unique_id); ?> .swiper-button-next,
     #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
         color: #000;
