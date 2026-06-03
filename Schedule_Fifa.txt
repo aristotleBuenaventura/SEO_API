@@ -103,17 +103,17 @@ function fifa_worldcup_2026_shortcode() {
 
                 /**
                  * =========================
-                 * SCORE FIX (IMPORTANT)
+                 * SCORE LOGIC FIX
                  * =========================
                  */
                 if (!empty($v->event_final_result) && $v->event_final_result !== "-") {
                     $score = $v->event_final_result;
                 } else {
-                    $score = "Upcoming Match";
+                    $score = "UPCOMING MATCH";
                 }
 
                 $date  = !empty($v->event_date) ? date("M d, Y", strtotime($v->event_date)) : "";
-                $venue = $v->event_stadium ?? "TBA";
+                $venue = !empty($v->event_stadium) ? $v->event_stadium : "TBA";
             ?>
 
             <div class="swiper-slide fifa-card">
@@ -161,6 +161,7 @@ function fifa_worldcup_2026_shortcode() {
         padding: 20px 0;
     }
 
+    /* ✅ FIX: equal height cards (no shrinking issue) */
     #<?php echo esc_attr($unique_id); ?> .fifa-card {
         background: #fff;
         border-radius: 10px;
@@ -168,16 +169,22 @@ function fifa_worldcup_2026_shortcode() {
         text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         width: 360px;
+
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+
+        min-height: 190px;
     }
 
     #<?php echo esc_attr($unique_id); ?> .fixture-date {
         font-size: 12px;
-		font-weight: 700;
-		margin-bottom: 4px;
-		color: #444;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: #444;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     #<?php echo esc_attr($unique_id); ?> .fixture-body {
@@ -189,10 +196,12 @@ function fifa_worldcup_2026_shortcode() {
 
     #<?php echo esc_attr($unique_id); ?> .fixture-score {
         font-size: 20px;
-		font-weight: bold;
-		color: #111;
-		min-width: 70px;
-		text-align: center;
+        font-weight: 800;
+        color: #111;
+        min-width: 70px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     #<?php echo esc_attr($unique_id); ?> .team img {
@@ -209,6 +218,7 @@ function fifa_worldcup_2026_shortcode() {
         font-size: 11px;
         color: #666;
         margin-top: 4px;
+        min-height: 14px;
     }
 
     #<?php echo esc_attr($unique_id); ?> .swiper-button-next,
