@@ -2,9 +2,9 @@ function fifa_wc_config() {
 
     return [
         'league_id'     => 28,
-        'season'        => '2026',
-        'fixtures_from' => '2026-06-01',
-        'fixtures_to'   => '2026-07-31',
+        'season'        => '2022',
+        'fixtures_from' => '2022-11-20',
+        'fixtures_to'   => '2022-12-20',
     ];
 }
 
@@ -55,53 +55,12 @@ function fifa_wc_fixtures_api() {
 }
 
 
-function fifa_wc_standings_api() {
-
-    $cfg = fifa_wc_config();
-
-    $url = 'https://apiv2.allsportsapi.com/football/?met=Standings'
-        . '&APIkey=' . fifa_wc_api_key()
-        . '&leagueId=' . $cfg['league_id'];
-
-    $ch = curl_init();
-
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_ENCODING       => 'gzip,deflate',
-    ]);
-
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    if (!$response) {
-        return [];
-    }
-
-    $json = json_decode($response, true);
-
-    return $json['result']['total'] ?? [];
-}
-
-
 function fifa_wc_filter_fixtures_by_season($fixtures, $season) {
 
     $season = (string) $season;
 
     return array_values(array_filter($fixtures, function ($fixture) use ($season) {
         return ($fixture['league_season'] ?? '') === $season;
-    }));
-}
-
-
-function fifa_wc_filter_standings_by_season($standings, $season) {
-
-    $season = (string) $season;
-
-    return array_values(array_filter($standings, function ($row) use ($season) {
-        return ($row['league_season'] ?? '') === $season;
     }));
 }
 
@@ -330,6 +289,184 @@ function fifa_wc_format_ko_date($date_str) {
 }
 
 
+function fifa_wc_ko_match_teams($match) {
+
+    $teams = [
+        $match['event_home_team'] ?? '',
+        $match['event_away_team'] ?? '',
+    ];
+
+    return array_values(array_filter($teams, function ($t) {
+        return $t !== '';
+    }));
+}
+
+
+function fifa_wc_ko_feeds_parent($child, $parent) {
+
+    $child_teams  = fifa_wc_ko_match_teams($child);
+    $parent_teams = fifa_wc_ko_match_teams($parent);
+
+    foreach ($child_teams as $team) {
+        if (in_array($team, $parent_teams, true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+function fifa_wc_sort_ko_by_date($matches) {
+
+    usort($matches, function ($a, $b) {
+        $da = strtotime($a['event_date'] ?? '') ?: 0;
+        $db = strtotime($b['event_date'] ?? '') ?: 0;
+        if ($da !== $db) {
+            return $da <=> $db;
+        }
+        return ($a['event_key'] ?? 0) <=> ($b['event_key'] ?? 0);
+    });
+
+    return $matches;
+}
+
+
+function fifa_wc_sort_ko_pair_for_parent(array $pair, $parent) {
+
+    if (count($pair) !== 2) {
+        return fifa_wc_sort_ko_by_date($pair);
+    }
+
+    $parent_teams = fifa_wc_ko_match_teams($parent);
+    $anchor       = $parent_teams[0] ?? '';
+
+    if ($anchor === '') {
+        return fifa_wc_sort_ko_by_date($pair);
+    }
+
+    usort($pair, function ($a, $b) use ($anchor) {
+        $a_has = in_array($anchor, fifa_wc_ko_match_teams($a), true);
+        $b_has = in_array($anchor, fifa_wc_ko_match_teams($b), true);
+
+        if ($a_has !== $b_has) {
+            return $b_has <=> $a_has;
+        }
+
+        $da = strtotime($a['event_date'] ?? '') ?: 0;
+        $db = strtotime($b['event_date'] ?? '') ?: 0;
+
+        if ($da !== $db) {
+            return $da <=> $db;
+        }
+
+        return ($a['event_key'] ?? 0) <=> ($b['event_key'] ?? 0);
+    });
+
+    return $pair;
+}
+
+
+function fifa_wc_sort_ko_children_for_parents(array $children, array $parents) {
+
+    $sorted = [];
+    $used   = [];
+
+    foreach ($parents as $parent) {
+        $pair = [];
+
+        foreach ($children as $idx => $child) {
+            if (isset($used[$idx])) {
+                continue;
+            }
+            if (!fifa_wc_ko_feeds_parent($child, $parent)) {
+                continue;
+            }
+            $pair[]        = $child;
+            $used[$idx]    = true;
+            if (count($pair) === 2) {
+                break;
+            }
+        }
+
+        if (count($pair) === 2) {
+            $pair = fifa_wc_sort_ko_pair_for_parent($pair, $parent);
+        }
+
+        foreach ($pair as $match) {
+            $sorted[] = $match;
+        }
+    }
+
+    foreach ($children as $idx => $child) {
+        if (!isset($used[$idx])) {
+            $sorted[] = $child;
+        }
+    }
+
+    return $sorted;
+}
+
+
+function fifa_wc_sort_knockout_columns($columns) {
+
+    $round_order = ['final', 'sf', 'qf', 'r16', 'r32'];
+
+    if (!empty($columns['final']['matches'])) {
+        $columns['final']['matches'] = fifa_wc_sort_ko_by_date($columns['final']['matches']);
+    }
+
+    for ($i = 0; $i < count($round_order) - 1; $i++) {
+        $parent_key = $round_order[$i];
+        $child_key  = $round_order[$i + 1];
+
+        if (empty($columns[$child_key]['matches'])) {
+            continue;
+        }
+
+        if (!empty($columns[$parent_key]['matches'])) {
+            $columns[$child_key]['matches'] = fifa_wc_sort_ko_children_for_parents(
+                $columns[$child_key]['matches'],
+                $columns[$parent_key]['matches']
+            );
+        } else {
+            $columns[$child_key]['matches'] = fifa_wc_sort_ko_by_date($columns[$child_key]['matches']);
+        }
+    }
+
+    return $columns;
+}
+
+
+function fifa_wc_ko_leaf_count($columns) {
+
+    foreach (['r32', 'r16'] as $key) {
+        if (!empty($columns[$key]['matches'])) {
+            return count($columns[$key]['matches']);
+        }
+    }
+
+    foreach (['qf', 'sf', 'final'] as $key) {
+        if (!empty($columns[$key]['matches'])) {
+            return max(1, count($columns[$key]['matches']) * 2);
+        }
+    }
+
+    return 1;
+}
+
+
+function fifa_wc_ko_slot_grid_style($index, $match_count, $leaf_count) {
+
+    $match_count = max(1, (int) $match_count);
+    $leaf_count  = max(1, (int) $leaf_count);
+    $span        = max(1, (int) round($leaf_count / $match_count));
+    $start       = (int) floor($index * $leaf_count / $match_count) + 1;
+
+    return 'grid-row:' . $start . ' / span ' . $span . ';align-self:center;';
+}
+
+
 function fifa_wc_build_knockout_bracket($fixtures) {
 
     $columns = [
@@ -353,14 +490,7 @@ function fifa_wc_build_knockout_bracket($fixtures) {
         }
     }
 
-    foreach ($columns as &$col) {
-        usort($col['matches'], function ($a, $b) {
-            return strtotime($a['event_date'] ?? '') <=> strtotime($b['event_date'] ?? '');
-        });
-    }
-    unset($col);
-
-    return $columns;
+    return fifa_wc_sort_knockout_columns($columns);
 }
 
 
@@ -377,9 +507,7 @@ function fifa_wc_render_ko_match_card($match) {
     <div class="wc-ko-card">
         <div class="wc-ko-meta">
             <span class="wc-ko-date"><?php echo esc_html($date); ?></span>
-            <?php if ($status): ?>
-                <span class="wc-ko-status"><?php echo esc_html($status); ?></span>
-            <?php endif; ?>
+            <span class="wc-ko-status"><?php echo esc_html($status); ?></span>
         </div>
         <?php
         $teams = [
@@ -410,7 +538,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v10';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v11';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -418,11 +546,7 @@ function fifa_wc_standings_grouped_shortcode() {
     }
 
     $fixtures = fifa_wc_filter_fixtures_by_season(fifa_wc_fixtures_api(), $cfg['season']);
-    $data     = fifa_wc_filter_standings_by_season(fifa_wc_standings_api(), $cfg['season']);
-
-    if (empty($data)) {
-        $data = fifa_wc_standings_from_fixtures($fixtures, $cfg['season']);
-    }
+    $data     = fifa_wc_standings_from_fixtures($fixtures, $cfg['season']);
 
     if (empty($data)) {
         return '<p>No standings available yet.</p>';
@@ -460,6 +584,7 @@ function fifa_wc_standings_grouped_shortcode() {
     ksort($groups);
 
     $knockout_cols = fifa_wc_build_knockout_bracket($fixtures);
+    $ko_leaf_rows  = fifa_wc_ko_leaf_count($knockout_cols);
 
     ob_start();
     ?>
@@ -666,11 +791,20 @@ function fifa_wc_standings_grouped_shortcode() {
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-slots{
         flex:1;
-        display:flex;
-        flex-direction:column;
-        justify-content:space-around;
-        gap:10px;
+        display:grid;
+        grid-template-rows:repeat(var(--ko-rows,8),minmax(var(--ko-card-h,80px),1fr));
+        align-content:stretch;
+        gap:0;
         padding:0 12px 8px;
+        width:100%;
+        min-height:calc(var(--ko-rows,8) * var(--ko-card-h,80px));
+    }
+    #<?php echo esc_attr($uid); ?> .wc-ko-slot{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        min-height:0;
+        padding:4px 0;
         width:100%;
     }
     @media (max-width:768px){
@@ -687,26 +821,42 @@ function fifa_wc_standings_grouped_shortcode() {
         background:#ececec;
         border-radius:8px;
         padding:8px 10px;
-        min-height:72px;
+        width:100%;
+        height:var(--ko-card-h,80px);
+        min-height:var(--ko-card-h,80px);
+        max-height:var(--ko-card-h,80px);
+        display:flex;
+        flex-direction:column;
+        justify-content:space-between;
+        overflow:hidden;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-meta{
         display:flex;
         justify-content:space-between;
         align-items:center;
-        margin-bottom:6px;
+        flex:0 0 16px;
+        min-height:16px;
+        margin:0;
         font-size:11px;
+        line-height:16px;
         color:#666;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-status{
         font-weight:600;
         color:#444;
+        min-width:28px;
+        text-align:right;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-team{
         display:flex;
         align-items:center;
         gap:6px;
-        padding:3px 0;
+        flex:1 1 0;
+        min-height:22px;
+        max-height:22px;
+        padding:0;
         font-size:12px;
+        line-height:22px;
         color:#111;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-team img{
@@ -805,17 +955,20 @@ function fifa_wc_standings_grouped_shortcode() {
     <div class="wc-tab-panel wc-tab-panel-knockout" role="tabpanel">
 
     <div class="wc-knockout">
-        <div class="wc-bracket">
+        <div class="wc-bracket" style="--ko-rows:<?php echo (int) $ko_leaf_rows; ?>;--ko-card-h:80px">
             <svg class="wc-bracket-svg" aria-hidden="true"></svg>
             <?php foreach ($knockout_cols as $col_key => $col): ?>
+                <?php $col_match_count = count($col['matches']); ?>
                 <div class="wc-ko-col wc-ko-col-<?php echo esc_attr($col_key); ?>">
                     <div class="wc-ko-col-title"><?php echo esc_html($col['label']); ?></div>
                     <div class="wc-ko-slots">
                         <?php if (empty($col['matches'])): ?>
                             <div class="wc-ko-empty">—</div>
                         <?php else: ?>
-                            <?php foreach ($col['matches'] as $match): ?>
-                                <?php echo fifa_wc_render_ko_match_card($match); ?>
+                            <?php foreach ($col['matches'] as $idx => $match): ?>
+                                <div class="wc-ko-slot" style="<?php echo esc_attr(fifa_wc_ko_slot_grid_style($idx, $col_match_count, $ko_leaf_rows)); ?>">
+                                    <?php echo fifa_wc_render_ko_match_card($match); ?>
+                                </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
@@ -877,6 +1030,7 @@ function fifa_wc_standings_grouped_shortcode() {
                     var y1 = midY(top);
                     var y2 = midY(bot);
                     var yMid = (y1 + y2) / 2;
+                    var yDest = midY(dest);
                     var xOut = rightX(top);
                     var xIn = leftX(dest);
                     var d = 'M' + xOut + ',' + y1 +
@@ -886,7 +1040,8 @@ function fifa_wc_standings_grouped_shortcode() {
                         'M' + gapMid + ',' + y1 +
                         'V' + y2 +
                         'M' + gapMid + ',' + yMid +
-                        'H' + xIn;
+                        'H' + xIn +
+                        'V' + yDest;
                     var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('d', d);
                     svg.appendChild(path);
