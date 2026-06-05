@@ -35,11 +35,17 @@ function fifa_wc_api($leagueId, $from, $to) {
     return $json->result ?? [];
 }
 
-function fifa_team_logo($api_logo) {
+function fifa_team_logo($api_logo, $team_name = '') {
 
-    return !empty($api_logo)
-        ? $api_logo
-        : "/wp-content/uploads/2025/09/tba.webp";
+    if (!empty($api_logo)) {
+        return $api_logo;
+    }
+
+    if (stripos(trim((string) $team_name), 'portugal') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/portugal.jpg';
+    }
+
+    return '/wp-content/uploads/2025/09/tba.webp';
 }
 
 function fifa_worldcup_2026_shortcode() {
@@ -78,8 +84,8 @@ function fifa_worldcup_2026_shortcode() {
                 $home = $v->event_home_team ?? "TBA";
                 $away = $v->event_away_team ?? "TBA";
 
-                $home_logo = fifa_team_logo($v->home_team_logo ?? '');
-                $away_logo = fifa_team_logo($v->away_team_logo ?? '');
+                $home_logo = fifa_team_logo($v->home_team_logo ?? '', $home);
+                $away_logo = fifa_team_logo($v->away_team_logo ?? '', $away);
 
                 if (!empty($v->event_final_result) && $v->event_final_result !== "-") {
                     $score = $v->event_final_result;

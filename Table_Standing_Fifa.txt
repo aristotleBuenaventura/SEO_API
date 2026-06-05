@@ -15,8 +15,27 @@ function fifa_wc_api_key() {
 }
 
 
-function fifa_wc_team_logo($logo) {
-    return !empty($logo) ? $logo : '/wp-content/uploads/2025/09/tba.webp';
+function fifa_wc_portugal_logo() {
+    return 'https://img-live.bannershive.dev/h001_uploads/images/portugal.jpg';
+}
+
+
+function fifa_wc_is_portugal($team_name) {
+    return stripos(trim((string) $team_name), 'portugal') !== false;
+}
+
+
+function fifa_wc_team_logo($logo, $team_name = '') {
+
+    if (!empty($logo)) {
+        return $logo;
+    }
+
+    if (fifa_wc_is_portugal($team_name)) {
+        return fifa_wc_portugal_logo();
+    }
+
+    return '/wp-content/uploads/2025/09/tba.webp';
 }
 
 
@@ -523,7 +542,7 @@ function fifa_wc_render_ko_match_card($match) {
             ?>
             <div class="wc-ko-team<?php echo $is_winner ? ' is-winner' : ''; ?>">
                 <span class="wc-ko-arrow"></span>
-                <img src="<?php echo esc_url(fifa_wc_team_logo($team['logo'])); ?>" alt="">
+                <img src="<?php echo esc_url(fifa_wc_team_logo($team['logo'], $team['name'])); ?>" alt="">
                 <span class="wc-ko-team-name"><?php echo esc_html($team['name']); ?></span>
                 <span class="wc-ko-score"><?php echo esc_html($score_txt); ?></span>
             </div>
@@ -538,7 +557,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v11';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v12';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -929,7 +948,7 @@ function fifa_wc_standings_grouped_shortcode() {
             <div class="wc-row">
                 <div class="wc-team-cell">
                     <span class="wc-rank"><?php echo esc_html($t['standing_place'] ?? ''); ?></span>
-                    <img src="<?php echo esc_url(fifa_wc_team_logo($t['team_logo'] ?? '')); ?>" alt="">
+                    <img src="<?php echo esc_url(fifa_wc_team_logo($t['team_logo'] ?? '', $t['standing_team'] ?? '')); ?>" alt="">
                     <span class="wc-name"><?php echo esc_html($t['standing_team'] ?? ''); ?></span>
                 </div>
                 <div class="wc-val-stat"><?php echo esc_html($t['standing_P'] ?? 0); ?></div>
