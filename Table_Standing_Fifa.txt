@@ -378,144 +378,6 @@ function fifa_wc_format_ko_date($date_str, $time_str = '') {
 }
 
 
-function fifa_wc_ko_round_match_counts() {
-
-    return [
-        'r32'   => 16,
-        'r16'   => 8,
-        'qf'    => 4,
-        'sf'    => 2,
-        'final' => 1,
-    ];
-}
-
-
-function fifa_wc_ko_bracket_has_r32($columns) {
-
-    if (!empty($columns['r32']['matches'])) {
-        return true;
-    }
-
-    if (!empty($columns['r16']['matches']) || !empty($columns['qf']['matches'])) {
-        return false;
-    }
-
-    return true;
-}
-
-
-function fifa_wc_ko_bracket_slot_orders($has_r32 = true) {
-
-    if ($has_r32) {
-        return [
-            'r32'   => [73, 75, 74, 77, 76, 78, 79, 80, 83, 84, 81, 82, 86, 88, 85, 87],
-            'r16'   => [90, 89, 91, 92, 93, 94, 95, 96],
-            'qf'    => [97, 98, 99, 100],
-            'sf'    => [101, 102],
-            'final' => [104],
-        ];
-    }
-
-    return [
-        'r16'   => [49, 50, 53, 54, 55, 56, 51, 52],
-        'qf'    => [57, 58, 59, 60],
-        'sf'    => [61, 62],
-        'final' => [64],
-    ];
-}
-
-
-function fifa_wc_ko_placeholder_match($round_key, $index, $has_r32 = true) {
-
-    $labels = [
-        'r32'   => 'Round of 32',
-        'r16'   => 'Round of 16',
-        'qf'    => 'Quarter-finals',
-        'sf'    => 'Semi-finals',
-        'final' => 'Final',
-    ];
-
-    $orders   = fifa_wc_ko_bracket_slot_orders($has_r32);
-    $match_no = $orders[$round_key][$index] ?? null;
-
-    return [
-        'event_key'            => 'placeholder_' . $round_key . '_' . $index,
-        'event_date'           => '',
-        'event_time'           => '',
-        'event_home_team'      => 'TBD',
-        'event_away_team'      => 'TBD',
-        'home_team_logo'       => '',
-        'away_team_logo'       => '',
-        'event_final_result'   => '-',
-        'event_penalty_result' => '',
-        'event_status'         => 'Not Started',
-        'league_round'         => $labels[$round_key] ?? '',
-        '_placeholder'         => true,
-        '_bracket_slot'        => $index,
-        '_bracket_match'       => $match_no,
-    ];
-}
-
-
-function fifa_wc_ko_bracket_round_chain($has_r32 = true) {
-
-    return $has_r32 ? ['r32', 'r16', 'qf', 'sf', 'final'] : ['r16', 'qf', 'sf', 'final'];
-}
-
-
-function fifa_wc_ko_is_real_team($team_name) {
-
-    $name = trim((string) $team_name);
-
-    if ($name === '' || fifa_wc_is_tbd_team($name)) {
-        return false;
-    }
-
-    return !preg_match('/\b(winner|runner-up|loser|3rd|third)\s+(group|match)\b/i', $name);
-}
-
-
-function fifa_wc_ko_match_number($fixture) {
-
-    if (isset($fixture['_bracket_match']) && is_numeric($fixture['_bracket_match'])) {
-        return (int) $fixture['_bracket_match'];
-    }
-
-    $fields = [
-        $fixture['league_round'] ?? '',
-        $fixture['event_note'] ?? '',
-        $fixture['event_title'] ?? '',
-        $fixture['event_stadium'] ?? '',
-    ];
-
-    foreach ($fields as $text) {
-        if (preg_match('/\bmatch\s*#?\s*(\d{2,3})\b/i', (string) $text, $m)) {
-            return (int) $m[1];
-        }
-    }
-
-    foreach (['event_home_team', 'event_away_team'] as $field) {
-        $text = (string) ($fixture[$field] ?? '');
-
-        if (preg_match('/\b(?:winner|loser)\s+match\s+(\d{2,3})\b/i', $text, $m)) {
-            $nums = [];
-
-            foreach (['event_home_team', 'event_away_team'] as $side) {
-                if (preg_match('/\b(?:winner|loser)\s+match\s+(\d{2,3})\b/i', (string) ($fixture[$side] ?? ''), $side_m)) {
-                    $nums[] = (int) $side_m[1];
-                }
-            }
-
-            if (count($nums) === 2) {
-                return (int) min($nums) + 1;
-            }
-        }
-    }
-
-    return null;
-}
-
-
 function fifa_wc_ko_match_teams($match) {
 
     $teams = [
@@ -524,39 +386,15 @@ function fifa_wc_ko_match_teams($match) {
     ];
 
     return array_values(array_filter($teams, function ($t) {
-        return fifa_wc_ko_is_real_team($t);
+        return $t !== '';
     }));
-}
-
-
-function fifa_wc_ko_match_feeder_teams($match) {
-
-    $scores = fifa_wc_parse_match_scores($match);
-
-    if ($scores['winner'] === 'home') {
-        $winner = trim((string) ($match['event_home_team'] ?? ''));
-
-        return fifa_wc_ko_is_real_team($winner) ? [$winner] : [];
-    }
-
-    if ($scores['winner'] === 'away') {
-        $winner = trim((string) ($match['event_away_team'] ?? ''));
-
-        return fifa_wc_ko_is_real_team($winner) ? [$winner] : [];
-    }
-
-    return fifa_wc_ko_match_teams($match);
 }
 
 
 function fifa_wc_ko_feeds_parent($child, $parent) {
 
-    $child_teams  = fifa_wc_ko_match_feeder_teams($child);
+    $child_teams  = fifa_wc_ko_match_teams($child);
     $parent_teams = fifa_wc_ko_match_teams($parent);
-
-    if (empty($child_teams) || empty($parent_teams)) {
-        return false;
-    }
 
     foreach ($child_teams as $team) {
         if (in_array($team, $parent_teams, true)) {
@@ -565,96 +403,6 @@ function fifa_wc_ko_feeds_parent($child, $parent) {
     }
 
     return false;
-}
-
-
-function fifa_wc_ko_assign_by_bracket_slots(array $matches, $round_key, $has_r32 = true) {
-
-    $orders   = fifa_wc_ko_bracket_slot_orders($has_r32);
-    $order    = $orders[$round_key] ?? null;
-    $expected = $order ? count($order) : count($matches);
-
-    if ($expected === 0) {
-        return $matches;
-    }
-
-    $slots      = array_fill(0, $expected, null);
-    $unassigned = [];
-
-    foreach ($matches as $match) {
-        $num = fifa_wc_ko_match_number($match);
-
-        if ($num !== null && $order) {
-            $idx = array_search($num, $order, true);
-
-            if ($idx !== false && $slots[$idx] === null) {
-                $slots[$idx] = $match;
-                continue;
-            }
-        }
-
-        if (isset($match['_bracket_slot']) && is_numeric($match['_bracket_slot'])) {
-            $idx = (int) $match['_bracket_slot'];
-
-            if ($idx >= 0 && $idx < $expected && $slots[$idx] === null) {
-                $slots[$idx] = $match;
-                continue;
-            }
-        }
-
-        $unassigned[] = $match;
-    }
-
-    usort($unassigned, function ($a, $b) {
-        $da = strtotime($a['event_date'] ?? '') ?: 0;
-        $db = strtotime($b['event_date'] ?? '') ?: 0;
-
-        if ($da !== $db) {
-            return $da <=> $db;
-        }
-
-        return ($a['event_key'] ?? 0) <=> ($b['event_key'] ?? 0);
-    });
-
-    $ui = 0;
-
-    for ($i = 0; $i < $expected; $i++) {
-        if ($slots[$i] === null && isset($unassigned[$ui])) {
-            $slots[$i] = $unassigned[$ui++];
-        }
-    }
-
-    while ($ui < count($unassigned)) {
-        $slots[] = $unassigned[$ui++];
-    }
-
-    return array_values(array_filter($slots, function ($match) {
-        return $match !== null;
-    }));
-}
-
-
-function fifa_wc_merge_knockout_placeholders($columns) {
-
-    $counts  = fifa_wc_ko_round_match_counts();
-    $has_r32 = fifa_wc_ko_bracket_has_r32($columns);
-
-    foreach ($counts as $key => $expected) {
-        if (!isset($columns[$key])) {
-            continue;
-        }
-
-        $real   = fifa_wc_ko_assign_by_bracket_slots($columns[$key]['matches'], $key, $has_r32);
-        $merged = [];
-
-        for ($i = 0; $i < $expected; $i++) {
-            $merged[] = $real[$i] ?? fifa_wc_ko_placeholder_match($key, $i, $has_r32);
-        }
-
-        $columns[$key]['matches'] = $merged;
-    }
-
-    return $columns;
 }
 
 
@@ -673,109 +421,10 @@ function fifa_wc_sort_ko_by_date($matches) {
 }
 
 
-function fifa_wc_ko_team_pair_key($match) {
-
-    $teams = array_map(function ($team) {
-        return strtolower(trim((string) $team));
-    }, fifa_wc_ko_match_teams($match));
-
-    sort($teams);
-
-    return implode('|', $teams);
-}
-
-
-function fifa_wc_ko_team_pair_slot_map($round_key, $has_r32 = true) {
-
-    if ($has_r32) {
-        return [];
-    }
-
-    static $legacy = [
-        'r16' => [
-            'netherlands|united states' => 0,
-            'argentina|australia'       => 1,
-            'japan|croatia'             => 2,
-            'brazil|korea republic'     => 3,
-            'morocco|spain'             => 4,
-            'portugal|switzerland'      => 5,
-            'france|poland'             => 6,
-            'england|senegal'           => 7,
-        ],
-        'qf' => [
-            'netherlands|argentina' => 0,
-            'brazil|croatia'        => 1,
-            'morocco|portugal'      => 2,
-            'england|france'        => 3,
-        ],
-        'sf' => [
-            'argentina|croatia' => 0,
-            'france|morocco'    => 1,
-        ],
-        'final' => [
-            'argentina|france' => 0,
-        ],
-    ];
-
-    return $legacy[$round_key] ?? [];
-}
-
-
-function fifa_wc_ko_bracket_index_of_match($match, $round_key, $has_r32 = true) {
-
-    if (isset($match['_bracket_slot']) && is_numeric($match['_bracket_slot'])) {
-        return (int) $match['_bracket_slot'];
-    }
-
-    $num    = fifa_wc_ko_match_number($match);
-    $orders = fifa_wc_ko_bracket_slot_orders($has_r32);
-    $order  = $orders[$round_key] ?? [];
-
-    if ($num !== null && $order) {
-        $idx = array_search($num, $order, true);
-
-        if ($idx !== false) {
-            return (int) $idx;
-        }
-    }
-
-    $pair_map = fifa_wc_ko_team_pair_slot_map($round_key, $has_r32);
-    $pair_key = fifa_wc_ko_team_pair_key($match);
-
-    if ($pair_key !== '' && isset($pair_map[$pair_key])) {
-        return (int) $pair_map[$pair_key];
-    }
-
-    return PHP_INT_MAX;
-}
-
-
-function fifa_wc_sort_ko_pair_for_parent(array $pair, $parent, $child_round_key = null, $has_r32 = true) {
+function fifa_wc_sort_ko_pair_for_parent(array $pair, $parent) {
 
     if (count($pair) !== 2) {
         return fifa_wc_sort_ko_by_date($pair);
-    }
-
-    if ($child_round_key) {
-        usort($pair, function ($a, $b) use ($child_round_key, $has_r32) {
-            $ia = fifa_wc_ko_bracket_index_of_match($a, $child_round_key, $has_r32);
-            $ib = fifa_wc_ko_bracket_index_of_match($b, $child_round_key, $has_r32);
-
-            if ($ia !== $ib) {
-                return $ia <=> $ib;
-            }
-
-            $da = strtotime($a['event_date'] ?? '') ?: 0;
-            $db = strtotime($b['event_date'] ?? '') ?: 0;
-
-            if ($da !== $db) {
-                return $da <=> $db;
-            }
-
-            return ($a['event_key'] ?? 0) <=> ($b['event_key'] ?? 0);
-        });
-
-        return $pair;
     }
 
     $parent_teams = fifa_wc_ko_match_teams($parent);
@@ -807,228 +456,71 @@ function fifa_wc_sort_ko_pair_for_parent(array $pair, $parent, $child_round_key 
 }
 
 
-function fifa_wc_ko_slot_parent_score($match, $parent_match, $slot = 0) {
+function fifa_wc_sort_ko_children_for_parents(array $children, array $parents) {
 
-    $score = 0;
-    $teams        = fifa_wc_ko_match_teams($match);
-    $parent_teams = fifa_wc_ko_match_teams($parent_match);
+    $sorted = [];
+    $used   = [];
 
-    if (!empty($teams) && !empty($parent_teams)) {
-        $overlap = count(array_intersect($teams, $parent_teams));
-
-        if ($overlap > 0) {
-            $score += 100 * $overlap;
-        }
-    }
-
-    return $score;
-}
-
-
-function fifa_wc_ko_forward_align_round(array $matches, array $parent_matches, $round_key, $has_r32 = true) {
-
-    $orders   = fifa_wc_ko_bracket_slot_orders($has_r32);
-    $order    = $orders[$round_key] ?? [];
-    $expected = $order ? count($order) : count($matches);
-
-    if ($expected === 0 || empty($matches)) {
-        return $matches;
-    }
-
-    if (empty($parent_matches)) {
-        return fifa_wc_ko_assign_by_bracket_slots($matches, $round_key, $has_r32);
-    }
-
-    $slots = array_fill(0, $expected, null);
-    $pool  = array_values($matches);
-    $used  = array_fill(0, count($pool), false);
-
-    for ($slot = 0; $slot < $expected; $slot++) {
-        $parent_idx   = (int) floor($slot / 2);
-        $parent_match = $parent_matches[$parent_idx] ?? null;
-        $best_idx     = null;
-        $best_score   = -1;
-        $best_tie     = PHP_INT_MAX;
-
-        foreach ($pool as $idx => $match) {
-            if ($used[$idx]) {
-                continue;
-            }
-
-            $score = $parent_match ? fifa_wc_ko_slot_parent_score($match, $parent_match, $slot) : 0;
-            $canonical_idx = fifa_wc_ko_bracket_index_of_match($match, $round_key, $has_r32);
-
-            if ($canonical_idx === $slot) {
-                $score += 1000;
-            } elseif ($canonical_idx !== PHP_INT_MAX) {
-                $score += max(0, 400 - (abs($canonical_idx - $slot) * 50));
-            }
-
-            if ($score > $best_score || ($score === $best_score && $canonical_idx < $best_tie)) {
-                $best_score = $score;
-                $best_tie   = $canonical_idx;
-                $best_idx   = $idx;
-            }
-        }
-
-        if ($best_idx === null) {
-            continue;
-        }
-
-        $slots[$slot]   = $pool[$best_idx];
-        $used[$best_idx] = true;
-    }
-
-    foreach ($pool as $idx => $match) {
-        if ($used[$idx]) {
-            continue;
-        }
-
-        for ($slot = 0; $slot < $expected; $slot++) {
-            if ($slots[$slot] === null) {
-                $slots[$slot] = $match;
-                break;
-            }
-        }
-    }
-
-    return array_values(array_filter($slots, function ($match) {
-        return $match !== null;
-    }));
-}
-
-
-function fifa_wc_ko_align_children_to_parents(array $children, array $parents, $child_round_key, $has_r32 = true) {
-
-    $child_count  = count($children);
-    $parent_count = count($parents);
-
-    if ($child_count === 0) {
-        return $children;
-    }
-
-    if ($parent_count === 0) {
-        return fifa_wc_ko_assign_by_bracket_slots($children, $child_round_key, $has_r32);
-    }
-
-    $sorted = array_fill(0, $child_count, null);
-    $pool   = array_values($children);
-    $used   = array_fill(0, count($pool), false);
-
-    foreach ($parents as $pi => $parent) {
+    foreach ($parents as $parent) {
         $pair = [];
 
-        foreach ($pool as $idx => $child) {
-            if ($used[$idx]) {
+        foreach ($children as $idx => $child) {
+            if (isset($used[$idx])) {
                 continue;
             }
-
             if (!fifa_wc_ko_feeds_parent($child, $parent)) {
                 continue;
             }
-
-            $pair[]     = $child;
-            $used[$idx] = true;
-
+            $pair[]        = $child;
+            $used[$idx]    = true;
             if (count($pair) === 2) {
                 break;
             }
         }
 
         if (count($pair) === 2) {
-            $pair = fifa_wc_sort_ko_pair_for_parent($pair, $parent, $child_round_key, $has_r32);
-        } elseif (count($pair) === 0) {
-            foreach ($pool as $idx => $child) {
-                if ($used[$idx]) {
-                    continue;
-                }
-
-                $pair[]     = $child;
-                $used[$idx] = true;
-
-                if (count($pair) === 2) {
-                    break;
-                }
-            }
+            $pair = fifa_wc_sort_ko_pair_for_parent($pair, $parent);
         }
 
-        $base = $pi * 2;
-
-        if (isset($pair[0])) {
-            $sorted[$base] = $pair[0];
-        }
-
-        if (isset($pair[1])) {
-            $sorted[$base + 1] = $pair[1];
+        foreach ($pair as $match) {
+            $sorted[] = $match;
         }
     }
 
-    foreach ($pool as $idx => $child) {
-        if ($used[$idx]) {
-            continue;
-        }
-
-        for ($slot = 0; $slot < $child_count; $slot++) {
-            if ($sorted[$slot] === null) {
-                $sorted[$slot] = $child;
-                break;
-            }
+    foreach ($children as $idx => $child) {
+        if (!isset($used[$idx])) {
+            $sorted[] = $child;
         }
     }
 
-    return array_values(array_filter($sorted, function ($match) {
-        return $match !== null;
-    }));
+    return $sorted;
 }
 
 
 function fifa_wc_sort_knockout_columns($columns) {
 
-    $has_r32 = fifa_wc_ko_bracket_has_r32($columns);
-    $chain   = fifa_wc_ko_bracket_round_chain($has_r32);
+    $round_order = ['final', 'sf', 'qf', 'r16', 'r32'];
 
-    foreach ($chain as $round_key) {
-        if (empty($columns[$round_key]['matches'])) {
-            continue;
-        }
-
-        $columns[$round_key]['matches'] = fifa_wc_ko_assign_by_bracket_slots(
-            $columns[$round_key]['matches'],
-            $round_key,
-            $has_r32
-        );
+    if (!empty($columns['final']['matches'])) {
+        $columns['final']['matches'] = fifa_wc_sort_ko_by_date($columns['final']['matches']);
     }
 
-    for ($i = count($chain) - 1; $i >= 1; $i--) {
-        $child_key  = $chain[$i - 1];
-        $parent_key = $chain[$i];
+    for ($i = 0; $i < count($round_order) - 1; $i++) {
+        $parent_key = $round_order[$i];
+        $child_key  = $round_order[$i + 1];
 
-        if (empty($columns[$child_key]['matches']) || empty($columns[$parent_key]['matches'])) {
+        if (empty($columns[$child_key]['matches'])) {
             continue;
         }
 
-        $columns[$child_key]['matches'] = fifa_wc_ko_align_children_to_parents(
-            $columns[$child_key]['matches'],
-            $columns[$parent_key]['matches'],
-            $child_key,
-            $has_r32
-        );
-    }
-
-    for ($i = 0; $i < count($chain) - 1; $i++) {
-        $child_key  = $chain[$i];
-        $parent_key = $chain[$i + 1];
-
-        if (empty($columns[$child_key]['matches']) || empty($columns[$parent_key]['matches'])) {
-            continue;
+        if (!empty($columns[$parent_key]['matches'])) {
+            $columns[$child_key]['matches'] = fifa_wc_sort_ko_children_for_parents(
+                $columns[$child_key]['matches'],
+                $columns[$parent_key]['matches']
+            );
+        } else {
+            $columns[$child_key]['matches'] = fifa_wc_sort_ko_by_date($columns[$child_key]['matches']);
         }
-
-        $columns[$child_key]['matches'] = fifa_wc_ko_forward_align_round(
-            $columns[$child_key]['matches'],
-            $columns[$parent_key]['matches'],
-            $child_key,
-            $has_r32
-        );
     }
 
     return $columns;
@@ -1037,21 +529,19 @@ function fifa_wc_sort_knockout_columns($columns) {
 
 function fifa_wc_ko_leaf_count($columns) {
 
-    $counts = fifa_wc_ko_round_match_counts();
-
     foreach (['r32', 'r16'] as $key) {
         if (!empty($columns[$key]['matches'])) {
-            return $counts[$key];
+            return count($columns[$key]['matches']);
         }
     }
 
     foreach (['qf', 'sf', 'final'] as $key) {
         if (!empty($columns[$key]['matches'])) {
-            return max(1, $counts[$key] * 2);
+            return max(1, count($columns[$key]['matches']) * 2);
         }
     }
 
-    return $counts['r32'];
+    return 1;
 }
 
 
@@ -1062,7 +552,7 @@ function fifa_wc_ko_slot_grid_style($index, $match_count, $leaf_count) {
     $span        = max(1, (int) round($leaf_count / $match_count));
     $start       = (int) floor($index * $leaf_count / $match_count) + 1;
 
-    return 'grid-row:' . $start . ' / span ' . $span . ';align-self:center;justify-self:stretch;';
+    return 'grid-row:' . $start . ' / span ' . $span . ';align-self:center;';
 }
 
 
@@ -1091,7 +581,7 @@ function fifa_wc_build_knockout_bracket($fixtures) {
 
     $columns = fifa_wc_sort_knockout_columns($columns);
 
-    return fifa_wc_merge_knockout_placeholders($columns);
+    return $columns;
 }
 
 
@@ -1212,10 +702,8 @@ function fifa_wc_standings_grouped_shortcode() {
 
     ksort($groups);
 
-    $knockout_cols = fifa_wc_merge_knockout_placeholders(fifa_wc_build_knockout_bracket($fixtures));
-    $ko_has_r32    = fifa_wc_ko_bracket_has_r32($knockout_cols);
+    $knockout_cols = fifa_wc_build_knockout_bracket($fixtures);
     $ko_leaf_rows  = fifa_wc_ko_leaf_count($knockout_cols);
-    $ko_match_counts = fifa_wc_ko_round_match_counts();
 
     ob_start();
     ?>
@@ -1602,26 +1090,19 @@ function fifa_wc_standings_grouped_shortcode() {
         <div class="wc-bracket" style="--ko-rows:<?php echo (int) $ko_leaf_rows; ?>;--ko-card-h:72px;--ko-row-step:84px">
             <svg class="wc-bracket-svg" aria-hidden="true"></svg>
             <?php foreach ($knockout_cols as $col_key => $col): ?>
-                <?php
-                $col_matches = $col['matches'];
-                $col_expected = $ko_match_counts[$col_key] ?? count($col_matches);
-
-                if (empty($col_matches)) {
-                    for ($pi = 0; $pi < $col_expected; $pi++) {
-                        $col_matches[] = fifa_wc_ko_placeholder_match($col_key, $pi, $ko_has_r32);
-                    }
-                }
-
-                $col_match_count = count($col_matches);
-                ?>
+                <?php $col_match_count = count($col['matches']); ?>
                 <div class="wc-ko-col wc-ko-col-<?php echo esc_attr($col_key); ?>">
                     <div class="wc-ko-col-title"><?php echo esc_html($col['label']); ?></div>
                     <div class="wc-ko-slots">
-                        <?php foreach ($col_matches as $idx => $match): ?>
-                            <div class="wc-ko-slot" style="<?php echo esc_attr(fifa_wc_ko_slot_grid_style($idx, $col_match_count, $ko_leaf_rows)); ?>">
-                                <?php echo fifa_wc_render_ko_match_card($match); ?>
-                            </div>
-                        <?php endforeach; ?>
+                        <?php if (empty($col['matches'])): ?>
+                            <div class="wc-ko-empty">—</div>
+                        <?php else: ?>
+                            <?php foreach ($col['matches'] as $idx => $match): ?>
+                                <div class="wc-ko-slot" style="<?php echo esc_attr(fifa_wc_ko_slot_grid_style($idx, $col_match_count, $ko_leaf_rows)); ?>">
+                                    <?php echo fifa_wc_render_ko_match_card($match); ?>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -1664,18 +1145,18 @@ function fifa_wc_standings_grouped_shortcode() {
             }
 
             for (var i = 0; i < cols.length - 1; i++) {
-                var leftSlots = cols[i].querySelectorAll('.wc-ko-slot');
-                var rightSlots = cols[i + 1].querySelectorAll('.wc-ko-slot');
-                if (leftSlots.length < 2 || !rightSlots.length) continue;
+                var leftCards = cols[i].querySelectorAll('.wc-ko-card');
+                var rightCards = cols[i + 1].querySelectorAll('.wc-ko-card');
+                if (leftCards.length < 2 || !rightCards.length) continue;
 
                 var leftCol = cols[i].getBoundingClientRect();
                 var rightCol = cols[i + 1].getBoundingClientRect();
                 var gapMid = ((leftCol.right - box.left) + (rightCol.left - box.left)) / 2;
 
-                for (var j = 0; j < rightSlots.length; j++) {
-                    var top = leftSlots[j * 2];
-                    var bot = leftSlots[j * 2 + 1];
-                    var dest = rightSlots[j];
+                for (var j = 0; j < rightCards.length; j++) {
+                    var top = leftCards[j * 2];
+                    var bot = leftCards[j * 2 + 1];
+                    var dest = rightCards[j];
                     if (!top || !bot || !dest) continue;
 
                     var y1 = midY(top);
@@ -1740,11 +1221,6 @@ function fifa_wc_standings_grouped_shortcode() {
                 drawKoLines();
             }
         });
-
-        var bracketEl = root.querySelector('.wc-bracket');
-        if (bracketEl) {
-            bracketEl.addEventListener('scroll', drawKoLines);
-        }
     })();
     </script>
 
