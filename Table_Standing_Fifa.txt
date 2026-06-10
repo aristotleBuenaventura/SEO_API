@@ -378,96 +378,6 @@ function fifa_wc_format_ko_date($date_str, $time_str = '') {
 }
 
 
-function fifa_wc_ko_round_match_counts() {
-
-    return [
-        'r32'   => 16,
-        'r16'   => 8,
-        'qf'    => 4,
-        'sf'    => 2,
-        'final' => 1,
-    ];
-}
-
-
-function fifa_wc_ko_bracket_has_r32($columns = null) {
-
-    if (is_array($columns) && !empty($columns['r32']['matches'])) {
-        return true;
-    }
-
-    if (is_array($columns) && (!empty($columns['r16']['matches']) || !empty($columns['qf']['matches']))) {
-        $has_real_r32 = false;
-
-        if (!empty($columns['r32']['matches'])) {
-            foreach ($columns['r32']['matches'] as $match) {
-                if (empty($match['_placeholder'])) {
-                    $has_real_r32 = true;
-                    break;
-                }
-            }
-        }
-
-        return $has_real_r32;
-    }
-
-    return (int) (fifa_wc_config()['season'] ?? 0) >= 2026;
-}
-
-
-function fifa_wc_ko_placeholder_match($round_key, $index) {
-
-    $labels = [
-        'r32'   => 'Round of 32',
-        'r16'   => 'Round of 16',
-        'qf'    => 'Quarter-finals',
-        'sf'    => 'Semi-finals',
-        'final' => 'Final',
-    ];
-
-    return [
-        'event_key'            => 'placeholder_' . $round_key . '_' . $index,
-        'event_date'           => '',
-        'event_time'           => '',
-        'event_home_team'      => 'TBD',
-        'event_away_team'      => 'TBD',
-        'home_team_logo'       => '',
-        'away_team_logo'       => '',
-        'event_final_result'   => '-',
-        'event_penalty_result' => '',
-        'event_status'         => 'Not Started',
-        'league_round'         => $labels[$round_key] ?? '',
-        '_placeholder'         => true,
-    ];
-}
-
-
-function fifa_wc_fill_knockout_placeholders($columns) {
-
-    $counts  = fifa_wc_ko_round_match_counts();
-    $has_r32 = fifa_wc_ko_bracket_has_r32($columns);
-    $rounds  = $has_r32 ? ['r32', 'r16', 'qf', 'sf', 'final'] : ['r16', 'qf', 'sf', 'final'];
-
-    foreach ($rounds as $key) {
-        $expected = $counts[$key];
-        $real     = $columns[$key]['matches'] ?? [];
-        $merged   = $real;
-
-        for ($i = count($real); $i < $expected; $i++) {
-            $merged[] = fifa_wc_ko_placeholder_match($key, $i);
-        }
-
-        $columns[$key]['matches'] = $merged;
-    }
-
-    if (!$has_r32) {
-        $columns['r32']['matches'] = [];
-    }
-
-    return $columns;
-}
-
-
 function fifa_wc_ko_match_teams($match) {
 
     $teams = [
@@ -476,7 +386,7 @@ function fifa_wc_ko_match_teams($match) {
     ];
 
     return array_values(array_filter($teams, function ($t) {
-        return $t !== '' && !fifa_wc_is_tbd_team($t);
+        return $t !== '';
     }));
 }
 
@@ -671,7 +581,7 @@ function fifa_wc_build_knockout_bracket($fixtures) {
 
     $columns = fifa_wc_sort_knockout_columns($columns);
 
-    return fifa_wc_fill_knockout_placeholders($columns);
+    return $columns;
 }
 
 
@@ -743,7 +653,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v20';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v19';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -1193,7 +1103,8 @@ function fifa_wc_standings_grouped_shortcode() {
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
-                    </div>                </div>
+                    </div>
+                </div>
             <?php endforeach; ?>
         </div>
     </div>
