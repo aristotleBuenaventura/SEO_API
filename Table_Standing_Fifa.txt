@@ -659,6 +659,82 @@ function fifa_wc_ko_group_map($groups) {
 }
 
 
+function fifa_wc_ko_build_logo_map($groups, $fixtures = []) {
+
+    $logos = [];
+
+    foreach ($groups as $teams) {
+        foreach ($teams as $team) {
+            $name = trim((string) ($team['standing_team'] ?? ''));
+            $logo = trim((string) ($team['team_logo'] ?? ''));
+
+            if ($name !== '' && $logo !== '') {
+                $logos[$name] = $logo;
+            }
+        }
+    }
+
+    foreach ($fixtures as $fixture) {
+        if (!is_array($fixture)) {
+            continue;
+        }
+
+        $pairs = [
+            [$fixture['event_home_team'] ?? '', $fixture['home_team_logo'] ?? ''],
+            [$fixture['event_away_team'] ?? '', $fixture['away_team_logo'] ?? ''],
+        ];
+
+        foreach ($pairs as $pair) {
+            $name = trim((string) $pair[0]);
+            $logo = trim((string) $pair[1]);
+
+            if ($name !== '' && $logo !== '' && !isset($logos[$name])) {
+                $logos[$name] = $logo;
+            }
+        }
+    }
+
+    return $logos;
+}
+
+
+function fifa_wc_ko_enrich_match_logos(&$match, $logo_map) {
+
+    if (!is_array($match) || empty($logo_map)) {
+        return;
+    }
+
+    $home = trim((string) ($match['event_home_team'] ?? ''));
+    $away = trim((string) ($match['event_away_team'] ?? ''));
+
+    if (empty($match['home_team_logo']) && $home !== '' && isset($logo_map[$home])) {
+        $match['home_team_logo'] = $logo_map[$home];
+    }
+
+    if (empty($match['away_team_logo']) && $away !== '' && isset($logo_map[$away])) {
+        $match['away_team_logo'] = $logo_map[$away];
+    }
+}
+
+
+function fifa_wc_ko_enrich_bracket_logos(&$columns, $logo_map) {
+
+    foreach ($columns as &$column) {
+        if (empty($column['matches']) || !is_array($column['matches'])) {
+            continue;
+        }
+
+        foreach ($column['matches'] as &$match) {
+            fifa_wc_ko_enrich_match_logos($match, $logo_map);
+        }
+
+        unset($match);
+    }
+
+    unset($column);
+}
+
+
 function fifa_wc_ko_side_label($spec) {
 
     if ($spec[0] === 'w') {
@@ -950,7 +1026,11 @@ function fifa_wc_ko_build_advance_round($parent_keys, $fifa_ids, $fixtures, $map
 }
 
 
-function fifa_wc_build_knockout_bracket($fixtures, $groups = []) {
+function fifa_wc_build_knockout_bracket($fixtures, $groups = [], $all_fixtures = []) {
+
+    if (empty($all_fixtures)) {
+        $all_fixtures = $fixtures;
+    }
 
     $columns = [
         'r32'   => ['label' => 'Round of 32', 'matches' => []],
@@ -1010,50 +1090,55 @@ function fifa_wc_build_knockout_bracket($fixtures, $groups = []) {
         $resolved
     );
 
+    $logo_map = fifa_wc_ko_build_logo_map($groups, $all_fixtures);
+    fifa_wc_ko_enrich_bracket_logos($columns, $logo_map);
+
     return $columns;
+}
+
+
+function fifa_wc_ko_resolve_placeholder_side($spec, $map, $resolved_by_match) {
+
+    if ($spec[0] === 'wo') {
+        $parent_key = fifa_wc_ko_parent_key($spec[1]);
+
+        if (isset($resolved_by_match[$parent_key]) && $resolved_by_match[$parent_key] !== '') {
+            return $resolved_by_match[$parent_key];
+        }
+
+        return 'TBD';
+    }
+
+    if ($spec[0] === 't') {
+        return 'TBD';
+    }
+
+    $resolved = fifa_wc_ko_resolve_side($spec, $map);
+
+    if ($resolved !== null && $resolved !== '') {
+        return $resolved;
+    }
+
+    return 'TBD';
 }
 
 
 function fifa_wc_ko_make_placeholder($match_no, $home_spec, $away_spec, $map, $resolved_by_match = []) {
 
-    $home = fifa_wc_ko_resolve_side($home_spec, $map);
-    $away = fifa_wc_ko_resolve_side($away_spec, $map);
-
-    if ($home_spec[0] === 'wo') {
-        $parent_key = fifa_wc_ko_parent_key($home_spec[1]);
-
-        if (isset($resolved_by_match[$parent_key])) {
-            $home = $resolved_by_match[$parent_key];
-        }
-    }
-
-    if ($away_spec[0] === 'wo') {
-        $parent_key = fifa_wc_ko_parent_key($away_spec[1]);
-
-        if (isset($resolved_by_match[$parent_key])) {
-            $away = $resolved_by_match[$parent_key];
-        }
-    }
-
-    if ($home === null || $home === '') {
-        $home = fifa_wc_ko_side_label($home_spec);
-    }
-
-    if ($away === null || $away === '') {
-        $away = fifa_wc_ko_side_label($away_spec);
-    }
+    $home = fifa_wc_ko_resolve_placeholder_side($home_spec, $map, $resolved_by_match);
+    $away = fifa_wc_ko_resolve_placeholder_side($away_spec, $map, $resolved_by_match);
 
     return [
-        '_placeholder'     => true,
-        '_match_no'        => $match_no,
-        'event_home_team'  => $home,
-        'event_away_team'  => $away,
-        'event_date'       => '',
-        'event_time'       => '',
-        'event_status'     => '',
+        '_placeholder'       => true,
+        '_match_no'          => $match_no,
+        'event_home_team'    => $home,
+        'event_away_team'    => $away,
+        'event_date'         => '',
+        'event_time'         => '',
+        'event_status'       => '',
         'event_final_result' => '-',
-        'home_team_logo'   => '',
-        'away_team_logo'   => '',
+        'home_team_logo'     => '',
+        'away_team_logo'     => '',
     ];
 }
 
@@ -1148,10 +1233,19 @@ function fifa_wc_render_ko_match_card($match) {
         $away = 'TBD';
     }
 
+    if (fifa_wc_ko_side_is_label($home)) {
+        $home = 'TBD';
+    }
+
+    if (fifa_wc_ko_side_is_label($away)) {
+        $away = 'TBD';
+    }
+
     if ($is_placeholder) {
         $date = 'TBD';
     } else {
         $date = fifa_wc_format_ko_date($match['event_date'] ?? '', $match['event_time'] ?? '');
+
         if ($date === '') {
             $date = 'TBD';
         }
@@ -1200,7 +1294,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v23';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v26';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -1253,7 +1347,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     ksort($groups);
 
-    $knockout_cols = fifa_wc_build_knockout_bracket($knockout_fixtures, $groups);
+    $knockout_cols = fifa_wc_build_knockout_bracket($knockout_fixtures, $groups, $fixtures);
     $ko_leaf_rows  = fifa_wc_ko_leaf_count($knockout_cols);
 
     ob_start();
