@@ -1294,7 +1294,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v26';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v27';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -1514,18 +1514,20 @@ function fifa_wc_standings_grouped_shortcode() {
         max-width:100%;
         margin:0;
         padding:0;
+        overflow-x:auto;
+        overflow-y:visible;
+        -webkit-overflow-scrolling:touch;
     }
     #<?php echo esc_attr($uid); ?> .wc-bracket{
         display:flex;
         align-items:stretch;
-        gap:0;
-        width:100%;
-        max-width:100%;
-        padding:8px 0 16px;
+        gap:18px;
+        width:max-content;
+        min-width:100%;
+        max-width:none;
+        padding:8px 4px 16px;
         position:relative;
-        overflow-x:auto;
-        overflow-y:visible;
-        -webkit-overflow-scrolling:touch;
+        overflow:visible;
     }
     #<?php echo esc_attr($uid); ?> .wc-bracket-svg{
         position:absolute;
@@ -1543,8 +1545,10 @@ function fifa_wc_standings_grouped_shortcode() {
         stroke-width:1;
     }
     #<?php echo esc_attr($uid); ?> .wc-ko-col{
-        flex:1 1 0;
-        min-width:0;
+        flex:0 0 172px;
+        width:172px;
+        min-width:172px;
+        max-width:172px;
         display:flex;
         flex-direction:column;
         position:relative;
@@ -1666,10 +1670,65 @@ function fifa_wc_standings_grouped_shortcode() {
         color:#999;
         padding:24px 8px;
     }
-    @media (max-width:768px){
+    @media (min-width:1024px){
+        #<?php echo esc_attr($uid); ?> .wc-bracket{
+            width:100%;
+            min-width:100%;
+            gap:12px;
+        }
         #<?php echo esc_attr($uid); ?> .wc-ko-col{
-            flex:0 0 20%;
-            min-width:130px;
+            flex:1 1 0;
+            width:auto;
+            min-width:140px;
+            max-width:none;
+        }
+    }
+    @media (max-width:768px){
+        #<?php echo esc_attr($uid); ?> .wc-tab-panel-knockout,
+        #<?php echo esc_attr($uid); ?> .wc-knockout{
+            margin:0 -4px;
+            padding:0 4px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-bracket{
+            --ko-card-h:64px;
+            --ko-row-step:72px;
+            gap:14px;
+            min-width:940px;
+            padding:8px 8px 20px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-col{
+            flex:0 0 160px;
+            width:160px;
+            min-width:160px;
+            max-width:160px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-col-title{
+            font-size:12px;
+            margin:0 0 10px;
+            padding:0 4px;
+            white-space:nowrap;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-slots{
+            padding:0 2px 8px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-card{
+            padding:6px 8px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-meta{
+            font-size:10px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-team{
+            gap:4px;
+            font-size:11px;
+            min-height:20px;
+            max-height:20px;
+            line-height:20px;
+        }
+        #<?php echo esc_attr($uid); ?> .wc-ko-team img,
+        #<?php echo esc_attr($uid); ?> .wc-ko-shield{
+            width:16px;
+            height:16px;
+            flex:0 0 16px;
         }
     }
     </style>
