@@ -2,7 +2,7 @@
 /**
  * Plugin Name: URL Shortify Domain Replacer by Aris
  * Description: Bulk replace old domains with new domains in URL Shortify target URLs. Keeps slugs and paths unchanged.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: Aris
  * Requires at least: 5.6
  * Requires PHP: 7.4
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('USDR_VERSION', '1.0.3');
+define('USDR_VERSION', '1.0.4');
 define('USDR_PLUGIN_FILE', __FILE__);
 define('USDR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 

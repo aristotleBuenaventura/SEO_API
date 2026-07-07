@@ -125,7 +125,7 @@ class USDR_Admin {
             'diagnostics' => $diagnostics,
             'i18n' => [
                 'scanning' => __('Scanning links...', 'us-domain-replacer'),
-                'replacing' => __('Replacing domains...', 'us-domain-replacer'),
+                'replacing' => __('Replacing all links, please wait...', 'us-domain-replacer'),
                 'done' => __('Domain replacement completed.', 'us-domain-replacer'),
                 'confirm' => __('This will update all matching URL Shortify target URLs. Continue?', 'us-domain-replacer'),
                 'invalid' => __('Please enter both old and new domains.', 'us-domain-replacer'),
@@ -297,9 +297,8 @@ class USDR_Admin {
 
         $old_domain = sanitize_text_field(wp_unslash($_POST['old_domain'] ?? ''));
         $new_domain = sanitize_text_field(wp_unslash($_POST['new_domain'] ?? ''));
-        $offset = absint($_POST['offset'] ?? 0);
 
-        $result = USDR_Replacer::process_batch($old_domain, $new_domain, $offset);
+        $result = USDR_Replacer::process_all($old_domain, $new_domain);
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }

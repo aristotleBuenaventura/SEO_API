@@ -6,8 +6,6 @@ if (!defined('ABSPATH')) {
 
 class USDR_Replacer {
 
-    const BATCH_SIZE = 50;
-
     public static function table_name() {
         global $wpdb;
         return $wpdb->prefix . 'kc_us_links';
@@ -205,9 +203,74 @@ class USDR_Replacer {
         return $ids;
     }
 
-    public static function process_batch($old_domain, $new_domain, $offset = 0) {
+    /**
+     * @return true|null True when updated, null when skipped or failed.
+     */
+    private static function update_link_domain($id, $old_domain, $new_domain, $user_id, $now) {
         global $wpdb;
 
+        $id = (int) $id;
+        $table = self::table_name();
+        $old_url = '';
+
+        if (function_exists('US') && isset(US()->db->links)) {
+            $link = US()->db->links->get($id);
+            if (is_array($link) && !empty($link['url'])) {
+                $old_url = $link['url'];
+            }
+        } else {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $old_url = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT url FROM {$table} WHERE id = %d",
+                $id
+            ));
+        }
+
+        if ($old_url === '' || self::host_from_url($old_url) !== $old_domain) {
+            return null;
+        }
+
+        $new_url = self::replace_domain_in_url($old_url, $old_domain, $new_domain);
+        if ($new_url === $old_url) {
+            return null;
+        }
+
+        if (function_exists('US') && isset(US()->db->links)) {
+            $link = US()->db->links->get($id);
+            if (!is_array($link)) {
+                return null;
+            }
+
+            $link['url'] = $new_url;
+            $link['updated_at'] = $now;
+            $link['updated_by_id'] = $user_id;
+            $saved = US()->db->links->update($id, $link);
+        } else {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+            $saved = $wpdb->update(
+                $table,
+                [
+                    'url' => $new_url,
+                    'updated_at' => $now,
+                    'updated_by_id' => $user_id,
+                ],
+                ['id' => $id],
+                ['%s', '%s', '%d'],
+                ['%d']
+            );
+            $saved = $saved !== false;
+        }
+
+        if (!$saved) {
+            return null;
+        }
+
+        do_action('kc_us_link_updated', $id);
+
+        return true;
+    }
+
+    public static function process_all($old_domain, $new_domain) {
         $old_domain = self::normalize_domain($old_domain);
         $new_domain = self::normalize_domain($new_domain);
 
@@ -223,96 +286,34 @@ class USDR_Replacer {
             return new WP_Error('missing_table', __('URL Shortify links table was not found.', 'us-domain-replacer'));
         }
 
-        $all_ids = self::find_matching_link_ids($old_domain);
-        $offset = max(0, (int) $offset);
-        $batch_ids = array_slice($all_ids, $offset, self::BATCH_SIZE);
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(300);
+        }
+        if (function_exists('ignore_user_abort')) {
+            @ignore_user_abort(true);
+        }
 
+        $all_ids = self::find_matching_link_ids($old_domain);
+        $total_matches = count($all_ids);
         $updated = 0;
         $skipped = 0;
-        $changes = [];
         $user_id = get_current_user_id();
         $now = current_time('mysql');
-        $table = self::table_name();
 
-        foreach ($batch_ids as $id) {
-            $id = (int) $id;
-            $old_url = '';
-
-            if (function_exists('US') && isset(US()->db->links)) {
-                $link = US()->db->links->get($id);
-                if (is_array($link) && !empty($link['url'])) {
-                    $old_url = $link['url'];
-                }
-            } else {
-                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-                $old_url = (string) $wpdb->get_var($wpdb->prepare(
-                    "SELECT url FROM {$table} WHERE id = %d",
-                    $id
-                ));
-            }
-
-            if ($old_url === '' || self::host_from_url($old_url) !== $old_domain) {
-                $skipped++;
-                continue;
-            }
-
-            $new_url = self::replace_domain_in_url($old_url, $old_domain, $new_domain);
-            if ($new_url === $old_url) {
-                $skipped++;
-                continue;
-            }
-
-            if (function_exists('US') && isset(US()->db->links)) {
-                $link = US()->db->links->get($id);
-                if (is_array($link)) {
-                    $link['url'] = $new_url;
-                    $link['updated_at'] = $now;
-                    $link['updated_by_id'] = $user_id;
-                    $saved = US()->db->links->update($id, $link);
-                } else {
-                    $saved = false;
-                }
-            } else {
-                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-                $saved = $wpdb->update(
-                    $table,
-                    [
-                        'url' => $new_url,
-                        'updated_at' => $now,
-                        'updated_by_id' => $user_id,
-                    ],
-                    ['id' => $id],
-                    ['%s', '%s', '%d'],
-                    ['%d']
-                );
-                $saved = $saved !== false;
-            }
-
-            if ($saved) {
-                do_action('kc_us_link_updated', $id);
+        foreach ($all_ids as $id) {
+            if (self::update_link_domain($id, $old_domain, $new_domain, $user_id, $now) === true) {
                 $updated++;
-                $changes[] = [
-                    'id' => $id,
-                    'old_url' => $old_url,
-                    'new_url' => $new_url,
-                ];
             } else {
                 $skipped++;
             }
         }
 
-        $total_matches = count($all_ids);
-        $next_offset = $offset + self::BATCH_SIZE;
-        $has_more = $next_offset < $total_matches;
-
         return [
             'updated' => $updated,
             'skipped' => $skipped,
-            'processed' => count($batch_ids),
+            'processed' => $total_matches,
             'total_matches' => $total_matches,
-            'has_more' => $has_more,
-            'next_offset' => $has_more ? $next_offset : $offset,
-            'changes' => $changes,
+            'has_more' => false,
         ];
     }
 }

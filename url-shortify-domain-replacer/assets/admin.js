@@ -104,15 +104,17 @@
         $results.html(html);
     }
 
-    function runReplace(domains, offset, totals) {
-        totals = totals || { updated: 0, skipped: 0, processed: 0 };
-
-        return $.post(USDR.ajaxUrl, {
-            action: 'usdr_replace_links',
-            nonce: USDR.nonce,
-            old_domain: domains.oldDomain,
-            new_domain: domains.newDomain,
-            offset: offset,
+    function runReplace(domains) {
+        return $.ajax({
+            url: USDR.ajaxUrl,
+            method: 'POST',
+            timeout: 300000,
+            data: {
+                action: 'usdr_replace_links',
+                nonce: USDR.nonce,
+                old_domain: domains.oldDomain,
+                new_domain: domains.newDomain,
+            },
         }).then(function (response) {
             if (!response || !response.success) {
                 const message = (response && response.data && response.data.message) || 'Replace failed.';
@@ -121,21 +123,7 @@
                 throw err;
             }
 
-            const data = response.data;
-            totals.updated += data.updated || 0;
-            totals.skipped += data.skipped || 0;
-            totals.processed += data.processed || 0;
-
-            setStatus(
-                USDR.i18n.replacing + ' Updated: ' + totals.updated + ' / ' + (data.total_matches || '?') + ', Skipped: ' + totals.skipped,
-                'info'
-            );
-
-            if (data.has_more) {
-                return runReplace(domains, data.next_offset, totals);
-            }
-
-            return totals;
+            return response.data;
         });
     }
 
@@ -228,10 +216,10 @@
             $replaceBtn.prop('disabled', true);
             setStatus(USDR.i18n.replacing, 'info');
 
-            runReplace(domains, 0)
-                .then(function (totals) {
+            runReplace(domains)
+                .then(function (data) {
                     setStatus(
-                        USDR.i18n.done + ' Updated: ' + totals.updated + ', Skipped: ' + totals.skipped + '.',
+                        USDR.i18n.done + ' Updated: ' + (data.updated || 0) + ' / ' + (data.total_matches || 0) + ', Skipped: ' + (data.skipped || 0) + '.',
                         'success'
                     );
                     return $.post(USDR.ajaxUrl, {
