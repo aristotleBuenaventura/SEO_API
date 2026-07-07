@@ -6,43 +6,91 @@ if (!defined('ABSPATH')) {
 
 class USDR_Admin {
 
+    const PARENT_SLUG = 'url_shortify';
+    const PAGE_SLUG = 'us-domain-replacer';
+
     public static function init() {
-        add_action('admin_menu', [__CLASS__, 'register_menu'], 99);
+        add_action('kc_us_admin_menu', [__CLASS__, 'register_menu']);
+        add_action('admin_menu', [__CLASS__, 'register_menu_fallback'], 999);
+        add_filter('plugin_action_links_' . plugin_basename(USDR_PLUGIN_FILE), [__CLASS__, 'plugin_action_links']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('wp_ajax_usdr_scan_links', [__CLASS__, 'ajax_scan_links']);
         add_action('wp_ajax_usdr_replace_links', [__CLASS__, 'ajax_replace_links']);
     }
 
     public static function register_menu() {
-        $parent = 'url-shortify';
-
-        if (!self::menu_exists($parent)) {
-            $parent = 'tools.php';
+        if (self::page_registered()) {
+            return;
         }
+
+        add_submenu_page(
+            self::PARENT_SLUG,
+            __('Domain Replacer', 'us-domain-replacer'),
+            __('Domain Replacer', 'us-domain-replacer'),
+            'read',
+            self::PAGE_SLUG,
+            [__CLASS__, 'render_page']
+        );
+    }
+
+    public static function register_menu_fallback() {
+        if (self::page_registered()) {
+            return;
+        }
+
+        $parent = self::parent_menu_exists() ? self::PARENT_SLUG : 'tools.php';
 
         add_submenu_page(
             $parent,
             __('Domain Replacer', 'us-domain-replacer'),
             __('Domain Replacer', 'us-domain-replacer'),
-            'manage_options',
-            'us-domain-replacer',
+            'read',
+            self::PAGE_SLUG,
             [__CLASS__, 'render_page']
         );
     }
 
-    private static function menu_exists($slug) {
-        global $menu, $submenu;
+    public static function plugin_action_links($links) {
+        $url = admin_url('admin.php?page=' . self::PAGE_SLUG);
+        array_unshift(
+            $links,
+            '<a href="' . esc_url($url) . '">' . esc_html__('Open Domain Replacer', 'us-domain-replacer') . '</a>'
+        );
 
-        if (!empty($submenu[$slug])) {
-            return true;
+        return $links;
+    }
+
+    private static function parent_menu_exists() {
+        global $submenu;
+
+        return !empty($submenu[self::PARENT_SLUG]);
+    }
+
+    private static function page_registered() {
+        global $submenu;
+
+        if (empty($submenu)) {
+            return false;
         }
 
-        if (!empty($menu)) {
-            foreach ($menu as $item) {
-                if (!empty($item[2]) && $item[2] === $slug) {
+        foreach ($submenu as $items) {
+            foreach ($items as $item) {
+                if (!empty($item[2]) && $item[2] === self::PAGE_SLUG) {
                     return true;
                 }
             }
+        }
+
+        return false;
+    }
+
+    public static function current_user_can_manage() {
+        if (current_user_can('manage_options')) {
+            return true;
+        }
+
+        if (function_exists('US') && isset(US()->access)) {
+            return US()->access->can('manage_links');
         }
 
         return false;
@@ -83,12 +131,12 @@ class USDR_Admin {
     }
 
     private static function get_hook_suffix() {
-        $parent = self::menu_exists('url-shortify') ? 'url-shortify' : 'tools.php';
-        return $parent . '_page_us-domain-replacer';
+        $parent = self::parent_menu_exists() ? self::PARENT_SLUG : 'tools.php';
+        return $parent . '_page_' . self::PAGE_SLUG;
     }
 
     public static function render_page() {
-        if (!current_user_can('manage_options')) {
+        if (!self::current_user_can_manage()) {
             wp_die(esc_html__('You do not have permission to access this page.', 'us-domain-replacer'));
         }
         ?>
@@ -138,7 +186,7 @@ class USDR_Admin {
     }
 
     private static function verify_request() {
-        if (!current_user_can('manage_options')) {
+        if (!self::current_user_can_manage()) {
             wp_send_json_error(['message' => __('Permission denied.', 'us-domain-replacer')], 403);
         }
 
