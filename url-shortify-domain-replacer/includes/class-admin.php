@@ -25,8 +25,8 @@ class USDR_Admin {
 
         add_submenu_page(
             self::PARENT_SLUG,
-            __('Domain Replacer', 'us-domain-replacer'),
-            __('Domain Replacer', 'us-domain-replacer'),
+            __('Domain Replacer by Aris', 'us-domain-replacer'),
+            __('Domain Replacer by Aris', 'us-domain-replacer'),
             'read',
             self::PAGE_SLUG,
             [__CLASS__, 'render_page']
@@ -42,8 +42,8 @@ class USDR_Admin {
 
         add_submenu_page(
             $parent,
-            __('Domain Replacer', 'us-domain-replacer'),
-            __('Domain Replacer', 'us-domain-replacer'),
+            __('Domain Replacer by Aris', 'us-domain-replacer'),
+            __('Domain Replacer by Aris', 'us-domain-replacer'),
             'read',
             self::PAGE_SLUG,
             [__CLASS__, 'render_page']
@@ -54,7 +54,7 @@ class USDR_Admin {
         $url = admin_url('admin.php?page=' . self::PAGE_SLUG);
         array_unshift(
             $links,
-            '<a href="' . esc_url($url) . '">' . esc_html__('Open Domain Replacer', 'us-domain-replacer') . '</a>'
+            '<a href="' . esc_url($url) . '">' . esc_html__('Open Domain Replacer by Aris', 'us-domain-replacer') . '</a>'
         );
 
         return $links;
@@ -150,7 +150,7 @@ class USDR_Admin {
         $ready = !empty($status['ready']);
         ?>
         <div class="wrap usdr-wrap">
-            <h1><?php esc_html_e('URL Shortify Domain Replacer', 'us-domain-replacer'); ?></h1>
+            <h1><?php esc_html_e('URL Shortify Domain Replacer by Aris', 'us-domain-replacer'); ?></h1>
             <p class="description">
                 <?php esc_html_e('Replace the target URL domain across all URL Shortify links. Short slugs and URL paths stay the same.', 'us-domain-replacer'); ?>
             </p>
@@ -203,7 +203,7 @@ class USDR_Admin {
                             <label for="usdr-old-domain"><?php esc_html_e('Old Domain', 'us-domain-replacer'); ?></label>
                         </th>
                         <td>
-                            <input type="text" id="usdr-old-domain" class="regular-text" placeholder="facai777.net" />
+                            <input type="text" id="usdr-old-domain" class="regular-text" placeholder="olddomain.com" />
                             <p class="description"><?php esc_html_e('Domain to search for in target URLs.', 'us-domain-replacer'); ?></p>
                         </td>
                     </tr>
@@ -212,7 +212,7 @@ class USDR_Admin {
                             <label for="usdr-new-domain"><?php esc_html_e('New Domain', 'us-domain-replacer'); ?></label>
                         </th>
                         <td>
-                            <input type="text" id="usdr-new-domain" class="regular-text" placeholder="mcw-casino.best" />
+                            <input type="text" id="usdr-new-domain" class="regular-text" placeholder="newdomain.com" />
                             <p class="description"><?php esc_html_e('Replacement domain. Paths and slugs are preserved.', 'us-domain-replacer'); ?></p>
                         </td>
                     </tr>
