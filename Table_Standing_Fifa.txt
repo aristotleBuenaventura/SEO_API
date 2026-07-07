@@ -1294,7 +1294,7 @@ function fifa_wc_standings_grouped_shortcode() {
 
     $uid = uniqid('wc_standings_');
     $cfg       = fifa_wc_config();
-    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v27';
+    $cache_key = 'fifa_wc_' . $cfg['season'] . '_standings_v30';
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -1519,6 +1519,8 @@ function fifa_wc_standings_grouped_shortcode() {
         -webkit-overflow-scrolling:touch;
     }
     #<?php echo esc_attr($uid); ?> .wc-bracket{
+        --ko-card-h:72px;
+        --ko-row-step:88px;
         display:flex;
         align-items:stretch;
         gap:18px;
@@ -1686,59 +1688,33 @@ function fifa_wc_standings_grouped_shortcode() {
     @media (max-width:768px){
         #<?php echo esc_attr($uid); ?> .wc-tab-panel-knockout,
         #<?php echo esc_attr($uid); ?> .wc-knockout{
-            margin:0 -4px;
-            padding:0 4px;
+            overflow-x:auto;
+            overflow-y:visible;
+            -webkit-overflow-scrolling:touch;
         }
         #<?php echo esc_attr($uid); ?> .wc-bracket{
-            --ko-card-h:64px;
-            --ko-row-step:72px;
-            gap:14px;
-            min-width:940px;
-            padding:8px 8px 20px;
+            --ko-card-h:72px;
+            --ko-row-step:88px;
+            width:max-content;
+            min-width:980px;
+            gap:20px;
+            padding:8px 12px 16px;
         }
         #<?php echo esc_attr($uid); ?> .wc-ko-col{
-            flex:0 0 160px;
-            width:160px;
-            min-width:160px;
-            max-width:160px;
-        }
-        #<?php echo esc_attr($uid); ?> .wc-ko-col-title{
-            font-size:12px;
-            margin:0 0 10px;
-            padding:0 4px;
-            white-space:nowrap;
-        }
-        #<?php echo esc_attr($uid); ?> .wc-ko-slots{
-            padding:0 2px 8px;
-        }
-        #<?php echo esc_attr($uid); ?> .wc-ko-card{
-            padding:6px 8px;
-        }
-        #<?php echo esc_attr($uid); ?> .wc-ko-meta{
-            font-size:10px;
-        }
-        #<?php echo esc_attr($uid); ?> .wc-ko-team{
-            gap:4px;
-            font-size:11px;
-            min-height:20px;
-            max-height:20px;
-            line-height:20px;
-        }
-        #<?php echo esc_attr($uid); ?> .wc-ko-team img,
-        #<?php echo esc_attr($uid); ?> .wc-ko-shield{
-            width:16px;
-            height:16px;
-            flex:0 0 16px;
+            flex:0 0 172px;
+            width:172px;
+            min-width:172px;
+            max-width:172px;
         }
     }
     </style>
 
     <div class="wc-tabs" role="tablist">
-        <button type="button" class="wc-tab is-active" role="tab" aria-selected="true" data-wc-tab="group">Group Stage</button>
-        <button type="button" class="wc-tab" role="tab" aria-selected="false" data-wc-tab="knockout">Knockout stage</button>
+        <button type="button" class="wc-tab" role="tab" aria-selected="false" data-wc-tab="group">Group Stage</button>
+        <button type="button" class="wc-tab is-active" role="tab" aria-selected="true" data-wc-tab="knockout">Knockout stage</button>
     </div>
 
-    <div class="wc-tab-panel wc-tab-panel-group is-active" role="tabpanel">
+    <div class="wc-tab-panel wc-tab-panel-group" role="tabpanel">
 
     <div class="wc-groups-list">
 
@@ -1788,10 +1764,10 @@ function fifa_wc_standings_grouped_shortcode() {
 
     </div>
 
-    <div class="wc-tab-panel wc-tab-panel-knockout" role="tabpanel">
+    <div class="wc-tab-panel wc-tab-panel-knockout is-active" role="tabpanel">
 
     <div class="wc-knockout">
-        <div class="wc-bracket" style="--ko-rows:<?php echo (int) $ko_leaf_rows; ?>;--ko-card-h:72px;--ko-row-step:84px">
+        <div class="wc-bracket" style="--ko-rows:<?php echo (int) $ko_leaf_rows; ?>">
             <svg class="wc-bracket-svg" aria-hidden="true"></svg>
             <?php foreach ($knockout_cols as $col_key => $col): ?>
                 <?php $col_match_count = count($col['matches']); ?>
