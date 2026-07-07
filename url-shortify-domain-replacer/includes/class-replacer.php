@@ -125,6 +125,51 @@ class USDR_Replacer {
     }
 
     /**
+     * @return array<int, array{id:int, name:string, slug:string, old_url:string}>
+     */
+    public static function get_all_matching_links($old_domain) {
+        global $wpdb;
+
+        $old_domain = self::normalize_domain($old_domain);
+        if ($old_domain === '' || !self::table_exists()) {
+            return [];
+        }
+
+        $table = self::table_name();
+        $like_host = '%' . $wpdb->esc_like($old_domain) . '%';
+        $like_www = '%' . $wpdb->esc_like('www.' . $old_domain) . '%';
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, name, slug, url FROM {$table}
+             WHERE url LIKE %s OR url LIKE %s
+             ORDER BY id ASC",
+            $like_host,
+            $like_www
+        ), ARRAY_A);
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $matches = [];
+        foreach ($rows as $row) {
+            if (self::host_from_url($row['url']) !== $old_domain) {
+                continue;
+            }
+
+            $matches[] = [
+                'id' => (int) $row['id'],
+                'name' => $row['name'],
+                'slug' => $row['slug'],
+                'old_url' => $row['url'],
+            ];
+        }
+
+        return $matches;
+    }
+
+    /**
      * @return int[]
      */
     public static function find_matching_link_ids($old_domain) {
@@ -160,52 +205,6 @@ class USDR_Replacer {
         return $ids;
     }
 
-    public static function get_matching_links($old_domain, $limit = 20, $offset = 0) {
-        global $wpdb;
-
-        if (!self::table_exists()) {
-            return [];
-        }
-
-        $table = self::table_name();
-        $like_host = '%' . $wpdb->esc_like($old_domain) . '%';
-        $like_www = '%' . $wpdb->esc_like('www.' . $old_domain) . '%';
-        $limit = max(1, (int) $limit);
-        $offset = max(0, (int) $offset);
-
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, name, slug, url FROM {$table}
-             WHERE url LIKE %s OR url LIKE %s
-             ORDER BY id ASC
-             LIMIT %d OFFSET %d",
-            $like_host,
-            $like_www,
-            $limit,
-            $offset
-        ), ARRAY_A);
-
-        if (!is_array($rows)) {
-            return [];
-        }
-
-        $matches = [];
-        foreach ($rows as $row) {
-            if (self::host_from_url($row['url']) !== $old_domain) {
-                continue;
-            }
-
-            $matches[] = [
-                'id' => (int) $row['id'],
-                'name' => $row['name'],
-                'slug' => $row['slug'],
-                'old_url' => $row['url'],
-            ];
-        }
-
-        return $matches;
-    }
-
     public static function process_batch($old_domain, $new_domain, $offset = 0) {
         global $wpdb;
 
@@ -224,38 +223,35 @@ class USDR_Replacer {
             return new WP_Error('missing_table', __('URL Shortify links table was not found.', 'us-domain-replacer'));
         }
 
-        $table = self::table_name();
-        $like_host = '%' . $wpdb->esc_like($old_domain) . '%';
-        $like_www = '%' . $wpdb->esc_like('www.' . $old_domain) . '%';
+        $all_ids = self::find_matching_link_ids($old_domain);
         $offset = max(0, (int) $offset);
-
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, url FROM {$table}
-             WHERE url LIKE %s OR url LIKE %s
-             ORDER BY id ASC
-             LIMIT %d OFFSET %d",
-            $like_host,
-            $like_www,
-            self::BATCH_SIZE,
-            $offset
-        ), ARRAY_A);
-
-        if (!is_array($rows)) {
-            $rows = [];
-        }
+        $batch_ids = array_slice($all_ids, $offset, self::BATCH_SIZE);
 
         $updated = 0;
         $skipped = 0;
         $changes = [];
         $user_id = get_current_user_id();
         $now = current_time('mysql');
+        $table = self::table_name();
 
-        foreach ($rows as $row) {
-            $id = (int) $row['id'];
-            $old_url = $row['url'];
+        foreach ($batch_ids as $id) {
+            $id = (int) $id;
+            $old_url = '';
 
-            if (self::host_from_url($old_url) !== $old_domain) {
+            if (function_exists('US') && isset(US()->db->links)) {
+                $link = US()->db->links->get($id);
+                if (is_array($link) && !empty($link['url'])) {
+                    $old_url = $link['url'];
+                }
+            } else {
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $old_url = (string) $wpdb->get_var($wpdb->prepare(
+                    "SELECT url FROM {$table} WHERE id = %d",
+                    $id
+                ));
+            }
+
+            if ($old_url === '' || self::host_from_url($old_url) !== $old_domain) {
                 $skipped++;
                 continue;
             }
@@ -305,15 +301,17 @@ class USDR_Replacer {
             }
         }
 
-        $processed = count($rows);
-        $has_more = $processed === self::BATCH_SIZE;
+        $total_matches = count($all_ids);
+        $next_offset = $offset + self::BATCH_SIZE;
+        $has_more = $next_offset < $total_matches;
 
         return [
             'updated' => $updated,
             'skipped' => $skipped,
-            'processed' => $processed,
+            'processed' => count($batch_ids),
+            'total_matches' => $total_matches,
             'has_more' => $has_more,
-            'next_offset' => $has_more ? $offset + self::BATCH_SIZE : $offset,
+            'next_offset' => $has_more ? $next_offset : $offset,
             'changes' => $changes,
         ];
     }

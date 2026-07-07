@@ -268,17 +268,17 @@ class USDR_Admin {
             wp_send_json_error(['message' => __('Old and new domains must be different.', 'us-domain-replacer')]);
         }
 
-        $count = USDR_Replacer::count_matching_links($old_domain);
-        $preview = USDR_Replacer::get_matching_links($old_domain, 20, 0);
+        $matches = USDR_Replacer::get_all_matching_links($old_domain);
+        $count = count($matches);
 
-        foreach ($preview as &$item) {
+        foreach ($matches as &$item) {
             $item['new_url'] = USDR_Replacer::replace_domain_in_url($item['old_url'], $old_domain, $new_domain);
         }
         unset($item);
 
         wp_send_json_success([
             'count' => $count,
-            'preview' => $preview,
+            'preview' => $matches,
             'old_domain' => $old_domain,
             'new_domain' => $new_domain,
         ]);

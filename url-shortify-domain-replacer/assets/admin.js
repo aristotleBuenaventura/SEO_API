@@ -85,7 +85,8 @@
             return;
         }
 
-        let html = '<h2>Preview</h2><table class="widefat striped"><thead><tr>';
+        let html = '<h2>All Matching Links (' + preview.length + ')</h2>';
+        html += '<div class="usdr-results-table-wrap"><table class="widefat striped"><thead><tr>';
         html += '<th>ID</th><th>Title</th><th>Slug</th><th>Old Target URL</th><th>New Target URL</th>';
         html += '</tr></thead><tbody>';
 
@@ -99,7 +100,7 @@
             html += '</tr>';
         });
 
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         $results.html(html);
     }
 
@@ -126,7 +127,7 @@
             totals.processed += data.processed || 0;
 
             setStatus(
-                USDR.i18n.replacing + ' Updated: ' + totals.updated + ', Skipped: ' + totals.skipped,
+                USDR.i18n.replacing + ' Updated: ' + totals.updated + ' / ' + (data.total_matches || '?') + ', Skipped: ' + totals.skipped,
                 'info'
             );
 
@@ -192,7 +193,7 @@
 
                     if (data.count > 0) {
                         $('#usdr-replace-btn').prop('disabled', false);
-                        setStatus('Found ' + data.count + ' matching link(s). Review the preview, then run replace.', 'success');
+                        setStatus('Found ' + data.count + ' matching link(s). Review the full list below, then run replace.', 'success');
                     } else {
                         setStatus(USDR.i18n.noMatches, 'error');
                     }

@@ -83,6 +83,13 @@
     max-width: 100%;
 }
 
+.usdr-results-table-wrap {
+    max-height: 520px;
+    overflow: auto;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
 .usdr-results table code {
     word-break: break-all;
     white-space: normal;
