@@ -79,7 +79,36 @@ class USDR_Replacer {
         return $new_url;
     }
 
-    public static function count_matching_links($old_domain) {
+    public static function get_diagnostics() {
+        $shortify_active = class_exists('KaizenCoders\URL_Shortify\Helper');
+        $table_name = self::table_name();
+        $table_exists = self::table_exists();
+        $total_links = $table_exists ? self::count_all_links() : 0;
+        $ready = $shortify_active && $table_exists;
+        $error = '';
+
+        if (!$shortify_active) {
+            $error = __('URL Shortify plugin is not active.', 'us-domain-replacer');
+        } elseif (!$table_exists) {
+            $error = sprintf(
+                /* translators: %s: database table name */
+                __('URL Shortify links table was not found (%s).', 'us-domain-replacer'),
+                $table_name
+            );
+        }
+
+        return [
+            'ready' => $ready,
+            'shortify_active' => $shortify_active,
+            'table_exists' => $table_exists,
+            'table_name' => $table_name,
+            'total_links' => $total_links,
+            'api_required' => false,
+            'error' => $error,
+        ];
+    }
+
+    public static function count_all_links() {
         global $wpdb;
 
         if (!self::table_exists()) {
@@ -87,15 +116,48 @@ class USDR_Replacer {
         }
 
         $table = self::table_name();
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+    }
+
+    public static function count_matching_links($old_domain) {
+        return count(self::find_matching_link_ids($old_domain));
+    }
+
+    /**
+     * @return int[]
+     */
+    public static function find_matching_link_ids($old_domain) {
+        global $wpdb;
+
+        $old_domain = self::normalize_domain($old_domain);
+        if ($old_domain === '' || !self::table_exists()) {
+            return [];
+        }
+
+        $table = self::table_name();
         $like_host = '%' . $wpdb->esc_like($old_domain) . '%';
         $like_www = '%' . $wpdb->esc_like('www.' . $old_domain) . '%';
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE url LIKE %s OR url LIKE %s",
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, url FROM {$table} WHERE url LIKE %s OR url LIKE %s",
             $like_host,
             $like_www
-        ));
+        ), ARRAY_A);
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($rows as $row) {
+            if (self::host_from_url($row['url']) === $old_domain) {
+                $ids[] = (int) $row['id'];
+            }
+        }
+
+        return $ids;
     }
 
     public static function get_matching_links($old_domain, $limit = 20, $offset = 0) {

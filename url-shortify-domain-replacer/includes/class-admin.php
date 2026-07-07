@@ -97,7 +97,8 @@ class USDR_Admin {
     }
 
     public static function enqueue_assets($hook) {
-        if ($hook !== self::get_hook_suffix()) {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        if ($page !== self::PAGE_SLUG) {
             return;
         }
 
@@ -116,9 +117,12 @@ class USDR_Admin {
             true
         );
 
+        $diagnostics = USDR_Replacer::get_diagnostics();
+
         wp_localize_script('usdr-admin', 'USDR', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('usdr_actions'),
+            'diagnostics' => $diagnostics,
             'i18n' => [
                 'scanning' => __('Scanning links...', 'us-domain-replacer'),
                 'replacing' => __('Replacing domains...', 'us-domain-replacer'),
@@ -126,25 +130,71 @@ class USDR_Admin {
                 'confirm' => __('This will update all matching URL Shortify target URLs. Continue?', 'us-domain-replacer'),
                 'invalid' => __('Please enter both old and new domains.', 'us-domain-replacer'),
                 'noMatches' => __('No matching links found for the old domain.', 'us-domain-replacer'),
+                'jsMissing' => __('Admin script failed to load. Please hard-refresh this page or re-upload the plugin assets folder.', 'us-domain-replacer'),
+                'ajaxFailed' => __('Request failed. See error details below.', 'us-domain-replacer'),
+                'notReady' => __('URL Shortify is not ready. Fix the connection issues shown above before scanning.', 'us-domain-replacer'),
             ],
         ]);
     }
 
-    private static function get_hook_suffix() {
-        $parent = self::parent_menu_exists() ? self::PARENT_SLUG : 'tools.php';
-        return $parent . '_page_' . self::PAGE_SLUG;
+    public static function get_connection_status() {
+        return USDR_Replacer::get_diagnostics();
     }
 
     public static function render_page() {
         if (!self::current_user_can_manage()) {
             wp_die(esc_html__('You do not have permission to access this page.', 'us-domain-replacer'));
         }
+
+        $status = self::get_connection_status();
+        $ready = !empty($status['ready']);
         ?>
         <div class="wrap usdr-wrap">
             <h1><?php esc_html_e('URL Shortify Domain Replacer', 'us-domain-replacer'); ?></h1>
             <p class="description">
                 <?php esc_html_e('Replace the target URL domain across all URL Shortify links. Short slugs and URL paths stay the same.', 'us-domain-replacer'); ?>
             </p>
+
+            <div class="usdr-card usdr-status-card <?php echo $ready ? 'is-ready' : 'is-error'; ?>">
+                <h2><?php esc_html_e('Connection Status', 'us-domain-replacer'); ?></h2>
+                <ul class="usdr-checklist">
+                    <li class="<?php echo !empty($status['shortify_active']) ? 'is-ok' : 'is-bad'; ?>">
+                        <?php if (!empty($status['shortify_active'])) : ?>
+                            <?php esc_html_e('URL Shortify plugin is active.', 'us-domain-replacer'); ?>
+                        <?php else : ?>
+                            <?php esc_html_e('URL Shortify plugin is not active. Activate it first.', 'us-domain-replacer'); ?>
+                        <?php endif; ?>
+                    </li>
+                    <li class="<?php echo !empty($status['table_exists']) ? 'is-ok' : 'is-bad'; ?>">
+                        <?php if (!empty($status['table_exists'])) : ?>
+                            <?php
+                            printf(
+                                /* translators: 1: database table name, 2: number of links */
+                                esc_html__('URL Shortify links table found (%1$s) with %2$d link(s).', 'us-domain-replacer'),
+                                esc_html($status['table_name']),
+                                (int) $status['total_links']
+                            );
+                            ?>
+                        <?php else : ?>
+                            <?php
+                            printf(
+                                /* translators: %s: database table name */
+                                esc_html__('URL Shortify links table not found (%s). Re-save URL Shortify settings or reinstall URL Shortify.', 'us-domain-replacer'),
+                                esc_html($status['table_name'])
+                            );
+                            ?>
+                        <?php endif; ?>
+                    </li>
+                    <li class="is-ok">
+                        <?php esc_html_e('REST API keys are NOT required. This tool reads and updates links directly inside WordPress.', 'us-domain-replacer'); ?>
+                    </li>
+                </ul>
+                <?php if (!$ready) : ?>
+                    <p class="usdr-inline-error">
+                        <?php esc_html_e('Scan and replace are disabled until URL Shortify is connected properly.', 'us-domain-replacer'); ?>
+                    </p>
+                <?php endif; ?>
+            </div>
 
             <div class="usdr-card">
                 <table class="form-table" role="presentation">
@@ -169,7 +219,7 @@ class USDR_Admin {
                 </table>
 
                 <p class="submit">
-                    <button type="button" class="button button-secondary" id="usdr-scan-btn">
+                    <button type="button" class="button button-secondary" id="usdr-scan-btn" <?php disabled(!$ready); ?>>
                         <?php esc_html_e('Scan Links', 'us-domain-replacer'); ?>
                     </button>
                     <button type="button" class="button button-primary" id="usdr-replace-btn" disabled>
@@ -177,6 +227,10 @@ class USDR_Admin {
                     </button>
                 </p>
             </div>
+
+            <noscript>
+                <div class="notice notice-error"><p><?php esc_html_e('JavaScript is required to scan and replace links.', 'us-domain-replacer'); ?></p></div>
+            </noscript>
 
             <div id="usdr-status" class="usdr-status" aria-live="polite"></div>
             <div id="usdr-summary" class="usdr-summary"></div>
@@ -196,6 +250,13 @@ class USDR_Admin {
     public static function ajax_scan_links() {
         self::verify_request();
 
+        $diagnostics = USDR_Replacer::get_diagnostics();
+        if (empty($diagnostics['ready'])) {
+            wp_send_json_error([
+                'message' => $diagnostics['error'] ?: __('URL Shortify is not connected properly.', 'us-domain-replacer'),
+                'diagnostics' => $diagnostics,
+            ]);
+        }
         $old_domain = USDR_Replacer::normalize_domain(sanitize_text_field(wp_unslash($_POST['old_domain'] ?? '')));
         $new_domain = USDR_Replacer::normalize_domain(sanitize_text_field(wp_unslash($_POST['new_domain'] ?? '')));
 
@@ -225,6 +286,14 @@ class USDR_Admin {
 
     public static function ajax_replace_links() {
         self::verify_request();
+
+        $diagnostics = USDR_Replacer::get_diagnostics();
+        if (empty($diagnostics['ready'])) {
+            wp_send_json_error([
+                'message' => $diagnostics['error'] ?: __('URL Shortify is not connected properly.', 'us-domain-replacer'),
+                'diagnostics' => $diagnostics,
+            ]);
+        }
 
         $old_domain = sanitize_text_field(wp_unslash($_POST['old_domain'] ?? ''));
         $new_domain = sanitize_text_field(wp_unslash($_POST['new_domain'] ?? ''));
