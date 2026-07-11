@@ -1,0 +1,425 @@
+function helpslot_all_games_shortcode() {
+    $html = '
+    <link rel="stylesheet" href="https://unpkg.com/swiper@10/swiper-bundle.min.css"/>
+    <div style="margin-bottom:20px;">
+        <input type="text" id="helpslot-search" placeholder="Search all games across manufacturers..." style="width:100%;padding:12px 20px;font-size:16px;border:2px solid #444;border-radius:10px;background:#222;color:#fff;outline:none;transition:border-color 0.3s;">
+        <div id="search-status" style="margin-top:8px;color:#999;font-size:14px;text-align:center;"></div>
+    </div>
+    <div class="swiper helpslot-swiper" style="margin-bottom:20px;">
+        <div class="swiper-wrapper" id="helpslot-buttons">
+            <div class="swiper-slide"><button onclick="showManuf(\'JILI\')" data-manuf="JILI"><img src="https://outmansgp3.s3.amazonaws.com/upload/41786877e5b48c0f35948ec66abdc1bd.png" alt="JILI"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'PG\')" data-manuf="PG"><img src="https://slotmax.s3.amazonaws.com/upload/02ee299d177a5a4f39645cf0392243b0.png" alt="PG"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'FC\')" data-manuf="FC"><img src="https://slotmax.s3.amazonaws.com/upload/25bd8e424761c1572da6d990e8515e52.png" alt="FC"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'PP\')" data-manuf="PP"><img src="https://slotmax.s3.amazonaws.com/upload/aea0a2cbc715c3d2ce3d0e802361d859.png" alt="PP"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'BNG\')" data-manuf="BNG"><img src="https://outmansgp3.s3.amazonaws.com/upload/61ae92544fbe87d4271f20e29ca389a1.png" alt="BNG"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'JDB\')" data-manuf="JDB"><img src="https://outmansgp3.s3.amazonaws.com/upload/7594bb75a92e18ff81c7c8e1d65a6dad.png" alt="JDB"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'YB\')" data-manuf="YB"><img src="https://outmansgp3.s3.amazonaws.com/upload/92ee026c472b91d14c61e38d32cce3eb.png" alt="YB"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'CQ9\')" data-manuf="CQ9"><img src="https://swanasayam.s3.amazonaws.com/game/icons/manuf/cq9.png" alt="CQ9"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'AW\')" data-manuf="AW"><img src="https://slotmax.s3.amazonaws.com/upload/abf4cf415aa6292c7fca502425c987d5.png" alt="AW"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'MW\')" data-manuf="MW"><img src="https://slotmax.s3.amazonaws.com/upload/3bf4202ead643e783126554143bd52e0.png" alt="MW"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'RSG\')" data-manuf="RSG"><img src="https://slotmax.s3.amazonaws.com/upload/4ac8285dc8ba6fb336c5bafb3c10b246.png" alt="RSG"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'R88\')" data-manuf="R88"><img src="https://slotmax.s3.amazonaws.com/upload/7a45dcd8865cc3922917682df217571a.png" alt="R88"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'KA\')" data-manuf="KA"><img src="https://outmansgp3.s3.amazonaws.com/upload/50ea64224d3e6b76c68bdd6e39740661.png" alt="KA"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'SG\')" data-manuf="SG"><img src="https://slotmax.s3.amazonaws.com/upload/027a3554136a9f4b03bbf92e25da6396.png" alt="SG"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'NE\')" data-manuf="NE"><img src="https://slotmax.s3.amazonaws.com/upload/2f61a64aa0e14422adf6334f52fc1bf0.png" alt="NE"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'AMBS\')" data-manuf="AMBS"><img src="https://slotmax.s3.amazonaws.com/upload/d9476193be84830ee6e05b7ebe3df5e6.png" alt="AMBS"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'DRS\')" data-manuf="DRS"><img src="https://slotmax.s3.amazonaws.com/upload/001e5786030e25f207e329ed2a820c5d.png" alt="DRS"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'HS\')" data-manuf="HS"><img src="https://slotmax.s3.amazonaws.com/upload/7b6c3cb2219792a230e1d022c6986cfc.png" alt="HS"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'AE\')" data-manuf="AE"><img src="https://slotmax.s3.amazonaws.com/upload/9be642a0e1d8a3a7c5e015d09f08adfe.png" alt="AE"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'BTG\')" data-manuf="BTG"><img src="https://slotmax.s3.amazonaws.com/upload/7adfed5a9cd06a581eff167bfbadd630.png" alt="BTG"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'MA\')" data-manuf="MA"><img src="https://slotmax.s3.amazonaws.com/upload/40d155acff304e642252f253993b126e.png" alt="MA"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'DNA\')" data-manuf="DNA"><img src="https://slotmax.s3.amazonaws.com/upload/a035b23795134651bcd27a923b7453f9.png" alt="DNA"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'WMT\')" data-manuf="WMT"><img src="https://slotmax.s3.amazonaws.com/upload/f6823427a35f41b1a378ad050a676db8.png" alt="WMT"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'5G\')" data-manuf="5G"><img src="https://slotmax.s3.amazonaws.com/upload/014e6a00b1ff714d5e5cd44064d16f48.png" alt="5G"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'NS\')" data-manuf="NS"><img src="https://slotmax.s3.amazonaws.com/upload/6ad041e11133876eda65b5f993a66d4f.png" alt="NS"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'RG\')" data-manuf="RG"><img src="https://slotmax.s3.amazonaws.com/upload/133480bdccbc68ca1bc4cea932a0e8b7.png" alt="RG"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'MAHA\')" data-manuf="MAHA"><img src="https://slotmax.s3.amazonaws.com/upload/fb40ff7da5ca4a8cbd1383d7d89c5b0f.png" alt="MAHA"></button></div>
+            <div class="swiper-slide"><button onclick="showManuf(\'BT\')" data-manuf="BT"><img src="https://slotmax.s3.amazonaws.com/upload/78eaafcc8f8e8bf4716e5dcb416c1abb.png" alt="BT"></button></div>
+        </div>
+    </div>
+    <div id="helpslot-container" style="position:relative;"></div>
+    <div id="helpslot-search-results" style="display:none;"></div>
+    <style>
+        #helpslot-search:focus {border-color:#0073aa;box-shadow:0 0 8px rgba(0,115,170,0.4);}
+        #helpslot-search-results .game-grid {display:grid;grid-template-columns:repeat(2,1fr);gap:20px;}
+        @media(max-width:768px){#helpslot-search-results .game-grid{grid-template-columns:1fr;}}
+        #helpslot-buttons button {border:none;background:transparent;padding:0;cursor:pointer;border-radius:10px;width:150px;height:70px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+        #helpslot-buttons button img {width:100%;height:100%;object-fit:contain;border-radius:10px;border:2px solid transparent;transition:all 0.2s;}
+        #helpslot-buttons button:hover img,#helpslot-buttons button.active img {border-color:#0073aa;box-shadow:0 0 8px rgba(0,115,170,0.6);}
+        .helpslot-swiper {width:100%;overflow:hidden;}
+        .swiper-slide {width:auto !important;}
+        @media(max-width:768px){#helpslot-buttons button{width:120px;height:60px;}}
+        @media(max-width:480px){#helpslot-buttons button{width:100px;height:50px;}}
+        .game-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;}
+        @media(max-width:768px){.game-grid{grid-template-columns:1fr;}}
+        .game-card {display:flex;align-items:center;gap:15px;padding:20px;border:1px solid #444;border-radius:10px;background-color:#222;box-shadow:0 4px 8px rgba(0,0,0,0.3);transition:transform 0.2s,box-shadow 0.2s;}
+        .game-card:hover {transform:translateY(-4px);box-shadow:0 6px 12px rgba(0,0,0,0.5);}
+        .game-card.hidden {display:none;}
+        .game-card-img-wrapper {position:relative;width:60px;height:60px;min-width:60px;display:flex;align-items:center;justify-content:center;}
+        .game-card-img-wrapper img {width:100%;height:100%;object-fit:cover;border-radius:8px;}
+        .game-card-img-wrapper img.loading {opacity:0;}
+        .game-card-img-wrapper img.loaded {opacity:1;transition:opacity 0.3s;}
+        .game-card-img-wrapper img.error {display:none;}
+        .game-card-content {display:flex;flex:1;justify-content:space-between;align-items:center;gap:20px;}
+        .game-card-left {flex:1;}
+        .game-card-right {text-align:right;}
+        .game-card strong {font-size:16px;color:#fff;display:block;margin-bottom:8px;}
+        .game-card .jackpot-value {color:#ccc;font-size:14px;}
+        .game-card .values {color:#ccc;font-size:14px;}
+        .game-card .values div {margin-bottom:4px;}
+        .game-card .values span {font-weight:600;}
+        .loader {width:40px;height:40px;border:4px solid #e0e0e0;border-bottom-color:#0073aa;border-radius:50%;display:inline-block;box-sizing:border-box;animation:rotation 1s linear infinite;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);}
+        .loader.hidden {display:none;}
+        .no-results {text-align:center;padding:40px;color:#999;font-size:16px;}
+        .see-more-btn {display:block;margin:20px auto;padding:12px 30px;background:#222222;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;transition:all 0.3s;}
+        .see-more-btn:hover {background:#222222;transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.4);}
+        .see-more-btn.hidden {display:none;}
+        @keyframes rotation {0% {transform:translate(-50%,-50%) rotate(0deg);}100% {transform:translate(-50%,-50%) rotate(360deg);}}
+    </style>
+    <script src="https://unpkg.com/swiper@10/swiper-bundle.min.js"></script>
+    <script type="text/javascript">
+    const manufacturers=["JILI","PG","FC","PP","BNG","JDB","YB","CQ9","AW","MW","RSG","R88","KA","SG","NE","AMBS","DRS","HS","AE","BTG","MA","DNA","WMT","5G","NS","RG","MAHA","BT"];
+    let currentManuf="JILI";
+    let cache={};
+    let refreshTimer=null;
+    let isRefreshing=false;
+    let searchTerm="";
+    let isSearchMode=false;
+    let loadedManufs=[];
+    let searchDebounceTimer=null;
+    let expandedManufs={};
+    const DEBOUNCE_DELAY=300;
+    const INITIAL_GAME_LIMIT=16;
+
+    async function loadAllManufs(){
+        for(let i=0;i<manufacturers.length;i++){
+            let m=manufacturers[i];
+            const c=document.createElement("div");
+            c.id="helpslot-"+m;
+            c.style.display=(m==="JILI")?"block":"none";
+            c.innerHTML="<p style=\\"color:#ccc;text-align:center;padding:40px;\\">Loading "+m+"...</p>";
+            document.getElementById("helpslot-container").appendChild(c);
+            expandedManufs[m]=false;
+        }
+        await loadManuf("JILI");
+        startRefreshLoop();
+        //updateSearchStatus("Loading all games...");
+        for(let i=0;i<manufacturers.length;i++){
+            let m=manufacturers[i];
+            if(m!=="JILI"){
+                await loadManuf(m);
+                loadedManufs.push(m);
+                //updateSearchStatus("Loaded "+(i+1)+" of "+manufacturers.length+" manufacturers");
+            }
+        }
+        updateSearchStatus("");
+    }
+
+    function updateSearchStatus(msg){
+        const status=document.getElementById("search-status");
+        if(status)status.textContent=msg;
+    }
+
+    async function loadManuf(m){
+        if(cache[m])return;
+        try{
+            const r=await fetch("' . admin_url('admin-ajax.php?action=fetch_helpslot_games') . '&manuf="+m);
+            const d=await r.json();
+            cache[m]=d;
+            const c=document.getElementById("helpslot-"+m);
+            if(c)c.innerHTML=renderGamesHTML(d,m);
+            if(isSearchMode)applySearchFilter();
+        }catch(e){
+            console.error(e);
+            const c=document.getElementById("helpslot-"+m);
+            if(c)c.innerHTML="<p style=\\"color:#f44;text-align:center;padding:40px;\\">Error loading "+m+"</p>";
+        }
+    }
+
+    function renderGamesHTML(d,manuf){
+        let h="";
+        const isExpanded=expandedManufs[manuf];
+        const gamesToShow=isExpanded?d.length:INITIAL_GAME_LIMIT;
+        const hasMore=d.length>INITIAL_GAME_LIMIT;
+        
+        d.forEach(function(g,index){
+            let progressPercent=g.value!=null?g.value.toFixed(2):0;
+            let progressColor=g.up?"green":"red";
+            let hideClass=(!isExpanded && index>=INITIAL_GAME_LIMIT)?" hidden":"";
+            
+            h+="<div class=\\"game-card"+hideClass+"\\" data-id=\\""+g.id+"\\" data-name=\\""+g.name.toLowerCase()+"\\" data-name-nospace=\\""+g.name.toLowerCase().replace(/\\s+/g,"")+"\\" data-manuf=\\""+manuf+"\\">"+
+            "<div class=\\"game-card-img-wrapper\\">"+
+            "<span class=\\"loader\\"></span>"+
+            "<img src=\\""+g.logo+"\\" alt=\\""+g.name+"\\" class=\\"loading\\" onload=\\"handleImageLoad(this)\\" onerror=\\"handleImageError(this)\\">"+
+            "</div>"+
+            "<div class=\\"game-card-content\\">"+
+            "<div class=\\"game-card-left\\">"+
+            "<strong>"+g.name+"</strong>"+
+            "<div style=\\"width:100%;height:30px;background:#333;border-radius:15px;margin:8px 0;position:relative;\\">"+
+            "<div style=\\"position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;z-index:1;\\">"+
+            progressPercent+"%"+
+            "</div>"+
+            "<div style=\\"width:"+progressPercent+"%;height:100%;background:"+progressColor+";border-radius:15px;transition:width 0.5s;position:absolute;top:0;left:0;z-index:0;\\"></div>"+
+            "</div>"+
+            "<div class=\\"jackpot-value\\">Jackpot Meter: <strong class=\\"val-value\\">"+(g.value!=null?g.value.toFixed(2):"")+"%</strong></div>"+
+            "</div>"+
+            "<div class=\\"game-card-right\\">"+
+            "<div class=\\"values\\">"+
+            "<div>10 mins: <span class=\\"val-min10\\">"+formatPercent(g.min10)+"</span></div>"+
+            "<div>1 Hr: <span class=\\"val-hr1\\">"+formatPercent(g.hr1)+"</span></div>"+
+            "<div>3 Hrs: <span class=\\"val-hr3\\">"+formatPercent(g.hr3)+"</span></div>"+
+            "<div>6 Hrs: <span class=\\"val-hr6\\">"+formatPercent(g.hr6)+"</span></div>"+
+            "</div>"+
+            "</div>"+
+            "</div>"+
+            "</div>";
+        });
+        
+        let seeMoreBtn="";
+        if(hasMore){
+            seeMoreBtn="<button class=\\"see-more-btn"+(isExpanded?" hidden":"")+"\\" onclick=\\"toggleSeeMore(\'"+manuf+"\')\\">" + "See More ("+(d.length-INITIAL_GAME_LIMIT)+" more games)</button>";
+        }
+        
+        return "<div class=\\"game-grid\\">"+h+"</div>"+seeMoreBtn;
+    }
+
+    function toggleSeeMore(manuf){
+        expandedManufs[manuf]=true;
+        const container=document.getElementById("helpslot-"+manuf);
+        if(!container)return;
+        
+        const hiddenCards=container.querySelectorAll(".game-card.hidden");
+        hiddenCards.forEach(function(card){
+            card.classList.remove("hidden");
+        });
+        
+        const btn=container.querySelector(".see-more-btn");
+        if(btn)btn.classList.add("hidden");
+    }
+
+    function handleImageLoad(img){
+        img.classList.remove("loading");
+        img.classList.add("loaded");
+        const loader=img.parentElement.querySelector(".loader");
+        if(loader)loader.classList.add("hidden");
+    }
+
+    function handleImageError(img){
+        img.classList.add("error");
+        const loader=img.parentElement.querySelector(".loader");
+        if(loader)loader.classList.add("hidden");
+        const wrapper=img.parentElement;
+        if(!wrapper.querySelector(".placeholder-text")){
+            const placeholder=document.createElement("div");
+            placeholder.className="placeholder-text";
+            placeholder.style.cssText="font-size:10px;text-align:center;color:#999;";
+            placeholder.textContent="No Image";
+            wrapper.appendChild(placeholder);
+        }
+    }
+
+    async function showManuf(m){
+        isSearchMode=false;
+        document.getElementById("helpslot-search").value="";
+        searchTerm="";
+        document.getElementById("helpslot-search-results").style.display="none";
+        document.getElementById("helpslot-container").style.display="block";
+        currentManuf=m;
+        document.querySelectorAll("#helpslot-buttons button").forEach(function(b){
+            b.classList.toggle("active",b.getAttribute("data-manuf")===m);
+        });
+        manufacturers.forEach(function(x){
+            let el=document.getElementById("helpslot-"+x);
+            if(el)el.style.display="none";
+        });
+        let selectedContainer=document.getElementById("helpslot-"+m);
+        if(selectedContainer){
+            selectedContainer.style.display="block";
+        }
+        if(!cache[m]){
+            await loadManuf(m);
+        }
+        stopRefreshLoop();
+        startRefreshLoop();
+    }
+
+    function applySearchFilter(){
+        const searchResults=document.getElementById("helpslot-search-results");
+        const mainContainer=document.getElementById("helpslot-container");
+        
+        if(searchTerm===""){
+            isSearchMode=false;
+            searchResults.style.display="none";
+            mainContainer.style.display="block";
+            manufacturers.forEach(function(m){
+                let el=document.getElementById("helpslot-"+m);
+                if(el)el.style.display=(m===currentManuf?"block":"none");
+            });
+            document.querySelectorAll(".no-results").forEach(el=>el.remove());
+            return;
+        }
+        
+        isSearchMode=true;
+        mainContainer.style.display="none";
+        searchResults.style.display="block";
+        
+        const fragment=document.createDocumentFragment();
+        const gridDiv=document.createElement("div");
+        gridDiv.className="game-grid";
+        
+        let matchCount=0;
+        
+        manufacturers.forEach(function(m){
+            let container=document.getElementById("helpslot-"+m);
+            if(!container)return;
+            
+            const cards=container.querySelectorAll(".game-card");
+            cards.forEach(function(card){
+                const nameNoSpace=card.getAttribute("data-name-nospace");
+                if(nameNoSpace.includes(searchTerm)){
+                    const clonedCard=card.cloneNode(true);
+                    clonedCard.classList.remove("hidden");
+                    gridDiv.appendChild(clonedCard);
+                    matchCount++;
+                }
+            });
+        });
+        
+        if(matchCount>0){
+            fragment.appendChild(gridDiv);
+            searchResults.innerHTML="";
+            searchResults.appendChild(fragment);
+        }else{
+            searchResults.innerHTML="<div class=\\"no-results\\">No games found matching \\""+document.getElementById("helpslot-search").value+"\\"</div>";
+        }
+        
+        document.querySelectorAll("#helpslot-buttons button").forEach(function(b){
+            b.classList.remove("active");
+        });
+    }
+
+    function startRefreshLoop(){
+        if(refreshTimer)clearTimeout(refreshTimer);
+        refreshLoop();
+    }
+
+    function stopRefreshLoop(){
+        if(refreshTimer){
+            clearTimeout(refreshTimer);
+            refreshTimer=null;
+        }
+    }
+
+    async function refreshLoop(){
+        if(isRefreshing){
+            refreshTimer=setTimeout(refreshLoop,1000);
+            return;
+        }
+        isRefreshing=true;
+        try{
+            const manufToRefresh=isSearchMode?manufacturers:[currentManuf];
+            for(let m of manufToRefresh){
+                if(!cache[m])continue;
+                const r=await fetch("' . admin_url('admin-ajax.php?action=fetch_helpslot_values') . '&manuf="+m);
+                const d=await r.json();
+                if(!Array.isArray(d))continue;
+                d.forEach(function(g){
+                    let c=document.querySelector("#helpslot-"+m+" .game-card[data-id=\'"+g.id+"\']");
+                    updateGameCard(c,g);
+                    if(isSearchMode){
+                        let searchCard=document.querySelector("#helpslot-search-results .game-card[data-id=\'"+g.id+"\'][data-manuf=\'"+m+"\']");
+                        updateGameCard(searchCard,g);
+                    }
+                });
+            }
+        }catch(e){
+            console.error(e);
+        }finally{
+            isRefreshing=false;
+            refreshTimer=setTimeout(refreshLoop,isSearchMode?5000:1000);
+        }
+    }
+
+    function updateGameCard(c,g){
+        if(!c)return;
+        c.querySelector(".val-value").innerText=g.value.toFixed(2)+"%";
+        c.querySelector(".val-min10").innerHTML=formatPercent(g.min10);
+        c.querySelector(".val-hr1").innerHTML=formatPercent(g.hr1);
+        c.querySelector(".val-hr3").innerHTML=formatPercent(g.hr3);
+        c.querySelector(".val-hr6").innerHTML=formatPercent(g.hr6);
+        let progressBar=c.querySelector(".game-card-left > div > div:last-child");
+        let progressText=c.querySelector(".game-card-left > div > div:first-child");
+        if(progressBar){
+            progressBar.style.width=g.value.toFixed(2)+"%";
+            progressBar.style.backgroundColor=g.up?"green":"red";
+        }
+        if(progressText){
+            progressText.innerText=g.value.toFixed(2)+"%";
+        }
+    }
+
+    function formatPercent(v){
+        if(v==null)return"";
+        return"<span style=\'color:"+(v>=0?"green":"red")+"\'>"+v.toFixed(2)+"%</span>";
+    }
+
+    document.addEventListener("DOMContentLoaded",function(){
+        new Swiper(".helpslot-swiper",{slidesPerView:"auto",spaceBetween:10,freeMode:false,centerInsufficientSlides:true});
+        
+        const searchInput=document.getElementById("helpslot-search");
+        searchInput.addEventListener("input",function(e){
+            if(searchDebounceTimer){
+                clearTimeout(searchDebounceTimer);
+            }
+            
+            const rawValue=e.target.value.toLowerCase().trim();
+            
+            searchDebounceTimer=setTimeout(function(){
+                searchTerm=rawValue.replace(/\\s+/g,"");
+                applySearchFilter();
+            },DEBOUNCE_DELAY);
+        });
+        
+        loadAllManufs();
+    });
+    </script>
+    ';
+    return $html;
+}
+add_shortcode("helpslot_all_games","helpslot_all_games_shortcode");
+
+add_action("wp_ajax_fetch_helpslot_games","fetch_helpslot_games");
+add_action("wp_ajax_nopriv_fetch_helpslot_games","fetch_helpslot_games");
+function fetch_helpslot_games(){
+    $manuf=isset($_GET["manuf"])?sanitize_text_field($_GET["manuf"]):"JILI";
+    $all_games=[];
+    $current=1;
+    do{
+        $res=wp_remote_get("https://helpslot.win/api/games/?manuf=".$manuf."&current=".$current);
+        if(is_wp_error($res))break;
+        $data=json_decode(wp_remote_retrieve_body($res),true);
+        $games=$data["data"]??[];
+        if(empty($games))break;
+        $all_games=array_merge($all_games,$games);
+        $current++;
+    }while(!empty($games));
+    wp_send_json($all_games);
+}
+
+add_action("wp_ajax_fetch_helpslot_values","fetch_helpslot_values");
+add_action("wp_ajax_nopriv_fetch_helpslot_values","fetch_helpslot_values");
+function fetch_helpslot_values(){
+    $manuf=isset($_GET["manuf"])?sanitize_text_field($_GET["manuf"]):"JILI";
+    $all_games=[];
+    $current=1;
+    do{
+        $res=wp_remote_get("https://helpslot.win/api/games/?manuf=".$manuf."&current=".$current);
+        if(is_wp_error($res))break;
+        $data=json_decode(wp_remote_retrieve_body($res),true);
+        $games=$data["data"]??[];
+        if(empty($games))break;
+        $all_games=array_merge($all_games,$games);
+        $current++;
+    }while(!empty($games));
+    wp_send_json($all_games);
+}
