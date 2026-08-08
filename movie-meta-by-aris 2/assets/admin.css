@@ -1,0 +1,82 @@
+.mmba-wrap .mmba-card {
+    max-width: 1100px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin-top: 16px;
+}
+
+.mmba-wrap .mmba-card h2 {
+    margin-top: 0;
+}
+
+.mmba-endpoints code {
+    display: inline-block;
+    margin: 4px 8px 4px 0;
+    padding: 4px 8px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    word-break: break-all;
+    white-space: normal;
+}
+
+.mmba-table-wrap {
+    max-height: 560px;
+    overflow: auto;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.mmba-list table code.mmba-link {
+    display: inline-block;
+    max-width: 320px;
+    word-break: break-all;
+    white-space: normal;
+    font-size: 12px;
+}
+
+.mmba-actions {
+    white-space: nowrap;
+}
+
+.mmba-actions .button {
+    margin: 0 4px 4px 0;
+}
+
+.mmba-count {
+    font-weight: 400;
+    color: #646970;
+}
+
+.mmba-shortcode-list {
+    margin: 0 0 0 18px;
+}
+
+.mmba-shortcode-list li {
+    margin-bottom: 8px;
+}
+
+.mmba-shortcode-list code {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    padding: 2px 6px;
+}
+
+.mmba-io-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.mmba-io-block h3 {
+    margin: 0 0 8px;
+}
+
+@media (max-width: 782px) {
+    .mmba-io-grid {
+        grid-template-columns: 1fr;
+    }
+}
