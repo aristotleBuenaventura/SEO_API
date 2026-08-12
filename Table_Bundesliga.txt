@@ -7,11 +7,24 @@ function bundesliga_standings_config() {
     return [
         'league_id' => 175,
         'season'    => '2026/2027',
+        'from'      => '2026-08-29',
+        'to'        => '2027-05-31',
     ];
 }
 
 
-function bundesliga_standing_team_logo($api_logo) {
+function bundesliga_standing_team_logo($api_logo, $team_name = '') {
+
+    $name = strtolower(trim((string) $team_name));
+
+    if (strpos($name, 'elversberg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Elversberg.png';
+    }
+
+    if (strpos($name, 'stuttgart') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Stuttgart.png';
+    }
+
     if (!empty($api_logo)) {
         return $api_logo;
     }
@@ -49,6 +62,171 @@ function bundesliga_standings_api($league_id, $season) {
     $total = $json['result']['total'] ?? [];
 
     return is_array($total) ? array_values($total) : [];
+}
+
+
+function bundesliga_fixtures_api($league_id, $from, $to) {
+
+    $url = 'https://apiv2.allsportsapi.com/football/?met=Fixtures'
+        . '&APIkey=' . bundesliga_standings_api_key()
+        . '&leagueId=' . $league_id
+        . '&timezone=Asia/Manila'
+        . '&from=' . $from
+        . '&to=' . $to;
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING       => 'gzip,deflate',
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) {
+        return [];
+    }
+
+    $json = json_decode($response, true);
+    $result = $json['result'] ?? [];
+
+    return is_array($result) ? array_values($result) : [];
+}
+
+
+function bundesliga_normalize_team_name($team_name) {
+
+    $name = trim((string) $team_name);
+    $map  = [
+        'Bayern München'   => 'Bayern Munich',
+        'Frankfurt'        => 'Eintracht Frankfurt',
+        'Leverkusen'       => 'Bayer Leverkusen',
+        "M'gladbach"       => 'B. Monchengladbach',
+        'Bremen'           => 'Werder Bremen',
+        'Köln'             => 'FC Koln',
+        'Hamburg'          => 'Hamburger SV',
+        'Mainz 05'         => 'Mainz',
+        'Leipzig'          => 'RB Leipzig',
+    ];
+
+    return $map[$name] ?? $name;
+}
+
+
+function bundesliga_standings_from_fixtures($fixtures, $season) {
+
+    $teams = [];
+
+    foreach ($fixtures as $fixture) {
+        if (($fixture['league_season'] ?? '') !== $season) {
+            continue;
+        }
+
+        $result = $fixture['event_final_result'] ?? '';
+        if ($result === '' || $result === '-' || !preg_match('/(\d+)\s*-\s*(\d+)/', $result, $m)) {
+            continue;
+        }
+
+        $home_goals = (int) $m[1];
+        $away_goals = (int) $m[2];
+        $home_team  = bundesliga_normalize_team_name($fixture['event_home_team'] ?? '');
+        $away_team  = bundesliga_normalize_team_name($fixture['event_away_team'] ?? '');
+
+        if ($home_team === '' || $away_team === '') {
+            continue;
+        }
+
+        $sides = [
+            [$home_team, $home_goals, $away_goals, $fixture['home_team_logo'] ?? '', $fixture['home_team_key'] ?? 0],
+            [$away_team, $away_goals, $home_goals, $fixture['away_team_logo'] ?? '', $fixture['away_team_key'] ?? 0],
+        ];
+
+        foreach ($sides as $side) {
+            list($team_name, $gf, $ga, $logo, $team_key) = $side;
+
+            if (!isset($teams[$team_name])) {
+                $teams[$team_name] = [
+                    'standing_team' => $team_name,
+                    'team_logo'     => $logo,
+                    'team_key'      => $team_key,
+                    'league_season' => $season,
+                    'standing_P'    => 0,
+                    'standing_W'    => 0,
+                    'standing_D'    => 0,
+                    'standing_L'    => 0,
+                    'standing_F'    => 0,
+                    'standing_A'    => 0,
+                    'standing_GD'   => 0,
+                    'standing_PTS'  => 0,
+                ];
+            }
+
+            $row = &$teams[$team_name];
+            if (empty($row['team_logo']) && !empty($logo)) {
+                $row['team_logo'] = $logo;
+            }
+
+            $row['standing_P']++;
+            $row['standing_F'] += $gf;
+            $row['standing_A'] += $ga;
+
+            if ($gf > $ga) {
+                $row['standing_W']++;
+                $row['standing_PTS'] += 3;
+            } elseif ($gf === $ga) {
+                $row['standing_D']++;
+                $row['standing_PTS'] += 1;
+            } else {
+                $row['standing_L']++;
+            }
+
+            unset($row);
+        }
+    }
+
+    // Keep regular-season clubs only (drop sparse aliases / odd entries).
+    $teams = array_filter($teams, function ($row) {
+        return (int) ($row['standing_P'] ?? 0) >= 20;
+    });
+
+    $standings = array_values($teams);
+
+    foreach ($standings as &$row) {
+        $row['standing_GD'] = (int) $row['standing_F'] - (int) $row['standing_A'];
+    }
+    unset($row);
+
+    usort($standings, function ($a, $b) {
+        if ($a['standing_PTS'] !== $b['standing_PTS']) {
+            return $b['standing_PTS'] <=> $a['standing_PTS'];
+        }
+        if ($a['standing_GD'] !== $b['standing_GD']) {
+            return $b['standing_GD'] <=> $a['standing_GD'];
+        }
+        return $b['standing_F'] <=> $a['standing_F'];
+    });
+
+    foreach ($standings as $i => &$row) {
+        $row['standing_place'] = $i + 1;
+    }
+    unset($row);
+
+    return $standings;
+}
+
+
+function bundesliga_standings_have_played($data) {
+    foreach ($data as $row) {
+        if ((int) ($row['standing_P'] ?? 0) > 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -99,7 +277,7 @@ function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_v2_' . md5($cfg['league_id'] . $cfg['season']);
+    $cache_key = 'bundesliga_standings_2026_v1_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -107,6 +285,15 @@ function bundesliga_standings_shortcode() {
     }
 
     $data = bundesliga_standings_api($cfg['league_id'], $cfg['season']);
+
+    // Historical seasons (and empty current season) — build from fixtures.
+    if (empty($data) || !bundesliga_standings_have_played($data)) {
+        $fixtures = bundesliga_fixtures_api($cfg['league_id'], $cfg['from'], $cfg['to']);
+        $computed = bundesliga_standings_from_fixtures($fixtures, $cfg['season']);
+        if (!empty($computed)) {
+            $data = $computed;
+        }
+    }
 
     if (empty($data)) {
         return '<p>Bundesliga standings will be available soon.</p>';
@@ -380,7 +567,7 @@ function bundesliga_standings_shortcode() {
             <div class="bl-team-cell">
                 <span class="bl-rank"><?php echo esc_html($t['standing_place'] ?? ''); ?></span>
                 <span class="bl-logo">
-                    <img src="<?php echo esc_url(bundesliga_standing_team_logo($t['team_logo'] ?? '')); ?>" alt="">
+                    <img src="<?php echo esc_url(bundesliga_standing_team_logo($t['team_logo'] ?? '', $t['standing_team'] ?? '')); ?>" alt="">
                 </span>
                 <span class="bl-name"><?php echo esc_html($t['standing_team'] ?? ''); ?></span>
             </div>

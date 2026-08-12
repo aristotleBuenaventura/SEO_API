@@ -15,8 +15,8 @@ function bundesliga_api($leagueId, $from, $to) {
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 10,
-        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_CONNECTTIMEOUT => 8,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_ENCODING => "gzip,deflate"
     ]);
@@ -30,12 +30,23 @@ function bundesliga_api($leagueId, $from, $to) {
         return [];
     }
 
-    $json = json_decode($response);
+    $json = json_decode($response, true);
+    $result = $json['result'] ?? [];
 
-    return $json->result ?? [];
+    return is_array($result) ? array_values($result) : [];
 }
 
 function bundesliga_team_logo($api_logo, $team_name = '') {
+
+    $name = strtolower(trim((string) $team_name));
+
+    if (strpos($name, 'elversberg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Elversberg.png';
+    }
+
+    if (strpos($name, 'stuttgart') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Stuttgart.png';
+    }
 
     if (!empty($api_logo)) {
         return $api_logo;
@@ -44,20 +55,37 @@ function bundesliga_team_logo($api_logo, $team_name = '') {
     return '/wp-content/uploads/2025/09/tba.webp';
 }
 
+function bundesliga_match_field($match, $key, $default = '') {
+    if (is_array($match)) {
+        return $match[$key] ?? $default;
+    }
+    if (is_object($match)) {
+        return $match->$key ?? $default;
+    }
+    return $default;
+}
+
 function bundesliga_schedule_shortcode() {
 
     $unique_id = uniqid("bundesliga_");
 
+    // Current season 2026/2027
     $leagueId = 175;
     $from     = "2026-08-29";
     $to       = "2027-05-31";
 
-    $cache_key = "bundesliga_2026_" . md5($leagueId . $from . $to);
+    $cache_key = "bundesliga_sched_2026_" . md5($leagueId . $from . $to);
     $data = get_transient($cache_key);
 
-    if ($data === false) {
+    if ($data === false || !is_array($data) || empty($data)) {
         $data = bundesliga_api($leagueId, $from, $to);
-        set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
+
+        // Never cache empty failures — allows next load to retry.
+        if (!empty($data)) {
+            set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
+        } else {
+            delete_transient($cache_key);
+        }
     }
 
     if (empty($data)) {
@@ -65,24 +93,32 @@ function bundesliga_schedule_shortcode() {
     }
 
     usort($data, function($a, $b) {
-        return strtotime($a->event_date) - strtotime($b->event_date);
+        return strtotime(bundesliga_match_field($a, 'event_date')) - strtotime(bundesliga_match_field($b, 'event_date'));
     });
 
     // Start on yesterday so finished matches (with scores) show first;
     // upcoming matches appear when navigating next. Moves forward each day.
+    // Exception: on/after the last match day — show last games at the end
+    // of the carousel so Next is already disabled (nothing follows).
     $tz = new DateTimeZone('Asia/Manila');
     $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
     $today     = (new DateTime('now', $tz))->format('Y-m-d');
 
     $initial_slide = 0;
+    $at_last_games = false;
     $yesterday_index = null;
     $last_past_day_start = null;
     $current_past_day = null;
+    $last_match_date = '';
 
     foreach ($data as $i => $match) {
-        $match_date = $match->event_date ?? '';
+        $match_date = (string) bundesliga_match_field($match, 'event_date');
         if ($match_date === '') {
             continue;
+        }
+
+        if ($match_date !== $last_match_date) {
+            $last_match_date = $match_date;
         }
 
         if ($match_date === $yesterday && $yesterday_index === null) {
@@ -97,11 +133,19 @@ function bundesliga_schedule_shortcode() {
         }
     }
 
-    if ($yesterday_index !== null) {
+    if ($last_match_date !== '' && $today >= $last_match_date) {
+        // Last games: show the last 3 cards; Next stays disabled (no white space).
+        $at_last_games = true;
+        $initial_slide = max(0, count($data) - 3);
+    } elseif ($yesterday_index !== null) {
         $initial_slide = $yesterday_index;
     } elseif ($last_past_day_start !== null) {
         $initial_slide = $last_past_day_start;
     }
+
+    // Keep initial slide in range so Swiper never lands on an empty view.
+    $max_start = max(0, count($data) - 1);
+    $initial_slide = min(max(0, (int) $initial_slide), $max_start);
 
     ob_start();
     ?>
@@ -123,26 +167,29 @@ function bundesliga_schedule_shortcode() {
         <?php foreach ($data as $v): ?>
 
             <?php
-                $home = $v->event_home_team ?? "TBA";
-                $away = $v->event_away_team ?? "TBA";
+                $home = bundesliga_match_field($v, 'event_home_team', 'TBA');
+                $away = bundesliga_match_field($v, 'event_away_team', 'TBA');
 
-                $home_logo = bundesliga_team_logo($v->home_team_logo ?? '', $home);
-                $away_logo = bundesliga_team_logo($v->away_team_logo ?? '', $away);
+                $home_logo = bundesliga_team_logo(bundesliga_match_field($v, 'home_team_logo'), $home);
+                $away_logo = bundesliga_team_logo(bundesliga_match_field($v, 'away_team_logo'), $away);
 
-                $has_score = !empty($v->event_final_result) && $v->event_final_result !== "-";
+                $final_result = bundesliga_match_field($v, 'event_final_result');
+                $has_score = !empty($final_result) && $final_result !== '-';
                 if ($has_score) {
-                    $score = $v->event_final_result;
+                    $score = $final_result;
                 } else {
                     $score = "UPCOMING MATCH";
                 }
 
-                $date  = !empty($v->event_date)
-                    ? date("M d, Y", strtotime($v->event_date))
+                $event_date = bundesliga_match_field($v, 'event_date');
+                $date  = !empty($event_date)
+                    ? date("M d, Y", strtotime($event_date))
                     : "";
 
-                $venue = !empty($v->event_stadium)
-                    ? $v->event_stadium
-                    : "TBA";
+                $venue = bundesliga_match_field($v, 'event_stadium', 'TBA');
+                if ($venue === '') {
+                    $venue = 'TBA';
+                }
             ?>
 
             <div class="swiper-slide bundesliga-card">
@@ -249,8 +296,15 @@ function bundesliga_schedule_shortcode() {
     }
 
     #<?php echo esc_attr($unique_id); ?> .bundesliga-swiper {
-        padding: 4px 28px 8px;
+        padding: 4px 40px 8px;
         position: relative;
+        min-height: 240px;
+        overflow: hidden;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .swiper-slide {
+        height: auto;
+        box-sizing: border-box;
     }
 
     #<?php echo esc_attr($unique_id); ?> .bundesliga-card {
@@ -260,7 +314,9 @@ function bundesliga_schedule_shortcode() {
         padding: 16px 14px;
         text-align: center;
         box-shadow: 0 2px 8px rgba(18, 20, 23, 0.06);
-        width: 360px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -384,6 +440,12 @@ function bundesliga_schedule_shortcode() {
         font-weight: bold;
     }
 
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-disabled {
+        opacity: 0.25;
+        cursor: default;
+        pointer-events: none;
+    }
+
     #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
         left: 0;
     }
@@ -421,10 +483,29 @@ function bundesliga_schedule_shortcode() {
 
         if (typeof Swiper === "undefined") return;
 
+        var atLastGames = <?php echo $at_last_games ? 'true' : 'false'; ?>;
+
+        function getSlidesPerView(swiper) {
+            var spv = swiper.params.slidesPerView;
+            if (typeof spv !== "number" || !isFinite(spv)) {
+                return 1;
+            }
+            return Math.max(1, Math.floor(spv));
+        }
+
+        function pinLastThree(swiper) {
+            var spv = getSlidesPerView(swiper);
+            var start = Math.max(0, swiper.slides.length - spv);
+            swiper.slideTo(start, 0);
+            swiper.update();
+        }
+
         new Swiper("#<?php echo esc_js($unique_id); ?> .bundesliga-swiper", {
             slidesPerView: 3,
             spaceBetween: 16,
             initialSlide: <?php echo (int) $initial_slide; ?>,
+            watchOverflow: true,
+            resistanceRatio: atLastGames ? 0 : 0.85,
             navigation: {
                 nextEl: "#<?php echo esc_js($unique_id); ?> .swiper-button-next",
                 prevEl: "#<?php echo esc_js($unique_id); ?> .swiper-button-prev"
@@ -433,6 +514,29 @@ function bundesliga_schedule_shortcode() {
                 0: { slidesPerView: 1 },
                 768: { slidesPerView: 2 },
                 1024: { slidesPerView: 3 }
+            },
+            on: {
+                init: function(swiperInstance) {
+                    if (atLastGames) {
+                        pinLastThree(swiperInstance);
+                    }
+                },
+                breakpoint: function(swiperInstance) {
+                    if (atLastGames) {
+                        pinLastThree(swiperInstance);
+                    }
+                },
+                slideChange: function(swiperInstance) {
+                    if (!atLastGames) {
+                        return;
+                    }
+                    // Lock at last full page of slides — prevents empty white space on Next.
+                    var spv = getSlidesPerView(swiperInstance);
+                    var maxIndex = Math.max(0, swiperInstance.slides.length - spv);
+                    if (swiperInstance.activeIndex > maxIndex) {
+                        swiperInstance.slideTo(maxIndex, 0);
+                    }
+                }
             }
         });
 
