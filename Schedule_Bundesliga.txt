@@ -441,24 +441,17 @@ function bundesliga_schedule_shortcode() {
     }
 
     @media (min-width:768px){
-        #<?php echo esc_attr($unique_id); ?>{ --bl-gap:14px; }
-        #<?php echo esc_attr($unique_id); ?> .bl-card{
-            flex:0 0 calc((100% - var(--bl-gap)) / 2);
-            width:calc((100% - var(--bl-gap)) / 2);
-            min-width:calc((100% - var(--bl-gap)) / 2);
-            max-width:calc((100% - var(--bl-gap)) / 2);
-        }
-        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 28px 8px; }
-    }
-    @media (min-width:1024px){
         #<?php echo esc_attr($unique_id); ?>{ --bl-gap:16px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-carousel{ padding:0 28px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 0 8px; }
         #<?php echo esc_attr($unique_id); ?> .bl-card{
             flex:0 0 calc((100% - (var(--bl-gap) * 2)) / 3);
             width:calc((100% - (var(--bl-gap) * 2)) / 3);
             min-width:calc((100% - (var(--bl-gap) * 2)) / 3);
             max-width:calc((100% - (var(--bl-gap) * 2)) / 3);
         }
-        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 32px 8px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
     }
     @media (max-width:767px){
         #<?php echo esc_attr($unique_id); ?>{
@@ -490,8 +483,6 @@ function bundesliga_schedule_shortcode() {
         #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score{ font-size:20px; }
         #<?php echo esc_attr($unique_id); ?> .bl-nav{
             font-size:30px;
-            left:auto;
-            right:auto;
         }
         #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
         #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
@@ -515,9 +506,7 @@ function bundesliga_schedule_shortcode() {
 
         function perView() {
             var w = window.innerWidth || document.documentElement.clientWidth;
-            if (w >= 1024) return 3;
-            if (w >= 768) return 2;
-            return 1;
+            return w >= 768 ? 3 : 1;
         }
 
         function maxIndex() {
