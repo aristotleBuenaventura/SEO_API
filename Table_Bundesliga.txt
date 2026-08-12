@@ -1,0 +1,419 @@
+function bundesliga_standings_api_key() {
+    return '75d4149d2873e1afd455cebbd0ec25255cea79295120d9726c22fdca3ed306be';
+}
+
+
+function bundesliga_standings_config() {
+    return [
+        'league_id' => 175,
+        'season'    => '2026/2027',
+    ];
+}
+
+
+function bundesliga_standing_team_logo($api_logo) {
+    if (!empty($api_logo)) {
+        return $api_logo;
+    }
+
+    return '/wp-content/uploads/2025/09/tba.webp';
+}
+
+
+function bundesliga_standings_api($league_id, $season) {
+
+    $url = 'https://apiv2.allsportsapi.com/football/?met=Standings'
+        . '&APIkey=' . bundesliga_standings_api_key()
+        . '&leagueId=' . $league_id
+        . '&season=' . urlencode((string) $season);
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING       => 'gzip,deflate',
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) {
+        return [];
+    }
+
+    $json  = json_decode($response, true);
+    $total = $json['result']['total'] ?? [];
+
+    return is_array($total) ? array_values($total) : [];
+}
+
+
+function bundesliga_standing_zone_class($team) {
+
+    $type  = strtolower((string) ($team['standing_place_type'] ?? ''));
+    $place = (int) ($team['standing_place'] ?? 0);
+
+    if ($type !== '') {
+        if (strpos($type, 'champions league') !== false) {
+            return 'is-ucl';
+        }
+        if (strpos($type, 'europa league') !== false) {
+            return 'is-uel';
+        }
+        if (strpos($type, 'conference') !== false) {
+            return 'is-uecl';
+        }
+        if (strpos($type, 'relegation') !== false && strpos($type, 'play') !== false) {
+            return 'is-playoff';
+        }
+        if (strpos($type, 'relegation') !== false) {
+            return 'is-rel';
+        }
+    }
+
+    if ($place >= 1 && $place <= 4) {
+        return 'is-ucl';
+    }
+    if ($place === 5) {
+        return 'is-uel';
+    }
+    if ($place === 6) {
+        return 'is-uecl';
+    }
+    if ($place === 16) {
+        return 'is-playoff';
+    }
+    if ($place >= 17) {
+        return 'is-rel';
+    }
+
+    return '';
+}
+
+
+function bundesliga_standings_shortcode() {
+
+    $uid       = uniqid('bl_standings_');
+    $cfg       = bundesliga_standings_config();
+    $cache_key = 'bundesliga_standings_v2_' . md5($cfg['league_id'] . $cfg['season']);
+    $cached    = get_transient($cache_key);
+
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $data = bundesliga_standings_api($cfg['league_id'], $cfg['season']);
+
+    if (empty($data)) {
+        return '<p>Bundesliga standings will be available soon.</p>';
+    }
+
+    usort($data, function ($a, $b) {
+        return ((int) ($a['standing_place'] ?? 99)) <=> ((int) ($b['standing_place'] ?? 99));
+    });
+
+    ob_start();
+    ?>
+
+    <div id="<?php echo esc_attr($uid); ?>" class="bl-standings-root">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+    #<?php echo esc_attr($uid); ?>{
+        --bl-ink:#121417;
+        --bl-muted:#6b7280;
+        --bl-line:#e8eaed;
+        --bl-soft:#f4f6f8;
+        --bl-panel:#ffffff;
+        --bl-accent:#d0021b;
+        --bl-ucl:#1d6b4f;
+        --bl-uel:#1a56a8;
+        --bl-uecl:#0f7a8a;
+        --bl-playoff:#b45309;
+        --bl-rel:#b91c1c;
+        box-sizing:border-box;
+        width:100%;
+        max-width:100%;
+        font-family:"Manrope",Helvetica,Arial,sans-serif;
+        color:var(--bl-ink);
+        background:linear-gradient(180deg,#f7f8fa 0%,#ffffff 48%);
+        line-height:1.25;
+        border:1px solid var(--bl-line);
+        border-radius:16px;
+        padding:20px 18px 16px;
+        overflow:hidden;
+    }
+    #<?php echo esc_attr($uid); ?> *{
+        box-sizing:border-box;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-header{
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap:12px;
+        margin:0 0 18px;
+        padding:0 4px 14px;
+        border-bottom:1px solid var(--bl-line);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-title{
+        margin:0;
+        font-size:20px;
+        font-weight:800;
+        letter-spacing:-0.02em;
+        color:var(--bl-ink);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-title span{
+        color:var(--bl-accent);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-season{
+        font-size:12px;
+        font-weight:600;
+        color:var(--bl-muted);
+        letter-spacing:0.04em;
+        text-transform:uppercase;
+        white-space:nowrap;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-scroll{
+        width:100%;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-table{
+        width:100%;
+        min-width:620px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row{
+        display:grid;
+        grid-template-columns:minmax(180px,1.6fr) repeat(7,minmax(36px,1fr)) minmax(44px,0.8fr);
+        align-items:center;
+        column-gap:4px;
+        margin:0;
+        padding:11px 10px;
+        border:none;
+        border-radius:10px;
+        background:transparent;
+        position:relative;
+        transition:background 0.18s ease;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-head{
+        padding:8px 10px 10px;
+        border-radius:0;
+        position:sticky;
+        top:0;
+        z-index:2;
+        background:rgba(255,255,255,0.92);
+        backdrop-filter:blur(6px);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-body + .bl-row-body{
+        margin-top:2px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-body:hover{
+        background:var(--bl-soft);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-body::before{
+        content:"";
+        position:absolute;
+        left:0;
+        top:18%;
+        bottom:18%;
+        width:3px;
+        border-radius:3px;
+        background:transparent;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-body.is-ucl::before{ background:var(--bl-ucl); }
+    #<?php echo esc_attr($uid); ?> .bl-row-body.is-uel::before{ background:var(--bl-uel); }
+    #<?php echo esc_attr($uid); ?> .bl-row-body.is-uecl::before{ background:var(--bl-uecl); }
+    #<?php echo esc_attr($uid); ?> .bl-row-body.is-playoff::before{ background:var(--bl-playoff); }
+    #<?php echo esc_attr($uid); ?> .bl-row-body.is-rel::before{ background:var(--bl-rel); }
+    #<?php echo esc_attr($uid); ?> .bl-lbl-club,
+    #<?php echo esc_attr($uid); ?> .bl-lbl-stat{
+        text-align:center;
+        font-size:11px;
+        font-weight:700;
+        color:var(--bl-muted);
+        letter-spacing:0.06em;
+        text-transform:uppercase;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-lbl-club{
+        text-align:left;
+        padding-left:46px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-lbl-pts{
+        color:var(--bl-ink);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-team-cell{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        min-width:0;
+        text-align:left;
+        padding-left:6px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-rank{
+        flex:0 0 22px;
+        width:22px;
+        font-size:13px;
+        font-weight:700;
+        color:var(--bl-muted);
+        text-align:center;
+        font-variant-numeric:tabular-nums;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-logo{
+        flex:0 0 32px;
+        width:32px;
+        height:32px;
+        border-radius:9px;
+        background:var(--bl-soft);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        overflow:hidden;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-logo img{
+        width:22px;
+        height:22px;
+        object-fit:contain;
+        display:block;
+        border:none;
+        margin:0;
+        padding:0;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-name{
+        flex:1;
+        min-width:0;
+        font-size:14px;
+        font-weight:600;
+        color:var(--bl-ink);
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-val-stat,
+    #<?php echo esc_attr($uid); ?> .bl-val-pts{
+        text-align:center;
+        font-size:14px;
+        font-weight:500;
+        color:var(--bl-ink);
+        font-variant-numeric:tabular-nums;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-val-pts{
+        font-weight:800;
+        color:var(--bl-accent);
+        background:rgba(208,2,27,0.08);
+        border-radius:8px;
+        padding:6px 0;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-legend{
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px 16px;
+        margin:16px 4px 0;
+        padding-top:14px;
+        border-top:1px solid var(--bl-line);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-legend-item{
+        display:inline-flex;
+        align-items:center;
+        gap:7px;
+        font-size:11px;
+        font-weight:600;
+        color:var(--bl-muted);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-dot{
+        width:8px;
+        height:8px;
+        border-radius:2px;
+        display:inline-block;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-dot.is-ucl{ background:var(--bl-ucl); }
+    #<?php echo esc_attr($uid); ?> .bl-dot.is-uel{ background:var(--bl-uel); }
+    #<?php echo esc_attr($uid); ?> .bl-dot.is-uecl{ background:var(--bl-uecl); }
+    #<?php echo esc_attr($uid); ?> .bl-dot.is-playoff{ background:var(--bl-playoff); }
+    #<?php echo esc_attr($uid); ?> .bl-dot.is-rel{ background:var(--bl-rel); }
+    @media (max-width:640px){
+        #<?php echo esc_attr($uid); ?>{
+            padding:16px 12px 12px;
+            border-radius:14px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-title{
+            font-size:18px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-header{
+            align-items:flex-start;
+            flex-direction:column;
+            gap:6px;
+        }
+    }
+    </style>
+
+    <div class="bl-header">
+        <h3 class="bl-title"><span>Bundesliga</span> Table</h3>
+        <div class="bl-season"><?php echo esc_html($cfg['season']); ?></div>
+    </div>
+
+    <div class="bl-scroll">
+    <div class="bl-table">
+
+        <div class="bl-row bl-row-head">
+            <div class="bl-lbl-club">Club</div>
+            <div class="bl-lbl-stat">MP</div>
+            <div class="bl-lbl-stat">W</div>
+            <div class="bl-lbl-stat">D</div>
+            <div class="bl-lbl-stat">L</div>
+            <div class="bl-lbl-stat">GF</div>
+            <div class="bl-lbl-stat">GA</div>
+            <div class="bl-lbl-stat">GD</div>
+            <div class="bl-lbl-stat bl-lbl-pts">Pts</div>
+        </div>
+
+        <?php foreach ($data as $t): ?>
+        <?php $zone = bundesliga_standing_zone_class($t); ?>
+
+        <div class="bl-row bl-row-body <?php echo esc_attr($zone); ?>">
+            <div class="bl-team-cell">
+                <span class="bl-rank"><?php echo esc_html($t['standing_place'] ?? ''); ?></span>
+                <span class="bl-logo">
+                    <img src="<?php echo esc_url(bundesliga_standing_team_logo($t['team_logo'] ?? '')); ?>" alt="">
+                </span>
+                <span class="bl-name"><?php echo esc_html($t['standing_team'] ?? ''); ?></span>
+            </div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_P'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_W'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_D'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_L'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_F'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_A'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_GD'] ?? 0); ?></div>
+            <div class="bl-val-pts"><?php echo esc_html($t['standing_PTS'] ?? 0); ?></div>
+        </div>
+
+        <?php endforeach; ?>
+
+    </div>
+    </div>
+
+    <div class="bl-legend">
+        <span class="bl-legend-item"><i class="bl-dot is-ucl"></i> Champions League</span>
+        <span class="bl-legend-item"><i class="bl-dot is-uel"></i> Europa League</span>
+        <span class="bl-legend-item"><i class="bl-dot is-uecl"></i> Conference League</span>
+        <span class="bl-legend-item"><i class="bl-dot is-playoff"></i> Relegation play-off</span>
+        <span class="bl-legend-item"><i class="bl-dot is-rel"></i> Relegation</span>
+    </div>
+
+    </div>
+
+    <?php
+    $html = ob_get_clean();
+    set_transient($cache_key, $html, 30 * MINUTE_IN_SECONDS);
+
+    return $html;
+}
+
+add_shortcode('bundesliga_standings', 'bundesliga_standings_shortcode');

@@ -106,7 +106,18 @@ function bundesliga_schedule_shortcode() {
     ob_start();
     ?>
 
-    <div id="<?php echo esc_attr($unique_id); ?>" class="swiper bundesliga-swiper">
+    <div id="<?php echo esc_attr($unique_id); ?>" class="bl-schedule-root">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <div class="bl-schedule-header">
+        <h3 class="bl-schedule-title"><span>Bundesliga</span> Schedule</h3>
+        <div class="bl-schedule-season">2026/2027</div>
+    </div>
+
+    <div class="swiper bundesliga-swiper">
         <div class="swiper-wrapper">
 
         <?php foreach ($data as $v): ?>
@@ -118,7 +129,8 @@ function bundesliga_schedule_shortcode() {
                 $home_logo = bundesliga_team_logo($v->home_team_logo ?? '', $home);
                 $away_logo = bundesliga_team_logo($v->away_team_logo ?? '', $away);
 
-                if (!empty($v->event_final_result) && $v->event_final_result !== "-") {
+                $has_score = !empty($v->event_final_result) && $v->event_final_result !== "-";
+                if ($has_score) {
                     $score = $v->event_final_result;
                 } else {
                     $score = "UPCOMING MATCH";
@@ -142,16 +154,20 @@ function bundesliga_schedule_shortcode() {
                 <div class="fixture-body">
 
                     <div class="team">
-                        <img src="<?php echo esc_url($home_logo); ?>" width="55" height="55">
+                        <span class="team-logo">
+                            <img src="<?php echo esc_url($home_logo); ?>" width="40" height="40" alt="">
+                        </span>
                         <div class="team-name"><?php echo esc_html($home); ?></div>
                     </div>
 
-                    <div class="fixture-score">
+                    <div class="fixture-score <?php echo $has_score ? 'has-score' : 'is-upcoming'; ?>">
                         <?php echo esc_html($score); ?>
                     </div>
 
                     <div class="team">
-                        <img src="<?php echo esc_url($away_logo); ?>" width="55" height="55">
+                        <span class="team-logo">
+                            <img src="<?php echo esc_url($away_logo); ?>" width="40" height="40" alt="">
+                        </span>
                         <div class="team-name"><?php echo esc_html($away); ?></div>
                     </div>
 
@@ -178,28 +194,92 @@ function bundesliga_schedule_shortcode() {
     <style>
 
     #<?php echo esc_attr($unique_id); ?> {
-        padding: 20px 14px;
+        --bl-ink:#121417;
+        --bl-muted:#6b7280;
+        --bl-line:#e8eaed;
+        --bl-soft:#f4f6f8;
+        --bl-panel:#ffffff;
+        --bl-accent:#d0021b;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        font-family: "Manrope", Helvetica, Arial, sans-serif;
+        color: var(--bl-ink);
+        background: linear-gradient(180deg, #f7f8fa 0%, #ffffff 48%);
+        border: 1px solid var(--bl-line);
+        border-radius: 16px;
+        padding: 20px 14px 16px;
+        overflow: hidden;
+        line-height: 1.25;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> * {
+        box-sizing: border-box;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 6px 16px;
+        padding: 0 4px 14px;
+        border-bottom: 1px solid var(--bl-line);
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--bl-ink);
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title span {
+        color: var(--bl-accent);
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-season {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--bl-muted);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bundesliga-swiper {
+        padding: 4px 28px 8px;
         position: relative;
     }
 
     #<?php echo esc_attr($unique_id); ?> .bundesliga-card {
-        background: #fff;
-        border-radius: 10px;
-        padding: 12px;
+        background: var(--bl-panel);
+        border: 1px solid var(--bl-line);
+        border-radius: 14px;
+        padding: 16px 14px;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(18, 20, 23, 0.06);
         width: 360px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        min-height: 210px;
+        min-height: 220px;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bundesliga-card:hover {
+        border-color: rgba(208, 2, 27, 0.28);
+        box-shadow: 0 6px 16px rgba(18, 20, 23, 0.08);
     }
 
     #<?php echo esc_attr($unique_id); ?> .fixture-date {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
-        margin-bottom: 4px;
-        color: #444;
+        margin-bottom: 6px;
+        color: var(--bl-muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -210,24 +290,39 @@ function bundesliga_schedule_shortcode() {
         justify-content: space-between;
         align-items: center;
         margin: 10px 0;
+        gap: 6px;
     }
 
     #<?php echo esc_attr($unique_id); ?> .team {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 5px;
+        gap: 8px;
         width: 90px;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .team img {
+    #<?php echo esc_attr($unique_id); ?> .team-logo {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        background: var(--bl-soft);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .team-logo img {
+        width: 36px;
+        height: 36px;
         object-fit: contain;
+        display: block;
     }
 
     #<?php echo esc_attr($unique_id); ?> .team-name {
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
-        color: #333;
+        color: var(--bl-ink);
         text-align: center;
         line-height: 1.2;
         max-width: 90px;
@@ -237,21 +332,46 @@ function bundesliga_schedule_shortcode() {
     }
 
     #<?php echo esc_attr($unique_id); ?> .fixture-score {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 800;
-        color: #111;
+        color: var(--bl-ink);
         min-width: 120px;
         text-align: center;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
         line-height: 1.2;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .fixture-teams,
+    #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming {
+        font-size: 13px;
+        color: var(--bl-accent);
+        background: rgba(208, 2, 27, 0.08);
+        border-radius: 8px;
+        padding: 8px 6px;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score {
+        color: var(--bl-accent);
+        font-size: 22px;
+        letter-spacing: 0.02em;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-teams {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--bl-accent);
+        margin-top: 4px;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     #<?php echo esc_attr($unique_id); ?> .fixture-venue {
         font-size: 11px;
-        color: #555;
-        margin-top: 2px;
+        font-weight: 500;
+        color: var(--bl-muted);
+        margin-top: 4px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -259,22 +379,39 @@ function bundesliga_schedule_shortcode() {
 
     #<?php echo esc_attr($unique_id); ?> .swiper-button-next,
     #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
-        color: #000;
+        color: var(--bl-accent);
         transform: scale(0.55);
         font-weight: bold;
     }
 
     #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
-        left: 8px;
+        left: 0;
     }
 
     #<?php echo esc_attr($unique_id); ?> .swiper-button-next {
-        right: 8px;
+        right: 0;
     }
 
     #<?php echo esc_attr($unique_id); ?> .swiper-button-next:after,
     #<?php echo esc_attr($unique_id); ?> .swiper-button-prev:after {
         font-size: 24px;
+    }
+
+    @media (max-width: 640px) {
+        #<?php echo esc_attr($unique_id); ?> {
+            padding: 16px 10px 12px;
+            border-radius: 14px;
+        }
+
+        #<?php echo esc_attr($unique_id); ?> .bl-schedule-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        #<?php echo esc_attr($unique_id); ?> .bl-schedule-title {
+            font-size: 18px;
+        }
     }
 
     </style>
@@ -284,7 +421,7 @@ function bundesliga_schedule_shortcode() {
 
         if (typeof Swiper === "undefined") return;
 
-        new Swiper("#<?php echo esc_js($unique_id); ?>", {
+        new Swiper("#<?php echo esc_js($unique_id); ?> .bundesliga-swiper", {
             slidesPerView: 3,
             spaceBetween: 16,
             initialSlide: <?php echo (int) $initial_slide; ?>,
@@ -301,6 +438,8 @@ function bundesliga_schedule_shortcode() {
 
     });
     </script>
+
+    </div>
 
     <?php
     return ob_get_clean();
