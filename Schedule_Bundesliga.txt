@@ -286,13 +286,14 @@ function bundesliga_schedule_shortcode() {
         overscroll-behavior-x:contain;
         touch-action:pan-x pinch-zoom;
         scrollbar-width:none;
-        padding:4px 36px 8px;
+        padding:4px 0 8px;
     }
     #<?php echo esc_attr($unique_id); ?> .bl-track::-webkit-scrollbar{ display:none; }
 
     #<?php echo esc_attr($unique_id); ?> .bl-card{
         flex:0 0 100%;
         width:100%;
+        min-width:100%;
         max-width:100%;
         scroll-snap-align:start;
         scroll-snap-stop:always;
@@ -412,24 +413,27 @@ function bundesliga_schedule_shortcode() {
         top:50%;
         transform:translateY(-50%);
         z-index:3;
-        width:36px;
-        height:36px;
-        border:1px solid var(--bl-line);
-        border-radius:50%;
-        background:#fff;
+        width:auto;
+        height:auto;
+        min-width:28px;
+        min-height:28px;
+        border:none;
+        border-radius:0;
+        background:transparent;
         color:var(--bl-accent);
-        font-size:24px;
+        font-size:34px;
+        font-weight:300;
         line-height:1;
         display:flex;
         align-items:center;
         justify-content:center;
         cursor:pointer;
-        padding:0;
-        box-shadow:0 2px 8px rgba(18,20,23,0.08);
+        padding:4px;
+        box-shadow:none;
         -webkit-tap-highlight-color:transparent;
     }
-    #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
-    #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:2px; }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:2px; }
     #<?php echo esc_attr($unique_id); ?> .bl-nav:disabled{
         opacity:0.28;
         cursor:default;
@@ -439,15 +443,22 @@ function bundesliga_schedule_shortcode() {
     @media (min-width:768px){
         #<?php echo esc_attr($unique_id); ?>{ --bl-gap:14px; }
         #<?php echo esc_attr($unique_id); ?> .bl-card{
-            flex-basis:calc((100% - var(--bl-gap)) / 2);
+            flex:0 0 calc((100% - var(--bl-gap)) / 2);
+            width:calc((100% - var(--bl-gap)) / 2);
+            min-width:calc((100% - var(--bl-gap)) / 2);
+            max-width:calc((100% - var(--bl-gap)) / 2);
         }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 28px 8px; }
     }
     @media (min-width:1024px){
         #<?php echo esc_attr($unique_id); ?>{ --bl-gap:16px; }
         #<?php echo esc_attr($unique_id); ?> .bl-card{
-            flex-basis:calc((100% - (var(--bl-gap) * 2)) / 3);
+            flex:0 0 calc((100% - (var(--bl-gap) * 2)) / 3);
+            width:calc((100% - (var(--bl-gap) * 2)) / 3);
+            min-width:calc((100% - (var(--bl-gap) * 2)) / 3);
+            max-width:calc((100% - (var(--bl-gap) * 2)) / 3);
         }
-        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 40px 8px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 32px 8px; }
     }
     @media (max-width:767px){
         #<?php echo esc_attr($unique_id); ?>{
@@ -461,8 +472,13 @@ function bundesliga_schedule_shortcode() {
             margin:0 2px 12px;
         }
         #<?php echo esc_attr($unique_id); ?> .bl-schedule-title{ font-size:17px; }
-        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:2px 30px 6px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-carousel{ padding:0 22px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:2px 0 6px; }
         #<?php echo esc_attr($unique_id); ?> .bl-card{
+            flex:0 0 100%;
+            width:100%;
+            min-width:100%;
+            max-width:100%;
             min-height:200px;
             padding:14px 12px;
         }
@@ -472,7 +488,13 @@ function bundesliga_schedule_shortcode() {
         #<?php echo esc_attr($unique_id); ?> .team-name{ font-size:11px; }
         #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming{ font-size:11px; }
         #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score{ font-size:20px; }
-        #<?php echo esc_attr($unique_id); ?> .bl-nav{ width:32px; height:32px; font-size:22px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav{
+            font-size:30px;
+            left:auto;
+            right:auto;
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
     }
     </style>
 
