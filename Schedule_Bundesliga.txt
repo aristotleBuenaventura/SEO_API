@@ -1,0 +1,309 @@
+function bundesliga_api($leagueId, $from, $to) {
+
+    $APIkey   = "75d4149d2873e1afd455cebbd0ec25255cea79295120d9726c22fdca3ed306be";
+    $timezone = "Asia/Manila";
+
+    $url = "https://apiv2.allsportsapi.com/football/?met=Fixtures"
+        . "&APIkey={$APIkey}"
+        . "&leagueId={$leagueId}"
+        . "&timezone={$timezone}"
+        . "&from={$from}"
+        . "&to={$to}";
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING => "gzip,deflate"
+    ]);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    curl_close($ch);
+
+    if ($http_code !== 200 || !$response) {
+        return [];
+    }
+
+    $json = json_decode($response);
+
+    return $json->result ?? [];
+}
+
+function bundesliga_team_logo($api_logo, $team_name = '') {
+
+    if (!empty($api_logo)) {
+        return $api_logo;
+    }
+
+    return '/wp-content/uploads/2025/09/tba.webp';
+}
+
+function bundesliga_schedule_shortcode() {
+
+    $unique_id = uniqid("bundesliga_");
+
+    $leagueId = 175;
+    $from     = "2026-08-29";
+    $to       = "2027-05-31";
+
+    $cache_key = "bundesliga_2026_" . md5($leagueId . $from . $to);
+    $data = get_transient($cache_key);
+
+    if ($data === false) {
+        $data = bundesliga_api($leagueId, $from, $to);
+        set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
+    }
+
+    if (empty($data)) {
+        return "<p>Upcoming Bundesliga matches will be available soon.</p>";
+    }
+
+    usort($data, function($a, $b) {
+        return strtotime($a->event_date) - strtotime($b->event_date);
+    });
+
+    // Start on yesterday so finished matches (with scores) show first;
+    // upcoming matches appear when navigating next. Moves forward each day.
+    $tz = new DateTimeZone('Asia/Manila');
+    $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
+    $today     = (new DateTime('now', $tz))->format('Y-m-d');
+
+    $initial_slide = 0;
+    $yesterday_index = null;
+    $last_past_day_start = null;
+    $current_past_day = null;
+
+    foreach ($data as $i => $match) {
+        $match_date = $match->event_date ?? '';
+        if ($match_date === '') {
+            continue;
+        }
+
+        if ($match_date === $yesterday && $yesterday_index === null) {
+            $yesterday_index = $i;
+        }
+
+        if ($match_date < $today) {
+            if ($match_date !== $current_past_day) {
+                $current_past_day = $match_date;
+                $last_past_day_start = $i;
+            }
+        }
+    }
+
+    if ($yesterday_index !== null) {
+        $initial_slide = $yesterday_index;
+    } elseif ($last_past_day_start !== null) {
+        $initial_slide = $last_past_day_start;
+    }
+
+    ob_start();
+    ?>
+
+    <div id="<?php echo esc_attr($unique_id); ?>" class="swiper bundesliga-swiper">
+        <div class="swiper-wrapper">
+
+        <?php foreach ($data as $v): ?>
+
+            <?php
+                $home = $v->event_home_team ?? "TBA";
+                $away = $v->event_away_team ?? "TBA";
+
+                $home_logo = bundesliga_team_logo($v->home_team_logo ?? '', $home);
+                $away_logo = bundesliga_team_logo($v->away_team_logo ?? '', $away);
+
+                if (!empty($v->event_final_result) && $v->event_final_result !== "-") {
+                    $score = $v->event_final_result;
+                } else {
+                    $score = "UPCOMING MATCH";
+                }
+
+                $date  = !empty($v->event_date)
+                    ? date("M d, Y", strtotime($v->event_date))
+                    : "";
+
+                $venue = !empty($v->event_stadium)
+                    ? $v->event_stadium
+                    : "TBA";
+            ?>
+
+            <div class="swiper-slide bundesliga-card">
+
+                <div class="fixture-date">
+                    <?php echo esc_html($date); ?>
+                </div>
+
+                <div class="fixture-body">
+
+                    <div class="team">
+                        <img src="<?php echo esc_url($home_logo); ?>" width="55" height="55">
+                        <div class="team-name"><?php echo esc_html($home); ?></div>
+                    </div>
+
+                    <div class="fixture-score">
+                        <?php echo esc_html($score); ?>
+                    </div>
+
+                    <div class="team">
+                        <img src="<?php echo esc_url($away_logo); ?>" width="55" height="55">
+                        <div class="team-name"><?php echo esc_html($away); ?></div>
+                    </div>
+
+                </div>
+
+                <div class="fixture-teams">
+                    Bundesliga 2026/27
+                </div>
+
+                <div class="fixture-venue">
+                    <?php echo esc_html($venue); ?>
+                </div>
+
+            </div>
+
+        <?php endforeach; ?>
+
+        </div>
+
+        <div class="swiper-button-next"></div>
+        <div class="swiper-button-prev"></div>
+    </div>
+
+    <style>
+
+    #<?php echo esc_attr($unique_id); ?> {
+        padding: 20px 14px;
+        position: relative;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bundesliga-card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        width: 360px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 210px;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-date {
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: #444;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-body {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 10px 0;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .team {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        width: 90px;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .team img {
+        object-fit: contain;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .team-name {
+        font-size: 11px;
+        font-weight: 600;
+        color: #333;
+        text-align: center;
+        line-height: 1.2;
+        max-width: 90px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-score {
+        font-size: 20px;
+        font-weight: 800;
+        color: #111;
+        min-width: 120px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        line-height: 1.2;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-teams,
+    #<?php echo esc_attr($unique_id); ?> .fixture-venue {
+        font-size: 11px;
+        color: #555;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-next,
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
+        color: #000;
+        transform: scale(0.55);
+        font-weight: bold;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
+        left: 8px;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-next {
+        right: 8px;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-next:after,
+    #<?php echo esc_attr($unique_id); ?> .swiper-button-prev:after {
+        font-size: 24px;
+    }
+
+    </style>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+
+        if (typeof Swiper === "undefined") return;
+
+        new Swiper("#<?php echo esc_js($unique_id); ?>", {
+            slidesPerView: 3,
+            spaceBetween: 16,
+            initialSlide: <?php echo (int) $initial_slide; ?>,
+            navigation: {
+                nextEl: "#<?php echo esc_js($unique_id); ?> .swiper-button-next",
+                prevEl: "#<?php echo esc_js($unique_id); ?> .swiper-button-prev"
+            },
+            breakpoints: {
+                0: { slidesPerView: 1 },
+                768: { slidesPerView: 2 },
+                1024: { slidesPerView: 3 }
+            }
+        });
+
+    });
+    </script>
+
+    <?php
+    return ob_get_clean();
+}
+
+add_shortcode("bundesliga_schedule", "bundesliga_schedule_shortcode");
