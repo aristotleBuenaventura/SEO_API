@@ -277,7 +277,7 @@ function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_2026_v4_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $cache_key = 'bundesliga_standings_2026_v5_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -313,16 +313,17 @@ function bundesliga_standings_shortcode() {
         }
     }
 
-    // Rank + gaps + logo + longest club name (ch), used on mobile.
-    $club_col_mobile = 'calc(18px + 8px + 28px + 8px + ' . (int) $max_name_len . 'ch)';
-    $club_col_small  = 'calc(16px + 6px + 24px + 6px + ' . (int) $max_name_len . 'ch)';
+    // Rank + gaps + logo + longest club name (ch).
+    $club_col_desktop = 'calc(22px + 12px + 32px + 12px + ' . (int) $max_name_len . 'ch)';
+    $club_col_mobile  = 'calc(18px + 8px + 28px + 8px + ' . (int) $max_name_len . 'ch)';
+    $club_col_small   = 'calc(16px + 6px + 24px + 6px + ' . (int) $max_name_len . 'ch)';
 
     ob_start();
     ?>
 
     <div id="<?php echo esc_attr($uid); ?>"
          class="bl-standings-root"
-         style="--bl-club-mobile: <?php echo esc_attr($club_col_mobile); ?>; --bl-club-small: <?php echo esc_attr($club_col_small); ?>;">
+         style="--bl-club-desktop: <?php echo esc_attr($club_col_desktop); ?>; --bl-club-mobile: <?php echo esc_attr($club_col_mobile); ?>; --bl-club-small: <?php echo esc_attr($club_col_small); ?>;">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -394,7 +395,7 @@ function bundesliga_standings_shortcode() {
     }
     #<?php echo esc_attr($uid); ?> .bl-row{
         display:grid;
-        grid-template-columns:minmax(180px,1.6fr) repeat(7,minmax(36px,1fr)) minmax(44px,0.8fr);
+        grid-template-columns:var(--bl-club-desktop) repeat(7,minmax(36px,1fr)) minmax(44px,0.8fr);
         align-items:center;
         column-gap:4px;
         margin:0;
@@ -494,9 +495,9 @@ function bundesliga_standings_shortcode() {
         font-size:14px;
         font-weight:600;
         color:var(--bl-ink);
-        overflow:hidden;
-        text-overflow:ellipsis;
         white-space:nowrap;
+        overflow:visible;
+        text-overflow:clip;
     }
     #<?php echo esc_attr($uid); ?> .bl-val-stat,
     #<?php echo esc_attr($uid); ?> .bl-val-pts{
@@ -543,7 +544,7 @@ function bundesliga_standings_shortcode() {
 
     @media (max-width:1024px){
         #<?php echo esc_attr($uid); ?> .bl-row{
-            grid-template-columns:minmax(160px,1.5fr) repeat(7,minmax(32px,1fr)) minmax(40px,0.8fr);
+            grid-template-columns:var(--bl-club-desktop) repeat(7,minmax(32px,1fr)) minmax(40px,0.8fr);
             padding:10px 8px;
         }
         #<?php echo esc_attr($uid); ?> .bl-lbl-club{
