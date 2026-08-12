@@ -230,54 +230,11 @@ function bundesliga_standings_have_played($data) {
 }
 
 
-function bundesliga_standing_zone_class($team) {
-
-    $type  = strtolower((string) ($team['standing_place_type'] ?? ''));
-    $place = (int) ($team['standing_place'] ?? 0);
-
-    if ($type !== '') {
-        if (strpos($type, 'champions league') !== false) {
-            return 'is-ucl';
-        }
-        if (strpos($type, 'europa league') !== false) {
-            return 'is-uel';
-        }
-        if (strpos($type, 'conference') !== false) {
-            return 'is-uecl';
-        }
-        if (strpos($type, 'relegation') !== false && strpos($type, 'play') !== false) {
-            return 'is-playoff';
-        }
-        if (strpos($type, 'relegation') !== false) {
-            return 'is-rel';
-        }
-    }
-
-    if ($place >= 1 && $place <= 4) {
-        return 'is-ucl';
-    }
-    if ($place === 5) {
-        return 'is-uel';
-    }
-    if ($place === 6) {
-        return 'is-uecl';
-    }
-    if ($place === 16) {
-        return 'is-playoff';
-    }
-    if ($place >= 17) {
-        return 'is-rel';
-    }
-
-    return '';
-}
-
-
 function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_2026_v5_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $cache_key = 'bundesliga_standings_2026_v6_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -337,11 +294,6 @@ function bundesliga_standings_shortcode() {
         --bl-soft:#f4f6f8;
         --bl-panel:#ffffff;
         --bl-accent:#111111;
-        --bl-ucl:#1d6b4f;
-        --bl-uel:#1a56a8;
-        --bl-uecl:#0f7a8a;
-        --bl-playoff:#b45309;
-        --bl-rel:#b91c1c;
         box-sizing:border-box;
         width:100%;
         max-width:100%;
@@ -421,21 +373,6 @@ function bundesliga_standings_shortcode() {
     #<?php echo esc_attr($uid); ?> .bl-row-body:hover{
         background:var(--bl-soft);
     }
-    #<?php echo esc_attr($uid); ?> .bl-row-body::before{
-        content:"";
-        position:absolute;
-        left:0;
-        top:18%;
-        bottom:18%;
-        width:3px;
-        border-radius:3px;
-        background:transparent;
-    }
-    #<?php echo esc_attr($uid); ?> .bl-row-body.is-ucl::before{ background:var(--bl-ucl); }
-    #<?php echo esc_attr($uid); ?> .bl-row-body.is-uel::before{ background:var(--bl-uel); }
-    #<?php echo esc_attr($uid); ?> .bl-row-body.is-uecl::before{ background:var(--bl-uecl); }
-    #<?php echo esc_attr($uid); ?> .bl-row-body.is-playoff::before{ background:var(--bl-playoff); }
-    #<?php echo esc_attr($uid); ?> .bl-row-body.is-rel::before{ background:var(--bl-rel); }
     #<?php echo esc_attr($uid); ?> .bl-lbl-club,
     #<?php echo esc_attr($uid); ?> .bl-lbl-stat{
         text-align:center;
@@ -514,33 +451,6 @@ function bundesliga_standings_shortcode() {
         border-radius:8px;
         padding:6px 0;
     }
-    #<?php echo esc_attr($uid); ?> .bl-legend{
-        display:flex;
-        flex-wrap:wrap;
-        gap:10px 16px;
-        margin:16px 4px 0;
-        padding-top:14px;
-        border-top:1px solid var(--bl-line);
-    }
-    #<?php echo esc_attr($uid); ?> .bl-legend-item{
-        display:inline-flex;
-        align-items:center;
-        gap:7px;
-        font-size:11px;
-        font-weight:600;
-        color:var(--bl-muted);
-    }
-    #<?php echo esc_attr($uid); ?> .bl-dot{
-        width:8px;
-        height:8px;
-        border-radius:2px;
-        display:inline-block;
-    }
-    #<?php echo esc_attr($uid); ?> .bl-dot.is-ucl{ background:var(--bl-ucl); }
-    #<?php echo esc_attr($uid); ?> .bl-dot.is-uel{ background:var(--bl-uel); }
-    #<?php echo esc_attr($uid); ?> .bl-dot.is-uecl{ background:var(--bl-uecl); }
-    #<?php echo esc_attr($uid); ?> .bl-dot.is-playoff{ background:var(--bl-playoff); }
-    #<?php echo esc_attr($uid); ?> .bl-dot.is-rel{ background:var(--bl-rel); }
 
     @media (max-width:1024px){
         #<?php echo esc_attr($uid); ?> .bl-row{
@@ -636,13 +546,6 @@ function bundesliga_standings_shortcode() {
         #<?php echo esc_attr($uid); ?> .bl-row-body:hover .bl-team-cell{
             background:var(--bl-soft);
         }
-        #<?php echo esc_attr($uid); ?> .bl-legend{
-            gap:8px 12px;
-            margin-top:12px;
-        }
-        #<?php echo esc_attr($uid); ?> .bl-legend-item{
-            font-size:10px;
-        }
     }
 
     @media (max-width:480px){
@@ -708,9 +611,8 @@ function bundesliga_standings_shortcode() {
         </div>
 
         <?php foreach ($data as $t): ?>
-        <?php $zone = bundesliga_standing_zone_class($t); ?>
 
-        <div class="bl-row bl-row-body <?php echo esc_attr($zone); ?>">
+        <div class="bl-row bl-row-body">
             <div class="bl-team-cell">
                 <span class="bl-rank"><?php echo esc_html($t['standing_place'] ?? ''); ?></span>
                 <span class="bl-logo">
@@ -731,14 +633,6 @@ function bundesliga_standings_shortcode() {
         <?php endforeach; ?>
 
     </div>
-    </div>
-
-    <div class="bl-legend">
-        <span class="bl-legend-item"><i class="bl-dot is-ucl"></i> Champions League</span>
-        <span class="bl-legend-item"><i class="bl-dot is-uel"></i> Europa League</span>
-        <span class="bl-legend-item"><i class="bl-dot is-uecl"></i> Conference League</span>
-        <span class="bl-legend-item"><i class="bl-dot is-playoff"></i> Relegation play-off</span>
-        <span class="bl-legend-item"><i class="bl-dot is-rel"></i> Relegation</span>
     </div>
 
     </div>
