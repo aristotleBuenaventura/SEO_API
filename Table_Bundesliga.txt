@@ -277,7 +277,7 @@ function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_2026_v1_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $cache_key = 'bundesliga_standings_2026_v3_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -319,7 +319,7 @@ function bundesliga_standings_shortcode() {
         --bl-line:#e8eaed;
         --bl-soft:#f4f6f8;
         --bl-panel:#ffffff;
-        --bl-accent:#d0021b;
+        --bl-accent:#111111;
         --bl-ucl:#1d6b4f;
         --bl-uel:#1a56a8;
         --bl-uecl:#0f7a8a;
@@ -493,7 +493,7 @@ function bundesliga_standings_shortcode() {
     #<?php echo esc_attr($uid); ?> .bl-val-pts{
         font-weight:800;
         color:var(--bl-accent);
-        background:rgba(208,2,27,0.08);
+        background:rgba(17,17,17,0.08);
         border-radius:8px;
         padding:6px 0;
     }
@@ -524,9 +524,20 @@ function bundesliga_standings_shortcode() {
     #<?php echo esc_attr($uid); ?> .bl-dot.is-uecl{ background:var(--bl-uecl); }
     #<?php echo esc_attr($uid); ?> .bl-dot.is-playoff{ background:var(--bl-playoff); }
     #<?php echo esc_attr($uid); ?> .bl-dot.is-rel{ background:var(--bl-rel); }
-    @media (max-width:640px){
+
+    @media (max-width:1024px){
+        #<?php echo esc_attr($uid); ?> .bl-row{
+            grid-template-columns:minmax(160px,1.5fr) repeat(7,minmax(32px,1fr)) minmax(40px,0.8fr);
+            padding:10px 8px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club{
+            padding-left:40px;
+        }
+    }
+
+    @media (max-width:768px){
         #<?php echo esc_attr($uid); ?>{
-            padding:16px 12px 12px;
+            padding:16px 10px 12px;
             border-radius:14px;
         }
         #<?php echo esc_attr($uid); ?> .bl-title{
@@ -536,6 +547,114 @@ function bundesliga_standings_shortcode() {
             align-items:flex-start;
             flex-direction:column;
             gap:6px;
+            margin:0 0 14px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-scroll{
+            margin:0 -2px;
+            padding-bottom:4px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-table{
+            min-width:560px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row{
+            grid-template-columns:minmax(148px,1.5fr) repeat(7,30px) 38px;
+            column-gap:2px;
+            padding:10px 6px;
+            border-radius:8px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club,
+        #<?php echo esc_attr($uid); ?> .bl-lbl-stat{
+            font-size:10px;
+            letter-spacing:0.04em;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club{
+            padding-left:36px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-team-cell{
+            gap:8px;
+            padding-left:4px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-rank{
+            flex:0 0 18px;
+            width:18px;
+            font-size:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo{
+            flex:0 0 28px;
+            width:28px;
+            height:28px;
+            border-radius:8px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo img{
+            width:18px;
+            height:18px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-name{
+            font-size:13px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-val-stat,
+        #<?php echo esc_attr($uid); ?> .bl-val-pts{
+            font-size:13px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-val-pts{
+            padding:5px 0;
+            border-radius:6px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club,
+        #<?php echo esc_attr($uid); ?> .bl-team-cell{
+            position:sticky;
+            left:0;
+            z-index:3;
+            background:#fff;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row-head .bl-lbl-club{
+            background:rgba(255,255,255,0.96);
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row-body:hover .bl-team-cell{
+            background:var(--bl-soft);
+        }
+        #<?php echo esc_attr($uid); ?> .bl-legend{
+            gap:8px 12px;
+            margin-top:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-legend-item{
+            font-size:10px;
+        }
+    }
+
+    @media (max-width:480px){
+        #<?php echo esc_attr($uid); ?>{
+            padding:14px 8px 10px;
+            border-radius:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-title{
+            font-size:16px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-season{
+            font-size:11px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-table{
+            min-width:520px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row{
+            grid-template-columns:minmax(132px,1.4fr) repeat(7,28px) 36px;
+            padding:9px 4px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-name{
+            font-size:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-val-stat,
+        #<?php echo esc_attr($uid); ?> .bl-val-pts{
+            font-size:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo{
+            flex:0 0 24px;
+            width:24px;
+            height:24px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo img{
+            width:16px;
+            height:16px;
         }
     }
     </style>

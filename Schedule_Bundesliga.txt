@@ -74,13 +74,12 @@ function bundesliga_schedule_shortcode() {
     $from     = "2026-08-29";
     $to       = "2027-05-31";
 
-    $cache_key = "bundesliga_sched_2026_" . md5($leagueId . $from . $to);
+    $cache_key = "bundesliga_sched_2026_v2_" . md5($leagueId . $from . $to);
     $data = get_transient($cache_key);
 
     if ($data === false || !is_array($data) || empty($data)) {
         $data = bundesliga_api($leagueId, $from, $to);
 
-        // Never cache empty failures — allows next load to retry.
         if (!empty($data)) {
             set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
         } else {
@@ -98,8 +97,7 @@ function bundesliga_schedule_shortcode() {
 
     // Start on yesterday so finished matches (with scores) show first;
     // upcoming matches appear when navigating next. Moves forward each day.
-    // Exception: on/after the last match day — show last games at the end
-    // of the carousel so Next is already disabled (nothing follows).
+    // Exception: on/after the last match day — show last games at the end.
     $tz = new DateTimeZone('Asia/Manila');
     $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
     $today     = (new DateTime('now', $tz))->format('Y-m-d');
@@ -134,7 +132,6 @@ function bundesliga_schedule_shortcode() {
     }
 
     if ($last_match_date !== '' && $today >= $last_match_date) {
-        // Last games: show the last 3 cards; Next stays disabled (no white space).
         $at_last_games = true;
         $initial_slide = max(0, count($data) - 3);
     } elseif ($yesterday_index !== null) {
@@ -143,14 +140,18 @@ function bundesliga_schedule_shortcode() {
         $initial_slide = $last_past_day_start;
     }
 
-    // Keep initial slide in range so Swiper never lands on an empty view.
     $max_start = max(0, count($data) - 1);
     $initial_slide = min(max(0, (int) $initial_slide), $max_start);
+    $total_cards = count($data);
 
     ob_start();
     ?>
 
-    <div id="<?php echo esc_attr($unique_id); ?>" class="bl-schedule-root">
+    <div id="<?php echo esc_attr($unique_id); ?>"
+         class="bl-schedule-root"
+         data-initial="<?php echo (int) $initial_slide; ?>"
+         data-at-last="<?php echo $at_last_games ? '1' : '0'; ?>"
+         data-total="<?php echo (int) $total_cards; ?>">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -161,11 +162,11 @@ function bundesliga_schedule_shortcode() {
         <div class="bl-schedule-season">2026/2027</div>
     </div>
 
-    <div class="swiper bundesliga-swiper">
-        <div class="swiper-wrapper">
+    <div class="bl-carousel">
+        <button type="button" class="bl-nav bl-nav-prev" aria-label="Previous matches">&#8249;</button>
 
+        <div class="bl-track" tabindex="0">
         <?php foreach ($data as $v): ?>
-
             <?php
                 $home = bundesliga_match_field($v, 'event_home_team', 'TBA');
                 $away = bundesliga_match_field($v, 'event_away_team', 'TBA');
@@ -175,16 +176,10 @@ function bundesliga_schedule_shortcode() {
 
                 $final_result = bundesliga_match_field($v, 'event_final_result');
                 $has_score = !empty($final_result) && $final_result !== '-';
-                if ($has_score) {
-                    $score = $final_result;
-                } else {
-                    $score = "UPCOMING MATCH";
-                }
+                $score = $has_score ? $final_result : 'UPCOMING MATCH';
 
                 $event_date = bundesliga_match_field($v, 'event_date');
-                $date  = !empty($event_date)
-                    ? date("M d, Y", strtotime($event_date))
-                    : "";
+                $date = !empty($event_date) ? date('M d, Y', strtotime($event_date)) : '';
 
                 $venue = bundesliga_match_field($v, 'event_stadium', 'TBA');
                 if ($venue === '') {
@@ -192,17 +187,13 @@ function bundesliga_schedule_shortcode() {
                 }
             ?>
 
-            <div class="swiper-slide bundesliga-card">
-
-                <div class="fixture-date">
-                    <?php echo esc_html($date); ?>
-                </div>
+            <article class="bl-card">
+                <div class="fixture-date"><?php echo esc_html($date); ?></div>
 
                 <div class="fixture-body">
-
                     <div class="team">
                         <span class="team-logo">
-                            <img src="<?php echo esc_url($home_logo); ?>" width="40" height="40" alt="">
+                            <img src="<?php echo esc_url($home_logo); ?>" width="40" height="40" alt="" draggable="false">
                         </span>
                         <div class="team-name"><?php echo esc_html($home); ?></div>
                     </div>
@@ -213,334 +204,407 @@ function bundesliga_schedule_shortcode() {
 
                     <div class="team">
                         <span class="team-logo">
-                            <img src="<?php echo esc_url($away_logo); ?>" width="40" height="40" alt="">
+                            <img src="<?php echo esc_url($away_logo); ?>" width="40" height="40" alt="" draggable="false">
                         </span>
                         <div class="team-name"><?php echo esc_html($away); ?></div>
                     </div>
-
                 </div>
 
-                <div class="fixture-teams">
-                    Bundesliga 2026/27
-                </div>
-
-                <div class="fixture-venue">
-                    <?php echo esc_html($venue); ?>
-                </div>
-
-            </div>
+                <div class="fixture-teams">Bundesliga 2026/27</div>
+                <div class="fixture-venue"><?php echo esc_html($venue); ?></div>
+            </article>
 
         <?php endforeach; ?>
-
         </div>
 
-        <div class="swiper-button-next"></div>
-        <div class="swiper-button-prev"></div>
+        <button type="button" class="bl-nav bl-nav-next" aria-label="Next matches">&#8250;</button>
     </div>
 
     <style>
-
     #<?php echo esc_attr($unique_id); ?> {
         --bl-ink:#121417;
         --bl-muted:#6b7280;
         --bl-line:#e8eaed;
         --bl-soft:#f4f6f8;
         --bl-panel:#ffffff;
-        --bl-accent:#d0021b;
-        box-sizing: border-box;
-        width: 100%;
-        max-width: 100%;
-        font-family: "Manrope", Helvetica, Arial, sans-serif;
-        color: var(--bl-ink);
-        background: linear-gradient(180deg, #f7f8fa 0%, #ffffff 48%);
-        border: 1px solid var(--bl-line);
-        border-radius: 16px;
-        padding: 20px 14px 16px;
-        overflow: hidden;
-        line-height: 1.25;
+        --bl-accent:#111111;
+        --bl-gap:12px;
+        box-sizing:border-box;
+        width:100%;
+        max-width:100%;
+        font-family:"Manrope",Helvetica,Arial,sans-serif;
+        color:var(--bl-ink);
+        background:linear-gradient(180deg,#f7f8fa 0%,#ffffff 48%);
+        border:1px solid var(--bl-line);
+        border-radius:16px;
+        padding:20px 14px 16px;
+        overflow:hidden;
+        line-height:1.25;
+        overscroll-behavior-x:contain;
+    }
+    #<?php echo esc_attr($unique_id); ?> *{ box-sizing:border-box; }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-header{
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap:12px;
+        margin:0 6px 16px;
+        padding:0 4px 14px;
+        border-bottom:1px solid var(--bl-line);
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title{
+        margin:0;
+        font-size:20px;
+        font-weight:800;
+        letter-spacing:-0.02em;
+        color:var(--bl-ink);
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title span{ color:var(--bl-accent); }
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-season{
+        font-size:12px;
+        font-weight:600;
+        color:var(--bl-muted);
+        letter-spacing:0.04em;
+        text-transform:uppercase;
+        white-space:nowrap;
     }
 
-    #<?php echo esc_attr($unique_id); ?> * {
-        box-sizing: border-box;
+    #<?php echo esc_attr($unique_id); ?> .bl-carousel{
+        position:relative;
+        display:block;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .bl-schedule-header {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 12px;
-        margin: 0 6px 16px;
-        padding: 0 4px 14px;
-        border-bottom: 1px solid var(--bl-line);
+    #<?php echo esc_attr($unique_id); ?> .bl-track{
+        display:flex;
+        gap:var(--bl-gap);
+        overflow-x:auto;
+        overflow-y:hidden;
+        scroll-snap-type:x mandatory;
+        scroll-behavior:smooth;
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior-x:contain;
+        touch-action:pan-x pinch-zoom;
+        scrollbar-width:none;
+        padding:4px 36px 8px;
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-track::-webkit-scrollbar{ display:none; }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-card{
+        flex:0 0 100%;
+        width:100%;
+        max-width:100%;
+        scroll-snap-align:start;
+        scroll-snap-stop:always;
+        background:var(--bl-panel);
+        border:1px solid var(--bl-line);
+        border-radius:14px;
+        padding:16px 14px;
+        text-align:center;
+        box-shadow:0 2px 8px rgba(18,20,23,0.06);
+        display:flex;
+        flex-direction:column;
+        justify-content:space-between;
+        min-height:220px;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title {
-        margin: 0;
-        font-size: 20px;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-        color: var(--bl-ink);
+    #<?php echo esc_attr($unique_id); ?> .fixture-date{
+        font-size:11px;
+        font-weight:700;
+        margin-bottom:6px;
+        color:var(--bl-muted);
+        letter-spacing:0.06em;
+        text-transform:uppercase;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-body{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin:10px 0;
+        gap:6px;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:8px;
+        width:90px;
+        min-width:0;
+        flex:0 1 30%;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team-logo{
+        width:52px;
+        height:52px;
+        border-radius:12px;
+        background:var(--bl-soft);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        overflow:hidden;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team-logo img{
+        width:36px;
+        height:36px;
+        object-fit:contain;
+        display:block;
+        pointer-events:none;
+        -webkit-user-drag:none;
+        user-select:none;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team-name{
+        font-size:12px;
+        font-weight:600;
+        color:var(--bl-ink);
+        text-align:center;
+        line-height:1.2;
+        max-width:100%;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-score{
+        font-size:18px;
+        font-weight:800;
+        color:var(--bl-ink);
+        min-width:0;
+        flex:1 1 auto;
+        text-align:center;
+        text-transform:uppercase;
+        letter-spacing:0.4px;
+        line-height:1.2;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming{
+        font-size:12px;
+        color:var(--bl-accent);
+        background:rgba(17,17,17,0.08);
+        border-radius:8px;
+        padding:8px 6px;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score{
+        color:var(--bl-accent);
+        font-size:22px;
+        letter-spacing:0.02em;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-teams{
+        font-size:11px;
+        font-weight:700;
+        color:var(--bl-accent);
+        margin-top:4px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-venue{
+        font-size:11px;
+        font-weight:500;
+        color:var(--bl-muted);
+        margin-top:4px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title span {
-        color: var(--bl-accent);
+    #<?php echo esc_attr($unique_id); ?> .bl-nav{
+        position:absolute;
+        top:50%;
+        transform:translateY(-50%);
+        z-index:3;
+        width:36px;
+        height:36px;
+        border:1px solid var(--bl-line);
+        border-radius:50%;
+        background:#fff;
+        color:var(--bl-accent);
+        font-size:24px;
+        line-height:1;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        cursor:pointer;
+        padding:0;
+        box-shadow:0 2px 8px rgba(18,20,23,0.08);
+        -webkit-tap-highlight-color:transparent;
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav:disabled{
+        opacity:0.28;
+        cursor:default;
+        pointer-events:none;
     }
 
-    #<?php echo esc_attr($unique_id); ?> .bl-schedule-season {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--bl-muted);
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        white-space: nowrap;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .bundesliga-swiper {
-        padding: 4px 40px 8px;
-        position: relative;
-        min-height: 240px;
-        overflow: hidden;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .swiper-slide {
-        height: auto;
-        box-sizing: border-box;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .bundesliga-card {
-        background: var(--bl-panel);
-        border: 1px solid var(--bl-line);
-        border-radius: 14px;
-        padding: 16px 14px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(18, 20, 23, 0.06);
-        width: 100%;
-        max-width: 100%;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        min-height: 220px;
-        transition: border-color 0.18s ease, box-shadow 0.18s ease;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .bundesliga-card:hover {
-        border-color: rgba(208, 2, 27, 0.28);
-        box-shadow: 0 6px 16px rgba(18, 20, 23, 0.08);
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-date {
-        font-size: 11px;
-        font-weight: 700;
-        margin-bottom: 6px;
-        color: var(--bl-muted);
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-body {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 10px 0;
-        gap: 6px;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .team {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        width: 90px;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .team-logo {
-        width: 52px;
-        height: 52px;
-        border-radius: 12px;
-        background: var(--bl-soft);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .team-logo img {
-        width: 36px;
-        height: 36px;
-        object-fit: contain;
-        display: block;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .team-name {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--bl-ink);
-        text-align: center;
-        line-height: 1.2;
-        max-width: 90px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-score {
-        font-size: 18px;
-        font-weight: 800;
-        color: var(--bl-ink);
-        min-width: 120px;
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-        line-height: 1.2;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming {
-        font-size: 13px;
-        color: var(--bl-accent);
-        background: rgba(208, 2, 27, 0.08);
-        border-radius: 8px;
-        padding: 8px 6px;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score {
-        color: var(--bl-accent);
-        font-size: 22px;
-        letter-spacing: 0.02em;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-teams {
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--bl-accent);
-        margin-top: 4px;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .fixture-venue {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--bl-muted);
-        margin-top: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-next,
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
-        color: var(--bl-accent);
-        transform: scale(0.55);
-        font-weight: bold;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-disabled {
-        opacity: 0.25;
-        cursor: default;
-        pointer-events: none;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-prev {
-        left: 0;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-next {
-        right: 0;
-    }
-
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-next:after,
-    #<?php echo esc_attr($unique_id); ?> .swiper-button-prev:after {
-        font-size: 24px;
-    }
-
-    @media (max-width: 640px) {
-        #<?php echo esc_attr($unique_id); ?> {
-            padding: 16px 10px 12px;
-            border-radius: 14px;
-        }
-
-        #<?php echo esc_attr($unique_id); ?> .bl-schedule-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 6px;
-        }
-
-        #<?php echo esc_attr($unique_id); ?> .bl-schedule-title {
-            font-size: 18px;
+    @media (min-width:768px){
+        #<?php echo esc_attr($unique_id); ?>{ --bl-gap:14px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-card{
+            flex-basis:calc((100% - var(--bl-gap)) / 2);
         }
     }
-
+    @media (min-width:1024px){
+        #<?php echo esc_attr($unique_id); ?>{ --bl-gap:16px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-card{
+            flex-basis:calc((100% - (var(--bl-gap) * 2)) / 3);
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 40px 8px; }
+    }
+    @media (max-width:767px){
+        #<?php echo esc_attr($unique_id); ?>{
+            padding:14px 8px 12px;
+            border-radius:14px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-schedule-header{
+            flex-direction:column;
+            align-items:flex-start;
+            gap:6px;
+            margin:0 2px 12px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-schedule-title{ font-size:17px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:2px 30px 6px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-card{
+            min-height:200px;
+            padding:14px 12px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .team{ width:72px; gap:6px; }
+        #<?php echo esc_attr($unique_id); ?> .team-logo{ width:44px; height:44px; }
+        #<?php echo esc_attr($unique_id); ?> .team-logo img{ width:28px; height:28px; }
+        #<?php echo esc_attr($unique_id); ?> .team-name{ font-size:11px; }
+        #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming{ font-size:11px; }
+        #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score{ font-size:20px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav{ width:32px; height:32px; font-size:22px; }
+    }
     </style>
 
     <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    (function () {
+        var root = document.getElementById(<?php echo wp_json_encode($unique_id); ?>);
+        if (!root) return;
 
-        if (typeof Swiper === "undefined") return;
+        var track = root.querySelector(".bl-track");
+        var prevBtn = root.querySelector(".bl-nav-prev");
+        var nextBtn = root.querySelector(".bl-nav-next");
+        var cards = Array.prototype.slice.call(root.querySelectorAll(".bl-card"));
+        if (!track || !cards.length) return;
 
-        var atLastGames = <?php echo $at_last_games ? 'true' : 'false'; ?>;
+        var initialIndex = parseInt(root.getAttribute("data-initial") || "0", 10) || 0;
+        var atLast = root.getAttribute("data-at-last") === "1";
+        var scrolling = false;
 
-        function getSlidesPerView(swiper) {
-            var spv = swiper.params.slidesPerView;
-            if (typeof spv !== "number" || !isFinite(spv)) {
-                return 1;
-            }
-            return Math.max(1, Math.floor(spv));
+        function perView() {
+            var w = window.innerWidth || document.documentElement.clientWidth;
+            if (w >= 1024) return 3;
+            if (w >= 768) return 2;
+            return 1;
         }
 
-        function pinLastThree(swiper) {
-            var spv = getSlidesPerView(swiper);
-            var start = Math.max(0, swiper.slides.length - spv);
-            swiper.slideTo(start, 0);
-            swiper.update();
+        function maxIndex() {
+            return Math.max(0, cards.length - perView());
         }
 
-        new Swiper("#<?php echo esc_js($unique_id); ?> .bundesliga-swiper", {
-            slidesPerView: 3,
-            spaceBetween: 16,
-            initialSlide: <?php echo (int) $initial_slide; ?>,
-            watchOverflow: true,
-            resistanceRatio: atLastGames ? 0 : 0.85,
-            navigation: {
-                nextEl: "#<?php echo esc_js($unique_id); ?> .swiper-button-next",
-                prevEl: "#<?php echo esc_js($unique_id); ?> .swiper-button-prev"
-            },
-            breakpoints: {
-                0: { slidesPerView: 1 },
-                768: { slidesPerView: 2 },
-                1024: { slidesPerView: 3 }
-            },
-            on: {
-                init: function(swiperInstance) {
-                    if (atLastGames) {
-                        pinLastThree(swiperInstance);
-                    }
-                },
-                breakpoint: function(swiperInstance) {
-                    if (atLastGames) {
-                        pinLastThree(swiperInstance);
-                    }
-                },
-                slideChange: function(swiperInstance) {
-                    if (!atLastGames) {
-                        return;
-                    }
-                    // Lock at last full page of slides — prevents empty white space on Next.
-                    var spv = getSlidesPerView(swiperInstance);
-                    var maxIndex = Math.max(0, swiperInstance.slides.length - spv);
-                    if (swiperInstance.activeIndex > maxIndex) {
-                        swiperInstance.slideTo(maxIndex, 0);
-                    }
+        function currentIndex() {
+            var left = track.scrollLeft;
+            var best = 0;
+            var bestDist = Infinity;
+            for (var i = 0; i < cards.length; i++) {
+                var dist = Math.abs(cards[i].offsetLeft - left);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = i;
                 }
             }
+            return best;
+        }
+
+        function updateNav() {
+            var idx = currentIndex();
+            var max = maxIndex();
+            prevBtn.disabled = idx <= 0;
+            nextBtn.disabled = idx >= max;
+        }
+
+        function goTo(index, smooth) {
+            var max = maxIndex();
+            var target = Math.max(0, Math.min(index, max));
+            var card = cards[target];
+            if (!card) return;
+
+            scrolling = true;
+            track.scrollTo({
+                left: card.offsetLeft,
+                behavior: smooth === false ? "auto" : "smooth"
+            });
+
+            window.setTimeout(function () {
+                scrolling = false;
+                updateNav();
+            }, smooth === false ? 40 : 320);
+        }
+
+        function step(dir) {
+            goTo(currentIndex() + dir, true);
+        }
+
+        prevBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            step(-1);
+        });
+        nextBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            step(1);
         });
 
-    });
+        var scrollTimer = null;
+        track.addEventListener("scroll", function () {
+            if (scrollTimer) window.clearTimeout(scrollTimer);
+            scrollTimer = window.setTimeout(function () {
+                if (scrolling) return;
+
+                // Snap-lock to nearest card after finger swipe.
+                var idx = currentIndex();
+                var max = maxIndex();
+                if (idx > max) idx = max;
+                var card = cards[idx];
+                if (!card) return;
+
+                if (Math.abs(track.scrollLeft - card.offsetLeft) > 2) {
+                    goTo(idx, true);
+                } else {
+                    updateNav();
+                }
+            }, 80);
+        }, { passive: true });
+
+        // Block browser back/forward edge gestures while touching the track.
+        track.addEventListener("touchstart", function (e) {
+            if (e.touches && e.touches.length === 1) {
+                track.setAttribute("data-touching", "1");
+            }
+        }, { passive: true });
+        track.addEventListener("touchend", function () {
+            track.removeAttribute("data-touching");
+            updateNav();
+        }, { passive: true });
+
+        function boot() {
+            var start = initialIndex;
+            if (atLast) {
+                start = maxIndex();
+            }
+            goTo(start, false);
+            updateNav();
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+
+        window.addEventListener("resize", function () {
+            goTo(Math.min(currentIndex(), maxIndex()), false);
+        });
+    })();
     </script>
 
     </div>
