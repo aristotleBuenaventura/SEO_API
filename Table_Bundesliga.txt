@@ -277,7 +277,7 @@ function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_2026_v3_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $cache_key = 'bundesliga_standings_2026_v4_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
@@ -303,10 +303,26 @@ function bundesliga_standings_shortcode() {
         return ((int) ($a['standing_place'] ?? 99)) <=> ((int) ($b['standing_place'] ?? 99));
     });
 
+    $max_name_len = 1;
+    foreach ($data as $team_row) {
+        $name_len = function_exists('mb_strlen')
+            ? mb_strlen((string) ($team_row['standing_team'] ?? ''))
+            : strlen((string) ($team_row['standing_team'] ?? ''));
+        if ($name_len > $max_name_len) {
+            $max_name_len = $name_len;
+        }
+    }
+
+    // Rank + gaps + logo + longest club name (ch), used on mobile.
+    $club_col_mobile = 'calc(18px + 8px + 28px + 8px + ' . (int) $max_name_len . 'ch)';
+    $club_col_small  = 'calc(16px + 6px + 24px + 6px + ' . (int) $max_name_len . 'ch)';
+
     ob_start();
     ?>
 
-    <div id="<?php echo esc_attr($uid); ?>" class="bl-standings-root">
+    <div id="<?php echo esc_attr($uid); ?>"
+         class="bl-standings-root"
+         style="--bl-club-mobile: <?php echo esc_attr($club_col_mobile); ?>; --bl-club-small: <?php echo esc_attr($club_col_small); ?>;">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -554,10 +570,12 @@ function bundesliga_standings_shortcode() {
             padding-bottom:4px;
         }
         #<?php echo esc_attr($uid); ?> .bl-table{
-            min-width:560px;
+            min-width:0;
+            width:max-content;
+            max-width:none;
         }
         #<?php echo esc_attr($uid); ?> .bl-row{
-            grid-template-columns:minmax(148px,1.5fr) repeat(7,30px) 38px;
+            grid-template-columns:var(--bl-club-mobile) repeat(7,28px) 34px;
             column-gap:2px;
             padding:10px 6px;
             border-radius:8px;
@@ -568,11 +586,12 @@ function bundesliga_standings_shortcode() {
             letter-spacing:0.04em;
         }
         #<?php echo esc_attr($uid); ?> .bl-lbl-club{
-            padding-left:36px;
+            padding-left:0;
         }
         #<?php echo esc_attr($uid); ?> .bl-team-cell{
             gap:8px;
             padding-left:4px;
+            overflow:hidden;
         }
         #<?php echo esc_attr($uid); ?> .bl-rank{
             flex:0 0 18px;
@@ -590,11 +609,14 @@ function bundesliga_standings_shortcode() {
             height:18px;
         }
         #<?php echo esc_attr($uid); ?> .bl-name{
-            font-size:13px;
+            font-size:12px;
+            white-space:nowrap;
+            overflow:visible;
+            text-overflow:clip;
         }
         #<?php echo esc_attr($uid); ?> .bl-val-stat,
         #<?php echo esc_attr($uid); ?> .bl-val-pts{
-            font-size:13px;
+            font-size:12px;
         }
         #<?php echo esc_attr($uid); ?> .bl-val-pts{
             padding:5px 0;
@@ -633,19 +655,16 @@ function bundesliga_standings_shortcode() {
         #<?php echo esc_attr($uid); ?> .bl-season{
             font-size:11px;
         }
-        #<?php echo esc_attr($uid); ?> .bl-table{
-            min-width:520px;
-        }
         #<?php echo esc_attr($uid); ?> .bl-row{
-            grid-template-columns:minmax(132px,1.4fr) repeat(7,28px) 36px;
+            grid-template-columns:var(--bl-club-small) repeat(7,26px) 32px;
             padding:9px 4px;
         }
         #<?php echo esc_attr($uid); ?> .bl-name{
-            font-size:12px;
+            font-size:11px;
         }
         #<?php echo esc_attr($uid); ?> .bl-val-stat,
         #<?php echo esc_attr($uid); ?> .bl-val-pts{
-            font-size:12px;
+            font-size:11px;
         }
         #<?php echo esc_attr($uid); ?> .bl-logo{
             flex:0 0 24px;
@@ -655,6 +674,14 @@ function bundesliga_standings_shortcode() {
         #<?php echo esc_attr($uid); ?> .bl-logo img{
             width:16px;
             height:16px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-rank{
+            flex:0 0 16px;
+            width:16px;
+            font-size:11px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-team-cell{
+            gap:6px;
         }
     }
     </style>
