@@ -48,6 +48,10 @@ function bundesliga_team_logo($api_logo, $team_name = '') {
         return 'https://img-live.bannershive.dev/h001_uploads/images/Stuttgart.png';
     }
 
+    if (strpos($name, 'eintracht frankfurt') !== false || $name === 'frankfurt') {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/EintrachtFrankfurt.png';
+    }
+
     if (!empty($api_logo)) {
         return $api_logo;
     }

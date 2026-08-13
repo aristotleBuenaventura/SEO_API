@@ -25,6 +25,10 @@ function bundesliga_standing_team_logo($api_logo, $team_name = '') {
         return 'https://img-live.bannershive.dev/h001_uploads/images/Stuttgart.png';
     }
 
+    if (strpos($name, 'eintracht frankfurt') !== false || $name === 'frankfurt') {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/EintrachtFrankfurt.png';
+    }
+
     if (!empty($api_logo)) {
         return $api_logo;
     }
@@ -234,7 +238,7 @@ function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_2026_v6_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $cache_key = 'bundesliga_standings_2026_v7_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
     $cached    = get_transient($cache_key);
 
     if ($cached !== false) {
