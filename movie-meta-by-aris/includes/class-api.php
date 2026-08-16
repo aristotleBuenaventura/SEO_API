@@ -46,6 +46,8 @@ class MMBA_API {
             }));
         }
 
+        $movies = array_map([__CLASS__, 'enrich_movie'], $movies);
+
         return rest_ensure_response([
             'generated_at' => gmdate('c'),
             'count'        => count($movies),
@@ -60,6 +62,17 @@ class MMBA_API {
             return new WP_Error('mmba_not_found', __('Movie not found.', 'movie-meta-by-aris'), ['status' => 404]);
         }
 
-        return rest_ensure_response($movie);
+        return rest_ensure_response(self::enrich_movie($movie));
+    }
+
+    /**
+     * Extra fields for external layouts / code snippets (no HTML).
+     */
+    private static function enrich_movie(array $movie) {
+        $link = isset($movie['movie_link']) ? (string) $movie['movie_link'] : '';
+        $movie['link_type']  = MMBA_Storage::get_movie_link_type($link);
+        $movie['embed_url']  = $movie['link_type'] === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
+        $movie['poster_url'] = MMBA_Storage::get_poster_url($link);
+        return $movie;
     }
 }

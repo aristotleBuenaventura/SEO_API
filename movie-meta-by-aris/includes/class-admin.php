@@ -303,6 +303,12 @@ class MMBA_Admin {
                     <li><code>[movie_meta player="0"]</code> — <?php echo esc_html__('details only, no video player', 'movie-meta-by-aris'); ?></li>
                     <li><code>[movie_meta show="title,year,cast,details"]</code> — <?php echo esc_html__('choose which fields to show', 'movie-meta-by-aris'); ?></li>
                 </ul>
+                <p class="description" style="margin-top:12px;">
+                    <?php echo esc_html__('Different homepage designs? Keep this plugin as data-only and register layout shortcodes via the Code Snippets plugin. Example PHP snippet:', 'movie-meta-by-aris'); ?>
+                    <code>snippets/genre-rows-shortcode.php</code>
+                    — <?php echo esc_html__('then use', 'movie-meta-by-aris'); ?>
+                    <code>[movie_genre_rows]</code>
+                </p>
             </div>
 
             <div class="mmba-card">
