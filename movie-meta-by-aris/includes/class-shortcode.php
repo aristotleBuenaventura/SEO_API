@@ -113,7 +113,7 @@ class MMBA_Shortcode {
                 <?php
                 $link_type = MMBA_Storage::get_movie_link_type($link);
                 $play_url = $link_type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
-                $safe_play = esc_attr($play_url);
+                $safe_play = MMBA_Storage::escape_play_url($play_url);
                 $poster_url = MMBA_Storage::get_poster_url($link);
                 ?>
                 <div class="mmba-movie-media">
@@ -144,7 +144,7 @@ class MMBA_Shortcode {
                             <span class="mmba-poster-caption"><?php echo esc_html($title); ?></span>
                         </button>
                         <noscript>
-                            <p><a href="<?php echo esc_url($link); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__('Open stream', 'movie-meta-by-aris'); ?></a></p>
+                            <p><a href="<?php echo MMBA_Storage::escape_play_url($link); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__('Open stream', 'movie-meta-by-aris'); ?></a></p>
                         </noscript>
                     <?php elseif ($link_type === 'embed') : ?>
                         <div class="mmba-player-wrap mmba-embed-wrap">
@@ -189,7 +189,7 @@ class MMBA_Shortcode {
                                         type="button"
                                         class="mmba-title-btn"
                                         data-mmba-open
-                                        data-src="<?php echo esc_attr($title_play); ?>"
+                                        data-src="<?php echo MMBA_Storage::escape_play_url($title_play); ?>"
                                         data-type="<?php echo esc_attr(MMBA_Storage::get_movie_link_type($link)); ?>"
                                         data-title="<?php echo esc_attr($title); ?>"
                                     ><?php echo esc_html($title); ?></button>
@@ -232,7 +232,7 @@ class MMBA_Shortcode {
 
                 <?php if (!empty($show['player']) && !$show_player && $link !== '') : ?>
                     <p class="mmba-movie-link">
-                        <a class="mmba-watch-btn" href="<?php echo esc_url($link); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__('Watch movie', 'movie-meta-by-aris'); ?></a>
+                        <a class="mmba-watch-btn" href="<?php echo MMBA_Storage::escape_play_url($link); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html__('Watch movie', 'movie-meta-by-aris'); ?></a>
                     </p>
                 <?php endif; ?>
             </div>

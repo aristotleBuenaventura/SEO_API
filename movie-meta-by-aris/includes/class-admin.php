@@ -304,10 +304,16 @@ class MMBA_Admin {
                     <li><code>[movie_meta show="title,year,cast,details"]</code> — <?php echo esc_html__('choose which fields to show', 'movie-meta-by-aris'); ?></li>
                 </ul>
                 <p class="description" style="margin-top:12px;">
-                    <?php echo esc_html__('Different homepage designs? Keep this plugin as data-only and register layout shortcodes via the Code Snippets plugin. Example PHP snippet:', 'movie-meta-by-aris'); ?>
+                    <?php echo esc_html__('Custom layouts (Code Snippets plugin): paste', 'movie-meta-by-aris'); ?>
                     <code>snippets/genre-rows-shortcode.php</code>
-                    — <?php echo esc_html__('then use', 'movie-meta-by-aris'); ?>
-                    <code>[movie_genre_rows]</code>
+                    → <code>[movie_genre_rows]</code>
+                    <?php echo esc_html__('on the homepage;', 'movie-meta-by-aris'); ?>
+                    <code>snippets/movie-watch-shortcode.php</code>
+                    → <code>[movie_watch]</code>
+                    <?php echo esc_html__('on /watch/;', 'movie-meta-by-aris'); ?>
+                    <code>snippets/movie-genre-page-shortcode.php</code>
+                    → <code>[movie_genre]</code>
+                    <?php echo esc_html__('on /genre/ (View all links: /genre/?genre=Horror).', 'movie-meta-by-aris'); ?>
                 </p>
             </div>
 
@@ -344,7 +350,7 @@ class MMBA_Admin {
                             <th scope="row"><label for="mmba-movie-link"><?php echo esc_html__('Movie link', 'movie-meta-by-aris'); ?></label></th>
                             <td>
                                 <input type="text" class="large-text" id="mmba-movie-link" name="movie_link" value="<?php echo esc_attr($form['movie_link']); ?>" placeholder="https://ployan.me/watch/?v11#..." required>
-                                <p class="description"><?php echo esc_html__('HLS / m3u8, ployan watch URL, or morencius.com/file/... (auto-converted to embed).', 'movie-meta-by-aris'); ?></p>
+                                <p class="description"><?php echo esc_html__('HLS / m3u8, ployan watch URL, morencius.com/file/..., or p2pstream hash links like https://imperial.p2pstream.vip/#owgg9h (hash is required).', 'movie-meta-by-aris'); ?></p>
                             </td>
                         </tr>
                         <tr>

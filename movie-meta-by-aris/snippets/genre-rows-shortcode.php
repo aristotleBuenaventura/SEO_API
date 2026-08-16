@@ -3,11 +3,11 @@
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
  * Shortcode: [movie_genre_rows]
- * Optional:  [movie_genre_rows genres="Horror,Action,Drama" new_days="45"]
+ * Optional:  [movie_genre_rows watch_url="/watch/" genre_url="/genre/" per_row="10"]
  *
  * Requires: Movie Meta by Aris plugin (data source).
- * Layout CSS/JS lives here — NOT in the movie plugin — so you can
- * add more layout shortcodes later without touching the plugin.
+ * Poster clicks → /watch/?id=MOVIE_ID
+ * "View all" → /genre/?genre=Horror  (pair with snippets/movie-genre-page-shortcode.php)
  */
 
 if (!defined('ABSPATH')) {
@@ -19,9 +19,12 @@ add_shortcode('movie_genre_rows', 'mmgr_render_genre_rows_shortcode');
 function mmgr_render_genre_rows_shortcode($atts = []) {
     $atts = shortcode_atts(
         [
-            'genres'   => 'Horror,Action,Drama,Comedy,Thriller,Romance,Crime,Animation,Adventure,Sci-Fi,War,Western,Documentary,Mystery,Fantasy,Family',
-            'new_days' => '45',
-            'api'      => '', // leave empty to use PHP storage; or set REST URL
+            'genres'    => 'Horror,Action,Drama,Comedy,Thriller,Romance,Crime,Animation,Adventure,Sci-Fi,War,Western,Documentary,Mystery,Fantasy,Family',
+            'new_days'  => '45',
+            'api'       => '',
+            'watch_url' => '/watch/',
+            'genre_url' => '/genre/', // WP page that has [movie_genre]
+            'per_row'   => '10',
         ],
         $atts,
         'movie_genre_rows'
@@ -31,6 +34,23 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     $api = $atts['api'] !== ''
         ? esc_url_raw($atts['api'])
         : esc_url_raw(rest_url('movie-meta/v1/movies'));
+
+    $watch_url = $atts['watch_url'];
+    if ($watch_url !== '' && strpos($watch_url, 'http') !== 0) {
+        $watch_url = home_url($watch_url);
+    }
+    $watch_url = esc_url($watch_url);
+
+    $genre_url = $atts['genre_url'];
+    if ($genre_url !== '' && strpos($genre_url, 'http') !== 0) {
+        $genre_url = home_url($genre_url);
+    }
+    $genre_url = esc_url($genre_url);
+
+    $per_row = max(1, absint($atts['per_row']));
+    if ($per_row < 1) {
+        $per_row = 10;
+    }
 
     // Prefer server-side data when plugin is active (faster, no extra request).
     $bootstrap = null;
@@ -57,6 +77,9 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   id="<?php echo esc_attr($uid); ?>"
   class="mmgr"
   data-api="<?php echo esc_attr($api); ?>"
+  data-watch-url="<?php echo esc_attr($watch_url); ?>"
+  data-genre-url="<?php echo esc_attr($genre_url); ?>"
+  data-per-row="<?php echo esc_attr((string) $per_row); ?>"
   data-genres="<?php echo esc_attr($atts['genres']); ?>"
   data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
   <?php if ($bootstrap !== null) : ?>
@@ -68,6 +91,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
 </div>
 
 <style>
+  .mmgr, .mmgr *, .mmgr *::before, .mmgr *::after { box-sizing: border-box; }
   .mmgr {
     --mmgr-ink: #12151a;
     --mmgr-muted: #6b7280;
@@ -82,8 +106,10 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     color: var(--mmgr-ink);
     font-family: var(--mmgr-font);
     max-width: 1200px;
+    width: 100%;
     margin: 0 auto;
     padding: 1.25rem 1rem 2.5rem;
+    overflow-x: clip;
   }
   .mmgr-loading, .mmgr-empty, .mmgr-error {
     color: var(--mmgr-muted);
@@ -91,21 +117,21 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     font-size: 0.95rem;
   }
   .mmgr-error { color: #b91c1c; }
-  .mmgr-row { margin: 0 0 2.35rem; }
+  .mmgr-row { margin: 0 0 2.35rem; min-width: 0; }
   .mmgr-row-head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.75rem 1rem;
     margin-bottom: 0.95rem;
   }
-  .mmgr-row-titles { min-width: 0; }
+  .mmgr-row-titles { min-width: 0; flex: 1 1 auto; }
   .mmgr-row-title {
     display: flex;
     align-items: center;
     gap: 0.55rem;
     margin: 0;
-    font-size: clamp(1.15rem, 2vw, 1.35rem);
+    font-size: clamp(1.05rem, 2.8vw, 1.35rem);
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -132,15 +158,27 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     padding-top: 0.15rem;
   }
   .mmgr-viewall {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
     color: var(--mmgr-muted);
     font-size: 0.86rem;
     font-weight: 600;
     white-space: nowrap;
-    margin-right: 0.2rem;
+    margin-right: 0.15rem;
+    text-decoration: none;
+    padding: 0.28rem 0.45rem;
+    border-radius: 999px;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .mmgr-viewall:hover {
+    color: var(--mmgr-accent);
+    background: rgba(37, 99, 235, 0.08);
   }
   .mmgr-nav {
     width: 34px;
     height: 34px;
+    min-width: 34px;
     border-radius: 999px;
     border: 1px solid var(--mmgr-line);
     background: #fff;
@@ -149,25 +187,30 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     place-items: center;
     cursor: pointer;
     padding: 0;
+    -webkit-tap-highlight-color: transparent;
   }
   .mmgr-nav:hover { border-color: var(--mmgr-accent); color: var(--mmgr-accent); }
   .mmgr-nav:disabled { opacity: 0.35; cursor: default; }
   .mmgr-nav svg { width: 16px; height: 16px; display: block; }
-  .mmgr-track-wrap { position: relative; margin: 0 -0.15rem; }
+  .mmgr-track-wrap { position: relative; margin: 0 -0.15rem; max-width: 100%; }
   .mmgr-track {
     display: flex;
     gap: var(--mmgr-gap);
     overflow-x: auto;
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scroll-behavior: smooth;
     padding: 0.15rem 0.15rem 0.65rem;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
     scrollbar-width: none;
   }
   .mmgr-track::-webkit-scrollbar { display: none; }
   .mmgr-card {
     flex: 0 0 var(--mmgr-card-w);
     width: var(--mmgr-card-w);
+    max-width: 72vw;
     scroll-snap-align: start;
     text-decoration: none;
     color: inherit;
@@ -177,6 +220,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     text-align: left;
     cursor: pointer;
     font: inherit;
+    -webkit-tap-highlight-color: transparent;
   }
   .mmgr-poster {
     position: relative;
@@ -186,9 +230,11 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     box-shadow: 0 10px 24px rgba(18, 21, 26, 0.08);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .mmgr-card:hover .mmgr-poster {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 28px rgba(18, 21, 26, 0.12);
+  @media (hover: hover) {
+    .mmgr-card:hover .mmgr-poster {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 28px rgba(18, 21, 26, 0.12);
+    }
   }
   .mmgr-poster-img {
     position: absolute;
@@ -203,7 +249,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     inset: 0;
     display: grid;
     place-items: center;
-    font-size: 3.2rem;
+    font-size: clamp(2rem, 10vw, 3.2rem);
     font-weight: 700;
     color: rgba(255, 255, 255, 0.18);
     letter-spacing: -0.04em;
@@ -255,57 +301,48 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     font-size: 0.78rem;
     line-height: 1.35;
   }
-  .mmgr-modal[hidden] { display: none !important; }
-  .mmgr-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-  }
-  .mmgr-modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(8, 10, 14, 0.72);
-  }
-  .mmgr-modal-dialog {
-    position: relative;
-    width: min(920px, 100%);
-    background: #0b0d10;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  }
-  .mmgr-modal-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.85rem 1rem;
-    color: #fff;
-  }
-  .mmgr-modal-title { margin: 0; font-size: 1rem; font-weight: 650; }
-  .mmgr-modal-close {
-    border: 0;
-    background: transparent;
-    color: #fff;
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-  }
-  .mmgr-modal-player { background: #000; }
-  .mmgr-modal-player iframe,
-  .mmgr-modal-player video {
-    display: block;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    border: 0;
-    background: #000;
+  @media (max-width: 900px) {
+    .mmgr { --mmgr-card-w: 160px; --mmgr-gap: 0.95rem; }
   }
   @media (max-width: 720px) {
-    .mmgr { --mmgr-card-w: 148px; padding-left: 0.75rem; padding-right: 0.75rem; }
+    .mmgr {
+      --mmgr-card-w: 142px;
+      --mmgr-gap: 0.8rem;
+      --mmgr-radius: 12px;
+      padding: 1rem max(0.75rem, env(safe-area-inset-right)) 2rem max(0.75rem, env(safe-area-inset-left));
+    }
+    .mmgr-row { margin-bottom: 1.75rem; }
     .mmgr-row-desc { display: none; }
+    .mmgr-viewall { font-size: 0.8rem; margin-right: 0; padding: 0.25rem 0.4rem; }
+    .mmgr-card-title { font-size: 0.86rem; }
+    .mmgr-card-meta { font-size: 0.72rem; }
+    .mmgr-badge { font-size: 0.62rem; padding: 0.18rem 0.42rem; }
+  }
+  @media (max-width: 480px) {
+    .mmgr {
+      --mmgr-card-w: 126px;
+      --mmgr-gap: 0.7rem;
+      padding-left: max(0.65rem, env(safe-area-inset-left));
+      padding-right: max(0.65rem, env(safe-area-inset-right));
+    }
+    .mmgr-row-head {
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .mmgr-row-controls {
+      margin-left: auto;
+      padding-top: 0;
+    }
+    .mmgr-nav {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+    }
+    .mmgr-card { max-width: 44vw; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mmgr-track { scroll-behavior: auto; }
+    .mmgr-poster { transition: none; }
   }
 </style>
 
@@ -316,6 +353,9 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   if (!root) return;
 
   var API = root.getAttribute('data-api') || '';
+  var WATCH_URL = root.getAttribute('data-watch-url') || '/watch/';
+  var GENRE_URL = root.getAttribute('data-genre-url') || '/genre/';
+  var PER_ROW = parseInt(root.getAttribute('data-per-row') || '10', 10) || 10;
   var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
   var GENRE_ORDER = (root.getAttribute('data-genres') || '')
     .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -395,20 +435,26 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     });
     return ordered;
   }
+  function watchHref(movie) {
+    var base = WATCH_URL || '/watch/';
+    var join = base.indexOf('?') === -1 ? '?' : '&';
+    return base + join + 'id=' + encodeURIComponent(movie.id || '');
+  }
+  function genreHref(genre) {
+    var base = GENRE_URL || '/genre/';
+    var join = base.indexOf('?') === -1 ? '?' : '&';
+    return base + join + 'genre=' + encodeURIComponent(genre || '');
+  }
   function cardHtml(movie) {
     var poster = movie.poster_url || '';
     var title = movie.title || 'Untitled';
-    var playSrc = movie.embed_url || movie.movie_link || '';
-    var playType = movie.link_type || 'embed';
-    var openAttr = playSrc
-      ? ' data-mmgr-open data-src="' + esc(playSrc) + '" data-type="' + esc(playType) + '" data-title="' + esc(title) + '"'
-      : '';
+    var href = watchHref(movie);
     var posterInner = poster
       ? '<img class="mmgr-poster-img" src="' + esc(poster) + '" alt="" loading="lazy" onerror="this.remove();var f=this.parentNode.querySelector(\'.mmgr-poster-fallback\');if(f)f.hidden=false;">' +
         '<span class="mmgr-poster-fallback" hidden>' + esc(initial(title)) + '</span>'
       : '<span class="mmgr-poster-fallback">' + esc(initial(title)) + '</span>';
     return (
-      '<button type="button" class="mmgr-card"' + openAttr + '>' +
+      '<a class="mmgr-card" href="' + esc(href) + '">' +
         '<div class="mmgr-poster mmgr-tone-' + tone(title) + '">' +
           posterInner +
           '<span class="mmgr-badge mmgr-badge-hd">HD</span>' +
@@ -419,11 +465,14 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
           '<h3 class="mmgr-card-title">' + esc(title) + '</h3>' +
           '<p class="mmgr-card-meta">' + esc(metaLine(movie)) + '</p>' +
         '</div>' +
-      '</button>'
+      '</a>'
     );
   }
   function rowHtml(genre, movies) {
     var desc = DESCRIPTIONS[genre] || ('Browse ' + genre.toLowerCase() + ' titles from the catalog.');
+    var visible = movies.slice(0, PER_ROW);
+    var allHref = genreHref(genre);
+    var showViewAll = movies.length > 0;
     return (
       '<section class="mmgr-row" data-genre="' + esc(genre) + '">' +
         '<div class="mmgr-row-head">' +
@@ -432,7 +481,9 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
             '<p class="mmgr-row-desc">' + esc(desc) + '</p>' +
           '</div>' +
           '<div class="mmgr-row-controls">' +
-            '<span class="mmgr-viewall">' + movies.length + ' titles</span>' +
+            (showViewAll
+              ? '<a class="mmgr-viewall" href="' + esc(allHref) + '">View all</a>'
+              : '') +
             '<button type="button" class="mmgr-nav mmgr-prev" aria-label="Scroll left">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
             '</button>' +
@@ -442,23 +493,9 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
           '</div>' +
         '</div>' +
         '<div class="mmgr-track-wrap"><div class="mmgr-track" tabindex="0">' +
-          movies.map(cardHtml).join('') +
+          visible.map(cardHtml).join('') +
         '</div></div>' +
       '</section>'
-    );
-  }
-  function modalHtml() {
-    return (
-      '<div class="mmgr-modal" id="' + esc(root.id) + '-modal" hidden>' +
-        '<div class="mmgr-modal-backdrop" data-mmgr-close></div>' +
-        '<div class="mmgr-modal-dialog" role="dialog" aria-modal="true">' +
-          '<div class="mmgr-modal-top">' +
-            '<h3 class="mmgr-modal-title" id="' + esc(root.id) + '-title"></h3>' +
-            '<button type="button" class="mmgr-modal-close" data-mmgr-close aria-label="Close">×</button>' +
-          '</div>' +
-          '<div class="mmgr-modal-player" id="' + esc(root.id) + '-player"></div>' +
-        '</div>' +
-      '</div>'
     );
   }
   function wireCarousel(section) {
@@ -480,57 +517,6 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     window.addEventListener('resize', update);
     update();
   }
-  var activeVideo = null;
-  function closeModal() {
-    var modal = document.getElementById(root.id + '-modal');
-    var mount = document.getElementById(root.id + '-player');
-    if (!modal || !mount) return;
-    if (activeVideo) { try { activeVideo.pause(); } catch (e) {} activeVideo = null; }
-    mount.innerHTML = '';
-    modal.hidden = true;
-  }
-  function openModal(src, type, title) {
-    var modal = document.getElementById(root.id + '-modal');
-    var mount = document.getElementById(root.id + '-player');
-    var titleEl = document.getElementById(root.id + '-title');
-    if (!modal || !mount || !src) return;
-    closeModal();
-    if (titleEl) titleEl.textContent = title || '';
-    if (type === 'hls') {
-      var video = document.createElement('video');
-      video.controls = true;
-      video.playsInline = true;
-      video.src = src;
-      mount.appendChild(video);
-      activeVideo = video;
-    } else {
-      var iframe = document.createElement('iframe');
-      iframe.src = src;
-      iframe.title = title || 'Movie';
-      iframe.allow = 'fullscreen; encrypted-media; picture-in-picture';
-      iframe.setAttribute('allowfullscreen', '');
-      iframe.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
-      mount.appendChild(iframe);
-    }
-    modal.hidden = false;
-  }
-  function wireModal() {
-    root.addEventListener('click', function (e) {
-      var openBtn = e.target.closest('[data-mmgr-open]');
-      if (openBtn) {
-        e.preventDefault();
-        openModal(openBtn.getAttribute('data-src'), openBtn.getAttribute('data-type') || 'embed', openBtn.getAttribute('data-title') || '');
-        return;
-      }
-      if (e.target.closest('[data-mmgr-close]')) {
-        e.preventDefault();
-        closeModal();
-      }
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closeModal();
-    });
-  }
   function render(movies) {
     if (!movies.length) {
       root.innerHTML = '<div class="mmgr-empty">No movies found.</div>';
@@ -538,9 +524,8 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     }
     var grouped = groupByGenre(movies);
     var keys = orderedGenreKeys(grouped);
-    root.innerHTML = keys.map(function (g) { return rowHtml(g, grouped[g]); }).join('') + modalHtml();
+    root.innerHTML = keys.map(function (g) { return rowHtml(g, grouped[g]); }).join('');
     root.querySelectorAll('.mmgr-row').forEach(wireCarousel);
-    wireModal();
   }
 
   var boot = root.getAttribute('data-bootstrap');

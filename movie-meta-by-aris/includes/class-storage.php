@@ -248,7 +248,8 @@ class MMBA_Storage {
             return '';
         }
 
-        // Reject obvious junk, but allow ":" in path segments.
+        // Reject obvious junk, but allow ":" in path segments and "#" stream ids
+        // (e.g. https://imperial.p2pstream.vip/#owgg9h, ployan.me/watch/?v11#...).
         if (preg_match('#[\s<>"\']#', $raw)) {
             return '';
         }
@@ -276,8 +277,15 @@ class MMBA_Storage {
             return 'embed';
         }
 
+        // Hash-only player ids on known stream hosts (already covered above),
+        // plus generic /watch|/embed paths.
         $path = wp_parse_url($url, PHP_URL_PATH);
-        if (is_string($path) && preg_match('#/(watch|embed|player|file|download)(/|$)#i', $path)) {
+        if (is_string($path) && preg_match('#/(watch|embed|player|file|download|e)(/|$)#i', $path)) {
+            return 'embed';
+        }
+
+        // Any https URL that relies on a #stream-id fragment is almost always an embed player.
+        if (preg_match('/^https?:\/\/[^#\s]+#[A-Za-z0-9_-]{4,}$/i', $url)) {
             return 'embed';
         }
 
@@ -287,6 +295,7 @@ class MMBA_Storage {
     /**
      * Convert watch/file pages into iframe-friendly embed URLs.
      * e.g. https://morencius.com/file/abc → https://morencius.com/embed/abc
+     * Keeps p2pstream hash ids: https://imperial.p2pstream.vip/#owgg9h
      */
     public static function get_embed_url($url) {
         $url = trim((string) $url);
@@ -301,16 +310,60 @@ class MMBA_Storage {
 
         $host = strtolower((string) $parts['host']);
         $path = isset($parts['path']) ? (string) $parts['path'] : '';
+        $fragment = isset($parts['fragment']) ? (string) $parts['fragment'] : '';
+        $scheme = !empty($parts['scheme']) ? $parts['scheme'] : 'https';
 
         // Morencius / Earnvids-style hosts: /file|/download|/embed/{id}
         if (preg_match('/(^|\.)morencius\.com$/i', $host)
             && preg_match('#^/(file|download|embed)/([a-zA-Z0-9_-]+)/?$#', $path, $m)
         ) {
-            $scheme = !empty($parts['scheme']) ? $parts['scheme'] : 'https';
             return $scheme . '://' . $parts['host'] . '/embed/' . $m[2];
         }
 
+        // p2pstream: keep hash player id on the host root (required for playback).
+        if (preg_match('/(^|\.)p2pstream\.vip$/i', $host) && $fragment !== '') {
+            return $scheme . '://' . $parts['host'] . '/#' . $fragment;
+        }
+
         return $url;
+    }
+
+    /**
+     * Escape a playable URL for HTML attributes without dropping #fragments.
+     * WordPress esc_url() strips fragments, which breaks p2pstream / ployan players.
+     *
+     * @param string $url
+     * @return string
+     */
+    public static function escape_play_url($url) {
+        $original = trim((string) $url);
+        if ($original === '') {
+            return '';
+        }
+
+        $fragment = '';
+        $base = $original;
+        if (preg_match('/#([\s\S]*)$/', $original, $m)) {
+            $fragment = (string) $m[1];
+            $base = substr($original, 0, -strlen($m[0]));
+        }
+
+        $escaped = esc_url($base);
+        if ($escaped === '') {
+            // Already sanitized https stream URLs may still fail esc_url in edge cases.
+            if (!preg_match('#^https?://#i', $original)) {
+                return '';
+            }
+            return esc_attr($original);
+        }
+
+        if ($fragment === '') {
+            return esc_attr($escaped);
+        }
+
+        // Keep stream-token characters used by p2pstream / ployan hash players.
+        $fragment = preg_replace('/[^A-Za-z0-9\-._~!$&\'()*+,;=:@\/?%]/', '', $fragment);
+        return esc_attr($escaped . '#' . $fragment);
     }
 
     /**
@@ -319,12 +372,12 @@ class MMBA_Storage {
     public static function get_poster_url($url) {
         $url = trim((string) $url);
         $parts = wp_parse_url($url);
-        if (!is_array($parts) || empty($parts['host']) || empty($parts['path'])) {
+        if (!is_array($parts) || empty($parts['host'])) {
             return '';
         }
 
         $host = strtolower((string) $parts['host']);
-        $path = (string) $parts['path'];
+        $path = isset($parts['path']) ? (string) $parts['path'] : '';
 
         if (preg_match('/(^|\.)morencius\.com$/i', $host)
             && preg_match('#^/(file|download|embed)/([a-zA-Z0-9_-]+)/?$#', $path, $m)
