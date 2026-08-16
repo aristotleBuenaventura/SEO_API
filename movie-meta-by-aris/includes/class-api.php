@@ -42,7 +42,7 @@ class MMBA_API {
 
         if ($genre !== '') {
             $movies = array_values(array_filter($movies, static function ($movie) use ($genre) {
-                return isset($movie['genre']) && strcasecmp((string) $movie['genre'], $genre) === 0;
+                return isset($movie['genre']) && MMBA_Storage::genre_matches($movie['genre'], $genre);
             }));
         }
 

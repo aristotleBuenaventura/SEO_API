@@ -89,6 +89,26 @@ class MMBA_Storage {
         return array_values($clean);
     }
 
+    public static function genre_matches($movie_genre, $filter) {
+        $filter = strtolower(trim((string) $filter));
+        if ($filter === '') {
+            return true;
+        }
+
+        $parts = preg_split('/\s*,\s*/', (string) $movie_genre);
+        if (!is_array($parts)) {
+            return strcasecmp((string) $movie_genre, $filter) === 0;
+        }
+
+        foreach ($parts as $part) {
+            if (strcasecmp(trim((string) $part), $filter) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function get_movie($id) {
         $id = (string) $id;
         foreach (self::get_movies() as $movie) {
@@ -252,7 +272,7 @@ class MMBA_Storage {
         }
 
         $host = wp_parse_url($url, PHP_URL_HOST);
-        if (is_string($host) && preg_match('/(^|\.)(ployan\.me|morencius\.com)$/i', $host)) {
+        if (is_string($host) && preg_match('/(^|\.)(ployan\.me|morencius\.com|p2pstream\.vip|xtremestream\.xyz)$/i', $host)) {
             return 'embed';
         }
 
@@ -318,7 +338,14 @@ class MMBA_Storage {
     public static function sanitize_movie($input, $existing_id = null) {
         $title = isset($input['title']) ? sanitize_text_field(wp_unslash($input['title'])) : '';
         $details = isset($input['details']) ? sanitize_textarea_field(wp_unslash($input['details'])) : '';
+        $cast = isset($input['cast']) ? sanitize_text_field(wp_unslash($input['cast'])) : '';
+        $year = isset($input['year']) ? sanitize_text_field(wp_unslash($input['year'])) : '';
         $genre = isset($input['genre']) ? sanitize_text_field(wp_unslash($input['genre'])) : '';
+
+        if ($year !== '' && !preg_match('/^\d{4}(\s*[-\/\x{2013}\x{2014}]\s*\d{2,4})?$/u', $year)) {
+            $year = preg_replace('/[^\d\-\/\x{2013}\x{2014}\s]/u', '', $year);
+            $year = trim(preg_replace('/\s+/', ' ', (string) $year));
+        }
 
         $raw_link = isset($input['movie_link']) ? $input['movie_link'] : '';
         $movie_link = self::sanitize_stream_url($raw_link);
@@ -347,6 +374,8 @@ class MMBA_Storage {
             'id'         => $id,
             'title'      => $title,
             'details'    => $details,
+            'cast'       => $cast,
+            'year'       => $year,
             'movie_link' => $movie_link,
             'genre'      => $genre,
             'created_at' => $existing && !empty($existing['created_at']) ? $existing['created_at'] : $now,
@@ -413,6 +442,8 @@ class MMBA_Storage {
             'id'         => isset($movie['id']) ? (string) $movie['id'] : '',
             'title'      => isset($movie['title']) ? (string) $movie['title'] : '',
             'details'    => isset($movie['details']) ? (string) $movie['details'] : '',
+            'cast'       => isset($movie['cast']) ? (string) $movie['cast'] : '',
+            'year'       => isset($movie['year']) ? (string) $movie['year'] : '',
             'movie_link' => isset($movie['movie_link']) ? (string) $movie['movie_link'] : '',
             'genre'      => isset($movie['genre']) ? (string) $movie['genre'] : '',
             'created_at' => isset($movie['created_at']) ? (string) $movie['created_at'] : '',

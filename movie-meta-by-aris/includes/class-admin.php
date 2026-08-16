@@ -71,6 +71,8 @@ class MMBA_Admin {
         $input = [
             'title'      => isset($_POST['title']) ? $_POST['title'] : '',
             'details'    => isset($_POST['details']) ? $_POST['details'] : '',
+            'cast'       => isset($_POST['cast']) ? $_POST['cast'] : '',
+            'year'       => isset($_POST['year']) ? $_POST['year'] : '',
             'movie_link' => isset($_POST['movie_link']) ? $_POST['movie_link'] : '',
             'genre'      => isset($_POST['genre']) ? $_POST['genre'] : '',
         ];
@@ -194,6 +196,8 @@ class MMBA_Admin {
             'id'         => $editing ? $editing['id'] : '',
             'title'      => $editing ? $editing['title'] : '',
             'details'    => $editing ? $editing['details'] : '',
+            'cast'       => $editing ? $editing['cast'] : '',
+            'year'       => $editing ? $editing['year'] : '',
             'movie_link' => $editing ? $editing['movie_link'] : '',
             'genre'      => $editing ? $editing['genre'] : '',
         ];
@@ -297,6 +301,7 @@ class MMBA_Admin {
                     <li><code>[movie_meta genre="Action"]</code> — <?php echo esc_html__('filter by genre', 'movie-meta-by-aris'); ?></li>
                     <li><code>[movie_meta layout="grid" limit="6"]</code> — <?php echo esc_html__('grid layout, max 6', 'movie-meta-by-aris'); ?></li>
                     <li><code>[movie_meta player="0"]</code> — <?php echo esc_html__('details only, no video player', 'movie-meta-by-aris'); ?></li>
+                    <li><code>[movie_meta show="title,year,cast,details"]</code> — <?php echo esc_html__('choose which fields to show', 'movie-meta-by-aris'); ?></li>
                 </ul>
             </div>
 
@@ -315,8 +320,19 @@ class MMBA_Admin {
                             <td><input type="text" class="regular-text" id="mmba-title" name="title" value="<?php echo esc_attr($form['title']); ?>" required></td>
                         </tr>
                         <tr>
+                            <th scope="row"><label for="mmba-year"><?php echo esc_html__('Year', 'movie-meta-by-aris'); ?></label></th>
+                            <td><input type="text" class="small-text" id="mmba-year" name="year" value="<?php echo esc_attr($form['year']); ?>" placeholder="2024" maxlength="9"></td>
+                        </tr>
+                        <tr>
                             <th scope="row"><label for="mmba-genre"><?php echo esc_html__('Genre', 'movie-meta-by-aris'); ?></label></th>
                             <td><input type="text" class="regular-text" id="mmba-genre" name="genre" value="<?php echo esc_attr($form['genre']); ?>" placeholder="Action, Drama, Comedy..."></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="mmba-cast"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></label></th>
+                            <td>
+                                <input type="text" class="large-text" id="mmba-cast" name="cast" value="<?php echo esc_attr($form['cast']); ?>" placeholder="Actor One, Actor Two, Actor Three">
+                                <p class="description"><?php echo esc_html__('Comma-separated actor names.', 'movie-meta-by-aris'); ?></p>
+                            </td>
                         </tr>
                         <tr>
                             <th scope="row"><label for="mmba-movie-link"><?php echo esc_html__('Movie link', 'movie-meta-by-aris'); ?></label></th>
@@ -326,7 +342,7 @@ class MMBA_Admin {
                             </td>
                         </tr>
                         <tr>
-                            <th scope="row"><label for="mmba-details"><?php echo esc_html__('Details', 'movie-meta-by-aris'); ?></label></th>
+                            <th scope="row"><label for="mmba-details"><?php echo esc_html__('Movie details', 'movie-meta-by-aris'); ?></label></th>
                             <td><textarea class="large-text" rows="5" id="mmba-details" name="details"><?php echo esc_textarea($form['details']); ?></textarea></td>
                         </tr>
                     </table>
@@ -355,10 +371,11 @@ class MMBA_Admin {
                             <thead>
                                 <tr>
                                     <th><?php echo esc_html__('Title', 'movie-meta-by-aris'); ?></th>
+                                    <th><?php echo esc_html__('Year', 'movie-meta-by-aris'); ?></th>
                                     <th><?php echo esc_html__('Genre', 'movie-meta-by-aris'); ?></th>
+                                    <th><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></th>
                                     <th><?php echo esc_html__('Shortcode', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Movie link', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Details', 'movie-meta-by-aris'); ?></th>
+                                    <th><?php echo esc_html__('Movie details', 'movie-meta-by-aris'); ?></th>
                                     <th><?php echo esc_html__('Actions', 'movie-meta-by-aris'); ?></th>
                                 </tr>
                             </thead>
@@ -367,12 +384,13 @@ class MMBA_Admin {
                                     <?php $movie_shortcode = '[movie_meta id="' . $movie['id'] . '"]'; ?>
                                     <tr>
                                         <td><strong><?php echo esc_html($movie['title']); ?></strong></td>
+                                        <td><?php echo esc_html($movie['year']); ?></td>
                                         <td><?php echo esc_html($movie['genre']); ?></td>
+                                        <td><?php echo esc_html(wp_trim_words($movie['cast'], 10)); ?></td>
                                         <td>
                                             <code><?php echo esc_html($movie_shortcode); ?></code>
                                             <button type="button" class="button button-small mmba-copy-btn" data-target="<?php echo esc_attr($movie_shortcode); ?>"><?php echo esc_html__('Copy', 'movie-meta-by-aris'); ?></button>
                                         </td>
-                                        <td><code class="mmba-link"><?php echo esc_html($movie['movie_link']); ?></code></td>
                                         <td><?php echo esc_html(wp_trim_words($movie['details'], 18)); ?></td>
                                         <td class="mmba-actions">
                                             <a class="button button-small" href="<?php echo esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG . '&edit=' . rawurlencode($movie['id']))); ?>">

@@ -181,6 +181,22 @@
     color: var(--mmba-ink);
 }
 
+.mmba-movie-year,
+.mmba-movie-year-only {
+    font-weight: 500;
+    color: var(--mmba-muted);
+    font-size: 0.82em;
+    letter-spacing: 0;
+}
+
+.mmba-movie-year {
+    margin-left: 0.4rem;
+}
+
+.mmba-movie-year-only {
+    margin: 0;
+}
+
 .mmba-title-btn {
     display: inline;
     padding: 0;
@@ -201,6 +217,9 @@
 
 .mmba-movie-genre {
     margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
 }
 
 .mmba-tag {
@@ -213,6 +232,23 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     line-height: 1.2;
+}
+
+.mmba-movie-cast {
+    margin: 0;
+    color: var(--mmba-ink);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.mmba-meta-label {
+    display: inline-block;
+    margin-right: 0.35rem;
+    color: var(--mmba-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .mmba-movie-details {

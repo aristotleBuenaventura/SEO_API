@@ -21,7 +21,7 @@ class MMBA_Shortcode {
                 'limit'  => 0,
                 'player' => '1',
                 'layout' => 'list', // list | grid | single
-                'show'   => 'all',   // all | title,genre,details,player
+                'show'   => 'all',   // all | title,genre,details,cast,year,player
             ],
             $atts,
             'movie_meta'
@@ -36,7 +36,7 @@ class MMBA_Shortcode {
         } elseif ($atts['genre'] !== '') {
             $genre = $atts['genre'];
             $movies = array_values(array_filter($movies, static function ($movie) use ($genre) {
-                return isset($movie['genre']) && strcasecmp((string) $movie['genre'], $genre) === 0;
+                return isset($movie['genre']) && MMBA_Storage::genre_matches($movie['genre'], $genre);
             }));
         }
 
@@ -97,6 +97,8 @@ class MMBA_Shortcode {
         $id = isset($movie['id']) ? (string) $movie['id'] : '';
         $title = isset($movie['title']) ? (string) $movie['title'] : '';
         $details = isset($movie['details']) ? (string) $movie['details'] : '';
+        $cast = isset($movie['cast']) ? (string) $movie['cast'] : '';
+        $year = isset($movie['year']) ? (string) $movie['year'] : '';
         $genre = isset($movie['genre']) ? (string) $movie['genre'] : '';
         $link = isset($movie['movie_link']) ? (string) $movie['movie_link'] : '';
         $player_id = 'mmba-player-' . preg_replace('/[^a-zA-Z0-9_-]/', '', $id);
@@ -173,7 +175,7 @@ class MMBA_Shortcode {
             <?php endif; ?>
 
             <div class="mmba-movie-body">
-                <?php if (!empty($show['title']) || (!empty($show['genre']) && $genre !== '')) : ?>
+                <?php if (!empty($show['title']) || (!empty($show['genre']) && $genre !== '') || (!empty($show['year']) && $year !== '')) : ?>
                     <header class="mmba-movie-header">
                         <?php if (!empty($show['title'])) : ?>
                             <?php if ($use_poster && $link !== '') : ?>
@@ -191,18 +193,37 @@ class MMBA_Shortcode {
                                         data-type="<?php echo esc_attr(MMBA_Storage::get_movie_link_type($link)); ?>"
                                         data-title="<?php echo esc_attr($title); ?>"
                                     ><?php echo esc_html($title); ?></button>
+                                    <?php if (!empty($show['year']) && $year !== '') : ?>
+                                        <span class="mmba-movie-year"><?php echo esc_html($year); ?></span>
+                                    <?php endif; ?>
                                 </h3>
                             <?php else : ?>
-                                <h3 class="mmba-movie-title"><?php echo esc_html($title); ?></h3>
+                                <h3 class="mmba-movie-title">
+                                    <?php echo esc_html($title); ?>
+                                    <?php if (!empty($show['year']) && $year !== '') : ?>
+                                        <span class="mmba-movie-year"><?php echo esc_html($year); ?></span>
+                                    <?php endif; ?>
+                                </h3>
                             <?php endif; ?>
+                        <?php elseif (!empty($show['year']) && $year !== '') : ?>
+                            <p class="mmba-movie-year-only"><?php echo esc_html($year); ?></p>
                         <?php endif; ?>
 
                         <?php if (!empty($show['genre']) && $genre !== '') : ?>
                             <p class="mmba-movie-genre">
-                                <span class="mmba-tag"><?php echo esc_html($genre); ?></span>
+                                <?php foreach (array_filter(array_map('trim', explode(',', $genre))) as $genre_item) : ?>
+                                    <span class="mmba-tag"><?php echo esc_html($genre_item); ?></span>
+                                <?php endforeach; ?>
                             </p>
                         <?php endif; ?>
                     </header>
+                <?php endif; ?>
+
+                <?php if (!empty($show['cast']) && $cast !== '') : ?>
+                    <p class="mmba-movie-cast">
+                        <span class="mmba-meta-label"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></span>
+                        <?php echo esc_html($cast); ?>
+                    </p>
                 <?php endif; ?>
 
                 <?php if (!empty($show['details']) && $details !== '') : ?>
@@ -246,6 +267,8 @@ class MMBA_Shortcode {
             'title'   => true,
             'genre'   => true,
             'details' => true,
+            'cast'    => true,
+            'year'    => true,
             'player'  => true,
         ];
 
@@ -259,6 +282,8 @@ class MMBA_Shortcode {
             'title'   => false,
             'genre'   => false,
             'details' => false,
+            'cast'    => false,
+            'year'    => false,
             'player'  => false,
         ];
 
