@@ -206,7 +206,6 @@ class USDR_Admin {
                             <div>
                                 <p class="usdr-eyebrow"><?php esc_html_e('URL Shortify Tool', 'us-domain-replacer'); ?></p>
                                 <h1><?php esc_html_e('Domain Replacer', 'us-domain-replacer'); ?></h1>
-                                <p><?php esc_html_e('Bulk-update target URL domains for filtered short links. Scope is controlled by brand, language, and Google Sheet slugs.', 'us-domain-replacer'); ?></p>
                             </div>
                         </div>
                         <div class="usdr-hero-meta">

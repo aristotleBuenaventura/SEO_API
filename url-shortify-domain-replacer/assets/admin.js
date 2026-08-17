@@ -206,17 +206,25 @@
         let dragSelect = null;
 
         function endDragSelect() {
-            if (!dragSelect) {
-                return;
-            }
-
             dragSelect = null;
             $('body').removeClass('usdr-drag-selecting');
             $('.usdr-table tbody tr').removeClass('is-drag-hover');
         }
 
+        function activateDragSelect() {
+            if (!dragSelect || dragSelect.active) {
+                return;
+            }
+
+            dragSelect.active = true;
+            dragSelect.value = !dragSelect.initialChecked;
+            $('body').addClass('usdr-drag-selecting');
+            applyDragToRow(dragSelect.startRow);
+            dragSelect.startRow.addClass('is-drag-hover');
+        }
+
         function applyDragToRow($row) {
-            if (!dragSelect || !$row.length) {
+            if (!dragSelect || !dragSelect.active || !$row.length) {
                 return;
             }
 
@@ -227,6 +235,7 @@
         $results.off('change.usdrSelect', '.usdr-row-check');
         $results.off('mousedown.usdrDrag', '.usdr-table tbody tr');
         $results.off('mouseenter.usdrDrag', '.usdr-table tbody tr');
+        $results.off('click.usdrDrag', '.usdr-row-check');
         $(document).off('mouseup.usdrDrag mousemove.usdrDrag');
 
         $results.on('change.usdrSelect', '#usdr-select-all', function () {
@@ -239,6 +248,10 @@
             updateSelectionUI();
         });
 
+        $results.on('click.usdrDrag', '.usdr-row-check', function (e) {
+            e.preventDefault();
+        });
+
         $results.on('mousedown.usdrDrag', '.usdr-table tbody tr', function (e) {
             if (e.which !== 1 || $(e.target).closest('#usdr-select-all').length) {
                 return;
@@ -248,14 +261,15 @@
 
             const $row = $(this);
             const $checkbox = $row.find('.usdr-row-check');
-            const value = !$checkbox.prop('checked');
 
-            dragSelect = { value: value };
-            $('body').addClass('usdr-drag-selecting');
-            $('.usdr-table tbody tr').removeClass('is-drag-hover');
-            applyDragToRow($row);
-            $row.addClass('is-drag-hover');
-            updateSelectionUI();
+            dragSelect = {
+                startRow: $row,
+                startX: e.clientX,
+                startY: e.clientY,
+                initialChecked: $checkbox.prop('checked'),
+                active: false,
+                value: null,
+            };
         });
 
         $results.on('mouseenter.usdrDrag', '.usdr-table tbody tr', function () {
@@ -263,17 +277,39 @@
                 return;
             }
 
-            $('.usdr-table tbody tr').removeClass('is-drag-hover');
             const $row = $(this);
+
+            if (!dragSelect.active && !$row.is(dragSelect.startRow)) {
+                activateDragSelect();
+            }
+
+            if (!dragSelect.active) {
+                return;
+            }
+
+            if ($row.hasClass('is-drag-hover')) {
+                return;
+            }
+
+            $('.usdr-table tbody tr').removeClass('is-drag-hover');
             applyDragToRow($row);
             $row.addClass('is-drag-hover');
             updateSelectionUI();
         });
 
-        $(document).on('mouseup.usdrDrag', endDragSelect);
-
         $(document).on('mousemove.usdrDrag', function (e) {
             if (!dragSelect) {
+                return;
+            }
+
+            const dx = Math.abs(e.clientX - dragSelect.startX);
+            const dy = Math.abs(e.clientY - dragSelect.startY);
+
+            if (!dragSelect.active && (dx > 4 || dy > 4)) {
+                activateDragSelect();
+            }
+
+            if (!dragSelect.active) {
                 return;
             }
 
@@ -295,6 +331,21 @@
             applyDragToRow($row);
             $row.addClass('is-drag-hover');
             updateSelectionUI();
+        });
+
+        $(document).on('mouseup.usdrDrag', function () {
+            if (!dragSelect) {
+                return;
+            }
+
+            if (!dragSelect.active) {
+                dragSelect.startRow
+                    .find('.usdr-row-check')
+                    .prop('checked', !dragSelect.initialChecked);
+                updateSelectionUI();
+            }
+
+            endDragSelect();
         });
     }
 
