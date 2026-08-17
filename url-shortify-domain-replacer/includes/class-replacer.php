@@ -123,13 +123,19 @@ class USDR_Replacer {
     }
 
     /**
+     * @param string[]|null $allowed_slugs When provided, only these URL Shortify slugs are eligible.
      * @return array<int, array{id:int, name:string, slug:string, old_url:string}>
      */
-    public static function get_all_matching_links($old_domain) {
+    public static function get_all_matching_links($old_domain, $allowed_slugs = null) {
         global $wpdb;
 
         $old_domain = self::normalize_domain($old_domain);
         if ($old_domain === '' || !self::table_exists()) {
+            return [];
+        }
+
+        $slug_map = self::slug_lookup($allowed_slugs);
+        if ($allowed_slugs !== null && empty($slug_map)) {
             return [];
         }
 
@@ -152,6 +158,10 @@ class USDR_Replacer {
 
         $matches = [];
         foreach ($rows as $row) {
+            if ($slug_map !== null && !isset($slug_map[self::normalize_slug($row['slug'])])) {
+                continue;
+            }
+
             if (self::host_from_url($row['url']) !== $old_domain) {
                 continue;
             }
@@ -165,6 +175,30 @@ class USDR_Replacer {
         }
 
         return $matches;
+    }
+
+    /**
+     * @param string[]|null $slugs
+     * @return array<string, true>|null
+     */
+    private static function slug_lookup($slugs) {
+        if ($slugs === null) {
+            return null;
+        }
+
+        $map = [];
+        foreach ((array) $slugs as $slug) {
+            $normalized = self::normalize_slug($slug);
+            if ($normalized !== '') {
+                $map[$normalized] = true;
+            }
+        }
+
+        return $map;
+    }
+
+    public static function normalize_slug($slug) {
+        return strtolower(trim((string) $slug));
     }
 
     /**
@@ -270,7 +304,7 @@ class USDR_Replacer {
         return true;
     }
 
-    public static function process_all($old_domain, $new_domain) {
+    public static function process_all($old_domain, $new_domain, $allowed_slugs = null) {
         $old_domain = self::normalize_domain($old_domain);
         $new_domain = self::normalize_domain($new_domain);
 
@@ -293,15 +327,15 @@ class USDR_Replacer {
             @ignore_user_abort(true);
         }
 
-        $all_ids = self::find_matching_link_ids($old_domain);
-        $total_matches = count($all_ids);
+        $matches = self::get_all_matching_links($old_domain, $allowed_slugs);
+        $total_matches = count($matches);
         $updated = 0;
         $skipped = 0;
         $user_id = get_current_user_id();
         $now = current_time('mysql');
 
-        foreach ($all_ids as $id) {
-            if (self::update_link_domain($id, $old_domain, $new_domain, $user_id, $now) === true) {
+        foreach ($matches as $item) {
+            if (self::update_link_domain($item['id'], $old_domain, $new_domain, $user_id, $now) === true) {
                 $updated++;
             } else {
                 $skipped++;

@@ -16,6 +16,9 @@ class USDR_Admin {
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('wp_ajax_usdr_scan_links', [__CLASS__, 'ajax_scan_links']);
         add_action('wp_ajax_usdr_replace_links', [__CLASS__, 'ajax_replace_links']);
+        add_action('wp_ajax_usdr_get_brands', [__CLASS__, 'ajax_get_brands']);
+        add_action('wp_ajax_usdr_get_languages', [__CLASS__, 'ajax_get_languages']);
+        add_action('wp_ajax_usdr_refresh_sheet', [__CLASS__, 'ajax_refresh_sheet']);
     }
 
     public static function register_menu() {
@@ -125,14 +128,21 @@ class USDR_Admin {
             'diagnostics' => $diagnostics,
             'i18n' => [
                 'scanning' => __('Scanning links...', 'us-domain-replacer'),
-                'replacing' => __('Replacing all links, please wait...', 'us-domain-replacer'),
+                'replacing' => __('Replacing filtered links, please wait...', 'us-domain-replacer'),
                 'done' => __('Domain replacement completed.', 'us-domain-replacer'),
-                'confirm' => __('This will update all matching URL Shortify target URLs. Continue?', 'us-domain-replacer'),
-                'invalid' => __('Please enter both old and new domains.', 'us-domain-replacer'),
-                'noMatches' => __('No matching links found for the old domain.', 'us-domain-replacer'),
+                'confirm' => __('This will update only the URL Shortify slugs listed in Google Sheets for the selected brand and language. Continue?', 'us-domain-replacer'),
+                'invalid' => __('Please select a brand and language, then enter both old and new domains.', 'us-domain-replacer'),
+                'noMatches' => __('No matching links found for the selected brand, language, and old domain.', 'us-domain-replacer'),
                 'jsMissing' => __('Admin script failed to load. Please hard-refresh this page or re-upload the plugin assets folder.', 'us-domain-replacer'),
                 'ajaxFailed' => __('Request failed. See error details below.', 'us-domain-replacer'),
                 'notReady' => __('URL Shortify is not ready. Fix the connection issues shown above before scanning.', 'us-domain-replacer'),
+                'loadingBrands' => __('Loading brands from Google Sheets...', 'us-domain-replacer'),
+                'loadingLanguages' => __('Loading languages...', 'us-domain-replacer'),
+                'selectBrand' => __('Select a brand', 'us-domain-replacer'),
+                'selectLanguage' => __('Select a language', 'us-domain-replacer'),
+                'noLanguages' => __('No languages found for this brand.', 'us-domain-replacer'),
+                'sheetFailed' => __('Could not load Google Sheets data.', 'us-domain-replacer'),
+                'refreshing' => __('Refreshing Google Sheets data...', 'us-domain-replacer'),
             ],
         ]);
     }
@@ -152,7 +162,7 @@ class USDR_Admin {
         <div class="wrap usdr-wrap">
             <h1><?php esc_html_e('URL Shortify Domain Replacer by Aris', 'us-domain-replacer'); ?></h1>
             <p class="description">
-                <?php esc_html_e('Replace the target URL domain across all URL Shortify links. Short slugs and URL paths stay the same.', 'us-domain-replacer'); ?>
+                <?php esc_html_e('Replace the target URL domain for URL Shortify links that exist in Google Sheets. Choose a brand and language first; only those slugs are updated. Paths stay the same.', 'us-domain-replacer'); ?>
             </p>
 
             <div class="usdr-card usdr-status-card <?php echo $ready ? 'is-ready' : 'is-error'; ?>">
@@ -188,6 +198,17 @@ class USDR_Admin {
                     <li class="is-ok">
                         <?php esc_html_e('REST API keys are NOT required. This tool reads and updates links directly inside WordPress.', 'us-domain-replacer'); ?>
                     </li>
+                    <li class="is-ok">
+                        <?php
+                        $service_email = USDR_GSheet::service_account_email();
+                        printf(
+                            /* translators: 1: Google Sheets URL, 2: service account email */
+                            esc_html__('Brand, language, and slug filters are loaded from the private Google Sheet %1$s using service account %2$s.', 'us-domain-replacer'),
+                            '<a href="' . esc_url(USDR_GSheet::spreadsheet_url()) . '" target="_blank" rel="noopener noreferrer">' . esc_html__('MCW Shortlinks Summary', 'us-domain-replacer') . '</a>',
+                            '<code>' . esc_html($service_email) . '</code>'
+                        );
+                        ?>
+                    </li>
                 </ul>
                 <?php if (!$ready) : ?>
                     <p class="usdr-inline-error">
@@ -198,6 +219,31 @@ class USDR_Admin {
 
             <div class="usdr-card">
                 <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">
+                            <label for="usdr-brand"><?php esc_html_e('Brand', 'us-domain-replacer'); ?></label>
+                        </th>
+                        <td>
+                            <select id="usdr-brand" class="regular-text usdr-select">
+                                <option value=""><?php esc_html_e('Loading brands...', 'us-domain-replacer'); ?></option>
+                            </select>
+                            <button type="button" class="button" id="usdr-refresh-sheet">
+                                <?php esc_html_e('Reload Google Sheet', 'us-domain-replacer'); ?>
+                            </button>
+                            <p class="description"><?php esc_html_e('Brand list comes from Google Sheet tab names. The Summary tab is skipped.', 'us-domain-replacer'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="usdr-language"><?php esc_html_e('Language', 'us-domain-replacer'); ?></label>
+                        </th>
+                        <td>
+                            <select id="usdr-language" class="regular-text usdr-select" disabled>
+                                <option value=""><?php esc_html_e('Select a brand first', 'us-domain-replacer'); ?></option>
+                            </select>
+                            <p class="description"><?php esc_html_e('Only languages that exist for the selected brand are shown. Matching slugs come from column F.', 'us-domain-replacer'); ?></p>
+                        </td>
+                    </tr>
                     <tr>
                         <th scope="row">
                             <label for="usdr-old-domain"><?php esc_html_e('Old Domain', 'us-domain-replacer'); ?></label>
@@ -223,7 +269,7 @@ class USDR_Admin {
                         <?php esc_html_e('Scan Links', 'us-domain-replacer'); ?>
                     </button>
                     <button type="button" class="button button-primary" id="usdr-replace-btn" disabled>
-                        <?php esc_html_e('Replace All Matching Links', 'us-domain-replacer'); ?>
+                        <?php esc_html_e('Replace Filtered Links', 'us-domain-replacer'); ?>
                     </button>
                 </p>
             </div>
@@ -247,6 +293,50 @@ class USDR_Admin {
         check_ajax_referer('usdr_actions', 'nonce');
     }
 
+    public static function ajax_get_brands() {
+        self::verify_request();
+
+        $brands = USDR_GSheet::get_brands();
+        if (is_wp_error($brands)) {
+            wp_send_json_error(['message' => $brands->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'brands' => $brands,
+        ]);
+    }
+
+    public static function ajax_get_languages() {
+        self::verify_request();
+
+        $brand = sanitize_text_field(wp_unslash($_POST['brand'] ?? ''));
+        $languages = USDR_GSheet::get_languages($brand);
+        if (is_wp_error($languages)) {
+            wp_send_json_error(['message' => $languages->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'brand' => $brand,
+            'languages' => $languages,
+        ]);
+    }
+
+    public static function ajax_refresh_sheet() {
+        self::verify_request();
+
+        USDR_GSheet::clear_cache();
+
+        $brands = USDR_GSheet::get_brands();
+        if (is_wp_error($brands)) {
+            wp_send_json_error(['message' => $brands->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'brands' => $brands,
+            'message' => __('Google Sheets data reloaded.', 'us-domain-replacer'),
+        ]);
+    }
+
     public static function ajax_scan_links() {
         self::verify_request();
 
@@ -257,18 +347,15 @@ class USDR_Admin {
                 'diagnostics' => $diagnostics,
             ]);
         }
-        $old_domain = USDR_Replacer::normalize_domain(sanitize_text_field(wp_unslash($_POST['old_domain'] ?? '')));
-        $new_domain = USDR_Replacer::normalize_domain(sanitize_text_field(wp_unslash($_POST['new_domain'] ?? '')));
 
-        if ($old_domain === '' || $new_domain === '') {
-            wp_send_json_error(['message' => __('Please provide valid old and new domains.', 'us-domain-replacer')]);
+        $filter = self::request_filter();
+        if (is_wp_error($filter)) {
+            wp_send_json_error(['message' => $filter->get_error_message()]);
         }
 
-        if ($old_domain === $new_domain) {
-            wp_send_json_error(['message' => __('Old and new domains must be different.', 'us-domain-replacer')]);
-        }
-
-        $matches = USDR_Replacer::get_all_matching_links($old_domain);
+        $old_domain = $filter['old_domain'];
+        $new_domain = $filter['new_domain'];
+        $matches = USDR_Replacer::get_all_matching_links($old_domain, $filter['slugs']);
         $count = count($matches);
 
         foreach ($matches as &$item) {
@@ -281,6 +368,9 @@ class USDR_Admin {
             'preview' => $matches,
             'old_domain' => $old_domain,
             'new_domain' => $new_domain,
+            'brand' => $filter['brand'],
+            'language' => $filter['language'],
+            'sheet_slugs' => count($filter['slugs']),
         ]);
     }
 
@@ -295,14 +385,62 @@ class USDR_Admin {
             ]);
         }
 
-        $old_domain = sanitize_text_field(wp_unslash($_POST['old_domain'] ?? ''));
-        $new_domain = sanitize_text_field(wp_unslash($_POST['new_domain'] ?? ''));
+        $filter = self::request_filter();
+        if (is_wp_error($filter)) {
+            wp_send_json_error(['message' => $filter->get_error_message()]);
+        }
 
-        $result = USDR_Replacer::process_all($old_domain, $new_domain);
+        $result = USDR_Replacer::process_all($filter['old_domain'], $filter['new_domain'], $filter['slugs']);
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
 
+        $result['brand'] = $filter['brand'];
+        $result['language'] = $filter['language'];
+        $result['sheet_slugs'] = count($filter['slugs']);
+
         wp_send_json_success($result);
+    }
+
+    /**
+     * @return array{brand:string, language:string, old_domain:string, new_domain:string, slugs:string[]}|WP_Error
+     */
+    private static function request_filter() {
+        $brand = sanitize_text_field(wp_unslash($_POST['brand'] ?? ''));
+        $language = sanitize_text_field(wp_unslash($_POST['language'] ?? ''));
+        $old_domain = USDR_Replacer::normalize_domain(sanitize_text_field(wp_unslash($_POST['old_domain'] ?? '')));
+        $new_domain = USDR_Replacer::normalize_domain(sanitize_text_field(wp_unslash($_POST['new_domain'] ?? '')));
+
+        if ($brand === '' || $language === '') {
+            return new WP_Error('missing_filter', __('Please select a brand and language.', 'us-domain-replacer'));
+        }
+
+        if ($old_domain === '' || $new_domain === '') {
+            return new WP_Error('invalid_domain', __('Please provide valid old and new domains.', 'us-domain-replacer'));
+        }
+
+        if ($old_domain === $new_domain) {
+            return new WP_Error('same_domain', __('Old and new domains must be different.', 'us-domain-replacer'));
+        }
+
+        $slugs = USDR_GSheet::get_slugs($brand, $language);
+        if (is_wp_error($slugs)) {
+            return $slugs;
+        }
+
+        if (empty($slugs)) {
+            return new WP_Error(
+                'no_slugs',
+                __('No slugs were found in Google Sheets for the selected brand and language.', 'us-domain-replacer')
+            );
+        }
+
+        return [
+            'brand' => $brand,
+            'language' => $language,
+            'old_domain' => $old_domain,
+            'new_domain' => $new_domain,
+            'slugs' => $slugs,
+        ];
     }
 }

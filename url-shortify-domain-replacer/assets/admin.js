@@ -1,11 +1,24 @@
 (function ($) {
     'use strict';
 
-    function getDomains() {
+    function getForm() {
         return {
+            brand: $('#usdr-brand').val() || '',
+            language: $('#usdr-language').val() || '',
             oldDomain: $('#usdr-old-domain').val().trim(),
             newDomain: $('#usdr-new-domain').val().trim(),
         };
+    }
+
+    function formPayload(extra) {
+        const form = getForm();
+        return $.extend({
+            nonce: USDR.nonce,
+            brand: form.brand,
+            language: form.language,
+            old_domain: form.oldDomain,
+            new_domain: form.newDomain,
+        }, extra || {});
     }
 
     function setStatus(message, type, details) {
@@ -63,6 +76,11 @@
         return !!(window.USDR && USDR.diagnostics && USDR.diagnostics.ready);
     }
 
+    function isFormValid() {
+        const form = getForm();
+        return !!(form.brand && form.language && form.oldDomain && form.newDomain);
+    }
+
     function renderSummary(data) {
         const $summary = $('#usdr-summary');
         if (!data || typeof data.count === 'undefined') {
@@ -70,10 +88,17 @@
             return;
         }
 
+        const brand = $('<div>').text(data.brand || '').html();
+        const language = $('<div>').text(data.language || '').html();
+        const oldDomain = $('<div>').text(data.old_domain).html();
+        const newDomain = $('<div>').text(data.new_domain).html();
+        const sheetSlugs = typeof data.sheet_slugs !== 'undefined' ? data.sheet_slugs : 0;
+
         $summary.html(
             '<p><strong>' + data.count + '</strong> matching link(s) found for <code>' +
-            $('<div>').text(data.old_domain).html() + '</code> → <code>' +
-            $('<div>').text(data.new_domain).html() + '</code></p>'
+            oldDomain + '</code> → <code>' + newDomain + '</code></p>' +
+            '<p>Filter: brand <code>' + brand + '</code>, language <code>' + language +
+            '</code>, Google Sheet slugs <strong>' + sheetSlugs + '</strong>.</p>'
         );
     }
 
@@ -85,7 +110,7 @@
             return;
         }
 
-        let html = '<h2>All Matching Links (' + preview.length + ')</h2>';
+        let html = '<h2>Filtered Matching Links (' + preview.length + ')</h2>';
         html += '<div class="usdr-results-table-wrap"><table class="widefat striped"><thead><tr>';
         html += '<th>ID</th><th>Title</th><th>Slug</th><th>Old Target URL</th><th>New Target URL</th>';
         html += '</tr></thead><tbody>';
@@ -104,17 +129,128 @@
         $results.html(html);
     }
 
-    function runReplace(domains) {
+    function fillBrandSelect(brands, selected) {
+        const $brand = $('#usdr-brand');
+        const current = selected || $brand.val() || '';
+        $brand.empty();
+        $brand.append($('<option>', { value: '', text: USDR.i18n.selectBrand }));
+
+        (brands || []).forEach(function (item) {
+            const name = item.name || item;
+            $brand.append($('<option>', { value: name, text: name }));
+        });
+
+        if (current) {
+            $brand.val(current);
+        }
+
+        $brand.prop('disabled', false);
+        return $brand.val();
+    }
+
+    function resetLanguageSelect(placeholder, disabled) {
+        const $language = $('#usdr-language');
+        $language.empty();
+        $language.append($('<option>', { value: '', text: placeholder || USDR.i18n.selectLanguage }));
+        $language.prop('disabled', !!disabled);
+        $('#usdr-replace-btn').prop('disabled', true);
+    }
+
+    function fillLanguageSelect(languages) {
+        const $language = $('#usdr-language');
+        $language.empty();
+
+        if (!languages || !languages.length) {
+            resetLanguageSelect(USDR.i18n.noLanguages, true);
+            return;
+        }
+
+        $language.append($('<option>', { value: '', text: USDR.i18n.selectLanguage }));
+        languages.forEach(function (item) {
+            const code = item.code || item;
+            const count = item.slug_count ? ' (' + item.slug_count + ' slugs)' : '';
+            $language.append($('<option>', { value: code, text: code + count }));
+        });
+        $language.prop('disabled', false);
+    }
+
+    function loadLanguages(brand) {
+        resetLanguageSelect(USDR.i18n.loadingLanguages, true);
+
+        if (!brand) {
+            resetLanguageSelect('Select a brand first', true);
+            return $.Deferred().resolve().promise();
+        }
+
+        return $.post(USDR.ajaxUrl, {
+            action: 'usdr_get_languages',
+            nonce: USDR.nonce,
+            brand: brand,
+        }).done(function (response) {
+            if (!response || !response.success) {
+                const message = (response && response.data && response.data.message) || USDR.i18n.sheetFailed;
+                resetLanguageSelect(message, true);
+                setStatus(message, 'error');
+                return;
+            }
+
+            fillLanguageSelect(response.data.languages);
+        }).fail(function (xhr) {
+            const message = parseAjaxError(xhr, USDR.i18n.sheetFailed);
+            resetLanguageSelect(message, true);
+            setStatus(message, 'error', xhr && xhr.responseText ? xhr.responseText : '');
+        });
+    }
+
+    function loadBrands(forceRefresh) {
+        const $brand = $('#usdr-brand');
+        const $refresh = $('#usdr-refresh-sheet');
+        const selected = $brand.val();
+
+        $brand.prop('disabled', true);
+        $refresh.prop('disabled', true);
+        resetLanguageSelect(USDR.i18n.loadingLanguages, true);
+        $brand.empty().append($('<option>', {
+            value: '',
+            text: forceRefresh ? USDR.i18n.refreshing : USDR.i18n.loadingBrands,
+        }));
+
+        return $.post(USDR.ajaxUrl, {
+            action: forceRefresh ? 'usdr_refresh_sheet' : 'usdr_get_brands',
+            nonce: USDR.nonce,
+        }).done(function (response) {
+            if (!response || !response.success) {
+                const message = (response && response.data && response.data.message) || USDR.i18n.sheetFailed;
+                $brand.empty().append($('<option>', { value: '', text: message }));
+                setStatus(message, 'error');
+                return;
+            }
+
+            const nextBrand = fillBrandSelect(response.data.brands, selected);
+            if (forceRefresh && response.data.message) {
+                setStatus(response.data.message, 'success');
+            }
+
+            if (nextBrand) {
+                loadLanguages(nextBrand);
+            } else {
+                resetLanguageSelect('Select a brand first', true);
+            }
+        }).fail(function (xhr) {
+            const message = parseAjaxError(xhr, USDR.i18n.sheetFailed);
+            $brand.empty().append($('<option>', { value: '', text: message }));
+            setStatus(message, 'error', xhr && xhr.responseText ? xhr.responseText : '');
+        }).always(function () {
+            $refresh.prop('disabled', false);
+        });
+    }
+
+    function runReplace() {
         return $.ajax({
             url: USDR.ajaxUrl,
             method: 'POST',
             timeout: 300000,
-            data: {
-                action: 'usdr_replace_links',
-                nonce: USDR.nonce,
-                old_domain: domains.oldDomain,
-                new_domain: domains.newDomain,
-            },
+            data: formPayload({ action: 'usdr_replace_links' }),
         }).then(function (response) {
             if (!response || !response.success) {
                 const message = (response && response.data && response.data.message) || 'Replace failed.';
@@ -140,14 +276,34 @@
             setStatus(USDR.i18n.notReady, 'error', USDR.diagnostics && USDR.diagnostics.error ? USDR.diagnostics.error : '');
         }
 
+        loadBrands(false);
+
+        $('#usdr-brand').on('change', function () {
+            $('#usdr-summary').empty();
+            $('#usdr-results').empty();
+            $('#usdr-replace-btn').prop('disabled', true);
+            loadLanguages($(this).val());
+        });
+
+        $('#usdr-language').on('change', function () {
+            $('#usdr-replace-btn').prop('disabled', true);
+        });
+
+        $('#usdr-refresh-sheet').on('click', function () {
+            $('#usdr-summary').empty();
+            $('#usdr-results').empty();
+            $('#usdr-replace-btn').prop('disabled', true);
+            setStatus(USDR.i18n.refreshing, 'info');
+            loadBrands(true);
+        });
+
         $('#usdr-scan-btn').on('click', function () {
             if (!isReady()) {
                 setStatus(USDR.i18n.notReady, 'error', USDR.diagnostics.error || '');
                 return;
             }
 
-            const domains = getDomains();
-            if (!domains.oldDomain || !domains.newDomain) {
+            if (!isFormValid()) {
                 setStatus(USDR.i18n.invalid, 'error');
                 return;
             }
@@ -159,12 +315,7 @@
             $('#usdr-summary').empty();
             $('#usdr-results').empty();
 
-            $.post(USDR.ajaxUrl, {
-                action: 'usdr_scan_links',
-                nonce: USDR.nonce,
-                old_domain: domains.oldDomain,
-                new_domain: domains.newDomain,
-            })
+            $.post(USDR.ajaxUrl, formPayload({ action: 'usdr_scan_links' }))
                 .done(function (response) {
                     if (!response || !response.success) {
                         const message = (response && response.data && response.data.message) || 'Scan failed.';
@@ -181,7 +332,7 @@
 
                     if (data.count > 0) {
                         $('#usdr-replace-btn').prop('disabled', false);
-                        setStatus('Found ' + data.count + ' matching link(s). Review the full list below, then run replace.', 'success');
+                        setStatus('Found ' + data.count + ' matching link(s) for ' + data.brand + ' / ' + data.language + '. Review the list below, then run replace.', 'success');
                     } else {
                         setStatus(USDR.i18n.noMatches, 'error');
                     }
@@ -200,8 +351,7 @@
                 return;
             }
 
-            const domains = getDomains();
-            if (!domains.oldDomain || !domains.newDomain) {
+            if (!isFormValid()) {
                 setStatus(USDR.i18n.invalid, 'error');
                 return;
             }
@@ -216,18 +366,13 @@
             $replaceBtn.prop('disabled', true);
             setStatus(USDR.i18n.replacing, 'info');
 
-            runReplace(domains)
+            runReplace()
                 .then(function (data) {
                     setStatus(
                         USDR.i18n.done + ' Updated: ' + (data.updated || 0) + ' / ' + (data.total_matches || 0) + ', Skipped: ' + (data.skipped || 0) + '.',
                         'success'
                     );
-                    return $.post(USDR.ajaxUrl, {
-                        action: 'usdr_scan_links',
-                        nonce: USDR.nonce,
-                        old_domain: domains.oldDomain,
-                        new_domain: domains.newDomain,
-                    });
+                    return $.post(USDR.ajaxUrl, formPayload({ action: 'usdr_scan_links' }));
                 })
                 .done(function (response) {
                     if (response && response.success) {

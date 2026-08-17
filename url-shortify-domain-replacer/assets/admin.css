@@ -90,6 +90,15 @@
     border-radius: 4px;
 }
 
+.usdr-wrap .usdr-select {
+    max-width: 360px;
+    margin-right: 8px;
+}
+
+.usdr-wrap #usdr-refresh-sheet {
+    vertical-align: top;
+}
+
 .usdr-results table code {
     word-break: break-all;
     white-space: normal;
