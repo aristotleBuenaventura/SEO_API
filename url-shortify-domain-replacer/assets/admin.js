@@ -30,10 +30,11 @@
 
         let html = '';
         if (message) {
-            html += '<p class="usdr-status-message">' + $('<div>').text(message).html() + '</p>';
-        }
-        if (details) {
-            html += '<pre class="usdr-status-details">' + $('<div>').text(details).html() + '</pre>';
+            html += '<div class="usdr-flash is-' + (type || 'info') + '">' + $('<div>').text(message).html();
+            if (details) {
+                html += '<code class="usdr-flash-details">' + $('<div>').text(details).html() + '</code>';
+            }
+            html += '</div>';
         }
 
         $status.html(html);
@@ -81,10 +82,45 @@
         return !!(form.brand && form.language && form.oldDomain && form.newDomain);
     }
 
+    function confirmDialog(title, message) {
+        return new Promise(function (resolve) {
+            const $modal = $('#usdr-modal');
+            $('#usdr-modal-title').text(title || USDR.i18n.confirmTitle);
+            $('#usdr-modal-message').text(message || USDR.i18n.confirm);
+            $('#usdr-modal-cancel').text(USDR.i18n.confirmCancel);
+            $('#usdr-modal-confirm').text(USDR.i18n.confirmOk);
+            $modal.removeAttr('hidden').attr('aria-hidden', 'false').addClass('is-open');
+            $('body').addClass('usdr-modal-open');
+
+            function close(result) {
+                $modal.attr('hidden', 'hidden').attr('aria-hidden', 'true').removeClass('is-open');
+                $('body').removeClass('usdr-modal-open');
+                $('#usdr-modal-confirm, #usdr-modal-cancel, [data-usdr-modal-close]').off('.usdrModal');
+                $(document).off('keydown.usdrModal');
+                resolve(result);
+            }
+
+            $('#usdr-modal-confirm').on('click.usdrModal', function () {
+                close(true);
+            });
+            $('#usdr-modal-cancel, [data-usdr-modal-close]').on('click.usdrModal', function () {
+                close(false);
+            });
+            $(document).on('keydown.usdrModal', function (e) {
+                if (e.key === 'Escape') {
+                    close(false);
+                }
+            });
+        });
+    }
+
     function renderSummary(data) {
         const $summary = $('#usdr-summary');
+        const $section = $('#usdr-results-section');
+
         if (!data || typeof data.count === 'undefined') {
             $summary.empty();
+            $section.addClass('is-hidden');
             return;
         }
 
@@ -95,11 +131,171 @@
         const sheetSlugs = typeof data.sheet_slugs !== 'undefined' ? data.sheet_slugs : 0;
 
         $summary.html(
-            '<p><strong>' + data.count + '</strong> matching link(s) found for <code>' +
-            oldDomain + '</code> → <code>' + newDomain + '</code></p>' +
-            '<p>Filter: brand <code>' + brand + '</code>, language <code>' + language +
-            '</code>, Google Sheet slugs <strong>' + sheetSlugs + '</strong>.</p>'
+            '<div class="usdr-summary-stats">' +
+            '<div class="usdr-stat is-accent"><span class="usdr-stat-label">Matches</span><strong>' + data.count + '</strong></div>' +
+            '<div class="usdr-stat"><span class="usdr-stat-label">Brand</span><strong>' + brand + '</strong></div>' +
+            '<div class="usdr-stat"><span class="usdr-stat-label">Language</span><strong>' + language + '</strong></div>' +
+            '<div class="usdr-stat"><span class="usdr-stat-label">Sheet slugs</span><strong>' + sheetSlugs + '</strong></div>' +
+            '</div>' +
+            '<div class="usdr-domain-preview">' +
+            '<span class="usdr-domain-preview-label">Domain swap</span>' +
+            '<code>' + oldDomain + '</code>' +
+            '<span class="usdr-domain-preview-arrow">→</span>' +
+            '<code>' + newDomain + '</code>' +
+            '</div>'
         );
+
+        $section.removeClass('is-hidden');
+    }
+
+    function getSelectedLinkIds() {
+        const ids = [];
+        $('.usdr-row-check:checked').each(function () {
+            const id = parseInt($(this).val(), 10);
+            if (id > 0) {
+                ids.push(id);
+            }
+        });
+        return ids;
+    }
+
+    function getTotalRowCount() {
+        return $('.usdr-row-check').length;
+    }
+
+    function updateSelectAllState() {
+        const $selectAll = $('#usdr-select-all');
+        if (!$selectAll.length) {
+            return;
+        }
+
+        const total = getTotalRowCount();
+        const selected = getSelectedLinkIds().length;
+
+        if (total === 0) {
+            $selectAll.prop({ checked: false, indeterminate: false });
+            return;
+        }
+
+        $selectAll.prop('checked', selected === total);
+        $selectAll.prop('indeterminate', selected > 0 && selected < total);
+    }
+
+    function updateRowSelectionStyles() {
+        $('.usdr-row-check').each(function () {
+            $(this).closest('tr').toggleClass('is-unselected', !$(this).prop('checked'));
+        });
+    }
+
+    function updateSelectionUI() {
+        const total = getTotalRowCount();
+        const selected = getSelectedLinkIds().length;
+        const $badge = $('#usdr-selection-badge');
+
+        if ($badge.length) {
+            $badge.text(USDR.i18n.selectedCount.replace('%1$d', selected).replace('%2$d', total));
+        }
+
+        $('#usdr-replace-btn').prop('disabled', selected === 0);
+        updateSelectAllState();
+        updateRowSelectionStyles();
+    }
+
+    function bindSelectionEvents() {
+        const $results = $('#usdr-results');
+        let dragSelect = null;
+
+        function endDragSelect() {
+            if (!dragSelect) {
+                return;
+            }
+
+            dragSelect = null;
+            $('body').removeClass('usdr-drag-selecting');
+            $('.usdr-table tbody tr').removeClass('is-drag-hover');
+        }
+
+        function applyDragToRow($row) {
+            if (!dragSelect || !$row.length) {
+                return;
+            }
+
+            $row.find('.usdr-row-check').prop('checked', dragSelect.value);
+        }
+
+        $results.off('change.usdrSelect', '#usdr-select-all');
+        $results.off('change.usdrSelect', '.usdr-row-check');
+        $results.off('mousedown.usdrDrag', '.usdr-table tbody tr');
+        $results.off('mouseenter.usdrDrag', '.usdr-table tbody tr');
+        $(document).off('mouseup.usdrDrag mousemove.usdrDrag');
+
+        $results.on('change.usdrSelect', '#usdr-select-all', function () {
+            const checked = $(this).prop('checked');
+            $('.usdr-row-check').prop('checked', checked);
+            updateSelectionUI();
+        });
+
+        $results.on('change.usdrSelect', '.usdr-row-check', function () {
+            updateSelectionUI();
+        });
+
+        $results.on('mousedown.usdrDrag', '.usdr-table tbody tr', function (e) {
+            if (e.which !== 1 || $(e.target).closest('#usdr-select-all').length) {
+                return;
+            }
+
+            e.preventDefault();
+
+            const $row = $(this);
+            const $checkbox = $row.find('.usdr-row-check');
+            const value = !$checkbox.prop('checked');
+
+            dragSelect = { value: value };
+            $('body').addClass('usdr-drag-selecting');
+            $('.usdr-table tbody tr').removeClass('is-drag-hover');
+            applyDragToRow($row);
+            $row.addClass('is-drag-hover');
+            updateSelectionUI();
+        });
+
+        $results.on('mouseenter.usdrDrag', '.usdr-table tbody tr', function () {
+            if (!dragSelect) {
+                return;
+            }
+
+            $('.usdr-table tbody tr').removeClass('is-drag-hover');
+            const $row = $(this);
+            applyDragToRow($row);
+            $row.addClass('is-drag-hover');
+            updateSelectionUI();
+        });
+
+        $(document).on('mouseup.usdrDrag', endDragSelect);
+
+        $(document).on('mousemove.usdrDrag', function (e) {
+            if (!dragSelect) {
+                return;
+            }
+
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            if (!target) {
+                return;
+            }
+
+            const $row = $(target).closest('.usdr-table tbody tr');
+            if (!$row.length || !$row.closest('#usdr-results').length) {
+                return;
+            }
+
+            if ($row.hasClass('is-drag-hover')) {
+                return;
+            }
+
+            $('.usdr-table tbody tr').removeClass('is-drag-hover');
+            applyDragToRow($row);
+            $row.addClass('is-drag-hover');
+            updateSelectionUI();
+        });
     }
 
     function renderPreview(preview) {
@@ -107,16 +303,29 @@
         $results.empty();
 
         if (!preview || !preview.length) {
+            $results.html(
+                '<div class="usdr-empty-state">' +
+                '<strong>No matching links</strong>' +
+                'Try a different domain or verify the selected brand and language.' +
+                '</div>'
+            );
             return;
         }
 
-        let html = '<h2>Filtered Matching Links (' + preview.length + ')</h2>';
-        html += '<div class="usdr-results-table-wrap"><table class="widefat striped"><thead><tr>';
+        let html = '<div class="usdr-results-head">';
+        html += '<h3>Matching links</h3>';
+        html += '<span class="usdr-count-badge" id="usdr-selection-badge">' +
+            USDR.i18n.selectedCount.replace('%1$d', preview.length).replace('%2$d', preview.length) +
+            '</span>';
+        html += '</div>';
+        html += '<div class="usdr-results-table-wrap"><table class="usdr-table"><thead><tr>';
+        html += '<th class="usdr-col-check"><input type="checkbox" id="usdr-select-all" checked aria-label="Select all links" /></th>';
         html += '<th>ID</th><th>Title</th><th>Slug</th><th>Old Target URL</th><th>New Target URL</th>';
         html += '</tr></thead><tbody>';
 
         preview.forEach(function (row) {
             html += '<tr>';
+            html += '<td class="usdr-col-check"><input type="checkbox" class="usdr-row-check" value="' + row.id + '" checked aria-label="Select link ' + row.id + '" /></td>';
             html += '<td>' + row.id + '</td>';
             html += '<td>' + $('<div>').text(row.name || '').html() + '</td>';
             html += '<td><code>' + $('<div>').text(row.slug || '').html() + '</code></td>';
@@ -127,6 +336,8 @@
 
         html += '</tbody></table></div>';
         $results.html(html);
+        bindSelectionEvents();
+        updateSelectionUI();
     }
 
     function fillBrandSelect(brands, selected) {
@@ -245,12 +456,16 @@
         });
     }
 
-    function runReplace() {
+    function runReplace(linkIds) {
         return $.ajax({
             url: USDR.ajaxUrl,
             method: 'POST',
             timeout: 300000,
-            data: formPayload({ action: 'usdr_replace_links' }),
+            traditional: true,
+            data: formPayload({
+                action: 'usdr_replace_links',
+                link_ids: linkIds || [],
+            }),
         }).then(function (response) {
             if (!response || !response.success) {
                 const message = (response && response.data && response.data.message) || 'Replace failed.';
@@ -281,6 +496,7 @@
         $('#usdr-brand').on('change', function () {
             $('#usdr-summary').empty();
             $('#usdr-results').empty();
+            $('#usdr-results-section').addClass('is-hidden');
             $('#usdr-replace-btn').prop('disabled', true);
             loadLanguages($(this).val());
         });
@@ -292,6 +508,7 @@
         $('#usdr-refresh-sheet').on('click', function () {
             $('#usdr-summary').empty();
             $('#usdr-results').empty();
+            $('#usdr-results-section').addClass('is-hidden');
             $('#usdr-replace-btn').prop('disabled', true);
             setStatus(USDR.i18n.refreshing, 'info');
             loadBrands(true);
@@ -314,6 +531,7 @@
             $('#usdr-replace-btn').prop('disabled', true);
             $('#usdr-summary').empty();
             $('#usdr-results').empty();
+            $('#usdr-results-section').addClass('is-hidden');
 
             $.post(USDR.ajaxUrl, formPayload({ action: 'usdr_scan_links' }))
                 .done(function (response) {
@@ -332,7 +550,7 @@
 
                     if (data.count > 0) {
                         $('#usdr-replace-btn').prop('disabled', false);
-                        setStatus('Found ' + data.count + ' matching link(s) for ' + data.brand + ' / ' + data.language + '. Review the list below, then run replace.', 'success');
+                        setStatus('Found ' + data.count + ' matching link(s) for ' + data.brand + ' / ' + data.language + '. Uncheck any row to exclude it, then run replace.', 'success');
                     } else {
                         setStatus(USDR.i18n.noMatches, 'error');
                     }
@@ -356,39 +574,51 @@
                 return;
             }
 
-            if (!window.confirm(USDR.i18n.confirm)) {
+            const selectedIds = getSelectedLinkIds();
+            if (!selectedIds.length) {
+                setStatus(USDR.i18n.noneSelected, 'error');
                 return;
             }
 
             const $scanBtn = $('#usdr-scan-btn');
             const $replaceBtn = $(this);
-            $scanBtn.prop('disabled', true);
-            $replaceBtn.prop('disabled', true);
-            setStatus(USDR.i18n.replacing, 'info');
+            const confirmMessage = USDR.i18n.confirm.replace('%d', selectedIds.length);
 
-            runReplace()
-                .then(function (data) {
-                    setStatus(
-                        USDR.i18n.done + ' Updated: ' + (data.updated || 0) + ' / ' + (data.total_matches || 0) + ', Skipped: ' + (data.skipped || 0) + '.',
-                        'success'
-                    );
-                    return $.post(USDR.ajaxUrl, formPayload({ action: 'usdr_scan_links' }));
-                })
-                .done(function (response) {
-                    if (response && response.success) {
-                        renderSummary(response.data);
-                        renderPreview(response.data.preview);
-                        if (!response.data.count) {
-                            $('#usdr-replace-btn').prop('disabled', true);
+            confirmDialog(USDR.i18n.confirmTitle, confirmMessage).then(function (ok) {
+                if (!ok) {
+                    return;
+                }
+
+                $scanBtn.prop('disabled', true);
+                $replaceBtn.prop('disabled', true);
+                setStatus(USDR.i18n.replacing, 'info');
+
+                runReplace(selectedIds)
+                    .then(function (data) {
+                        setStatus(
+                            USDR.i18n.done + ' Updated: ' + (data.updated || 0) + ' / ' + (data.total_matches || 0) + ', Skipped: ' + (data.skipped || 0) + '.',
+                            'success'
+                        );
+                        return $.post(USDR.ajaxUrl, formPayload({ action: 'usdr_scan_links' }));
+                    })
+                    .done(function (response) {
+                        if (response && response.success) {
+                            renderSummary(response.data);
+                            renderPreview(response.data.preview);
+                            if (!response.data.count) {
+                                $('#usdr-replace-btn').prop('disabled', true);
+                            } else {
+                                updateSelectionUI();
+                            }
                         }
-                    }
-                })
-                .fail(function (xhr) {
-                    setStatus(parseAjaxError(xhr, 'Replace failed.'), 'error', xhr && xhr.responseText ? xhr.responseText : '');
-                })
-                .always(function () {
-                    $scanBtn.prop('disabled', !isReady());
-                });
+                    })
+                    .fail(function (xhr) {
+                        setStatus(parseAjaxError(xhr, 'Replace failed.'), 'error', xhr && xhr.responseText ? xhr.responseText : '');
+                    })
+                    .always(function () {
+                        $scanBtn.prop('disabled', !isReady());
+                    });
+            });
         });
     }
 

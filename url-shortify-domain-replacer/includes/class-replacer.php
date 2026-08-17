@@ -304,7 +304,7 @@ class USDR_Replacer {
         return true;
     }
 
-    public static function process_all($old_domain, $new_domain, $allowed_slugs = null) {
+    public static function process_all($old_domain, $new_domain, $allowed_slugs = null, $link_ids = null) {
         $old_domain = self::normalize_domain($old_domain);
         $new_domain = self::normalize_domain($new_domain);
 
@@ -328,6 +328,13 @@ class USDR_Replacer {
         }
 
         $matches = self::get_all_matching_links($old_domain, $allowed_slugs);
+        if ($link_ids !== null) {
+            $allowed_ids = array_fill_keys(array_map('intval', $link_ids), true);
+            $matches = array_values(array_filter($matches, static function ($item) use ($allowed_ids) {
+                return isset($allowed_ids[(int) $item['id']]);
+            }));
+        }
+
         $total_matches = count($matches);
         $updated = 0;
         $skipped = 0;

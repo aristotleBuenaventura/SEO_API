@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: URL Shortify Domain Replacer by Aris
+ * Plugin Name: URL Shortify Domain Replacer
  * Description: Bulk replace old domains with new domains in URL Shortify target URLs, filtered by Google Sheets brand and language.
- * Version: 1.2.0
+ * Version: 1.2.6
  * Author: Aris
  * Requires at least: 5.6
  * Requires PHP: 7.4
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('USDR_VERSION', '1.2.0');
+define('USDR_VERSION', '1.2.6');
 define('USDR_PLUGIN_FILE', __FILE__);
 define('USDR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 

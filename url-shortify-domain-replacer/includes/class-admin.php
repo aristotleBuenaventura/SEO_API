@@ -19,6 +19,28 @@ class USDR_Admin {
         add_action('wp_ajax_usdr_get_brands', [__CLASS__, 'ajax_get_brands']);
         add_action('wp_ajax_usdr_get_languages', [__CLASS__, 'ajax_get_languages']);
         add_action('wp_ajax_usdr_refresh_sheet', [__CLASS__, 'ajax_refresh_sheet']);
+        add_action('in_admin_header', [__CLASS__, 'suppress_foreign_notices'], 1000);
+        add_filter('admin_body_class', [__CLASS__, 'admin_body_class']);
+    }
+
+    public static function admin_body_class($classes) {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        if ($page === self::PAGE_SLUG) {
+            $classes .= ' usdr-admin-page';
+        }
+
+        return $classes;
+    }
+
+    /** Keep this screen free of other plugins' admin notices. */
+    public static function suppress_foreign_notices() {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        if ($page !== self::PAGE_SLUG) {
+            return;
+        }
+
+        remove_all_actions('admin_notices');
+        remove_all_actions('all_admin_notices');
     }
 
     public static function register_menu() {
@@ -28,8 +50,8 @@ class USDR_Admin {
 
         add_submenu_page(
             self::PARENT_SLUG,
-            __('Domain Replacer by Aris', 'us-domain-replacer'),
-            __('Domain Replacer by Aris', 'us-domain-replacer'),
+            __('Domain Replacer', 'us-domain-replacer'),
+            __('Domain Replacer', 'us-domain-replacer'),
             'read',
             self::PAGE_SLUG,
             [__CLASS__, 'render_page']
@@ -45,8 +67,8 @@ class USDR_Admin {
 
         add_submenu_page(
             $parent,
-            __('Domain Replacer by Aris', 'us-domain-replacer'),
-            __('Domain Replacer by Aris', 'us-domain-replacer'),
+            __('Domain Replacer', 'us-domain-replacer'),
+            __('Domain Replacer', 'us-domain-replacer'),
             'read',
             self::PAGE_SLUG,
             [__CLASS__, 'render_page']
@@ -57,7 +79,7 @@ class USDR_Admin {
         $url = admin_url('admin.php?page=' . self::PAGE_SLUG);
         array_unshift(
             $links,
-            '<a href="' . esc_url($url) . '">' . esc_html__('Open Domain Replacer by Aris', 'us-domain-replacer') . '</a>'
+            '<a href="' . esc_url($url) . '">' . esc_html__('Open Domain Replacer', 'us-domain-replacer') . '</a>'
         );
 
         return $links;
@@ -105,6 +127,7 @@ class USDR_Admin {
             return;
         }
 
+        wp_enqueue_style('dashicons');
         wp_enqueue_style(
             'usdr-admin',
             plugins_url('assets/admin.css', USDR_PLUGIN_FILE),
@@ -130,7 +153,12 @@ class USDR_Admin {
                 'scanning' => __('Scanning links...', 'us-domain-replacer'),
                 'replacing' => __('Replacing filtered links, please wait...', 'us-domain-replacer'),
                 'done' => __('Domain replacement completed.', 'us-domain-replacer'),
-                'confirm' => __('This will update only the URL Shortify slugs listed in Google Sheets for the selected brand and language. Continue?', 'us-domain-replacer'),
+                'confirm' => __('This will update %d selected link(s) for the chosen brand and language.', 'us-domain-replacer'),
+                'confirmTitle' => __('Confirm domain replacement', 'us-domain-replacer'),
+                'confirmOk' => __('Replace selected links', 'us-domain-replacer'),
+                'confirmCancel' => __('Cancel', 'us-domain-replacer'),
+                'noneSelected' => __('Select at least one link to replace.', 'us-domain-replacer'),
+                'selectedCount' => __('%1$d of %2$d selected', 'us-domain-replacer'),
                 'invalid' => __('Please select a brand and language, then enter both old and new domains.', 'us-domain-replacer'),
                 'noMatches' => __('No matching links found for the selected brand, language, and old domain.', 'us-domain-replacer'),
                 'jsMissing' => __('Admin script failed to load. Please hard-refresh this page or re-upload the plugin assets folder.', 'us-domain-replacer'),
@@ -158,129 +186,188 @@ class USDR_Admin {
 
         $status = self::get_connection_status();
         $ready = !empty($status['ready']);
-        ?>
-        <div class="wrap usdr-wrap">
-            <h1><?php esc_html_e('URL Shortify Domain Replacer by Aris', 'us-domain-replacer'); ?></h1>
-            <p class="description">
-                <?php esc_html_e('Replace the target URL domain for URL Shortify links that exist in Google Sheets. Choose a brand and language first; only those slugs are updated. Paths stay the same.', 'us-domain-replacer'); ?>
-            </p>
+        $service_email = USDR_GSheet::service_account_email();
+        $sheet_title = USDR_GSheet::spreadsheet_title();
 
-            <div class="usdr-card usdr-status-card <?php echo $ready ? 'is-ready' : 'is-error'; ?>">
-                <h2><?php esc_html_e('Connection Status', 'us-domain-replacer'); ?></h2>
-                <ul class="usdr-checklist">
-                    <li class="<?php echo !empty($status['shortify_active']) ? 'is-ok' : 'is-bad'; ?>">
-                        <?php if (!empty($status['shortify_active'])) : ?>
-                            <?php esc_html_e('URL Shortify plugin is active.', 'us-domain-replacer'); ?>
-                        <?php else : ?>
-                            <?php esc_html_e('URL Shortify plugin is not active. Activate it first.', 'us-domain-replacer'); ?>
-                        <?php endif; ?>
-                    </li>
-                    <li class="<?php echo !empty($status['table_exists']) ? 'is-ok' : 'is-bad'; ?>">
-                        <?php if (!empty($status['table_exists'])) : ?>
-                            <?php
-                            printf(
-                                /* translators: 1: database table name, 2: number of links */
-                                esc_html__('URL Shortify links table found (%1$s) with %2$d link(s).', 'us-domain-replacer'),
-                                esc_html($status['table_name']),
-                                (int) $status['total_links']
-                            );
-                            ?>
-                        <?php else : ?>
-                            <?php
-                            printf(
-                                /* translators: %s: database table name */
-                                esc_html__('URL Shortify links table not found (%s). Re-save URL Shortify settings or reinstall URL Shortify.', 'us-domain-replacer'),
-                                esc_html($status['table_name'])
-                            );
-                            ?>
-                        <?php endif; ?>
-                    </li>
-                    <li class="is-ok">
-                        <?php esc_html_e('REST API keys are NOT required. This tool reads and updates links directly inside WordPress.', 'us-domain-replacer'); ?>
-                    </li>
-                    <li class="is-ok">
-                        <?php
-                        $service_email = USDR_GSheet::service_account_email();
-                        printf(
-                            /* translators: 1: Google Sheets URL, 2: service account email */
-                            esc_html__('Brand, language, and slug filters are loaded from the private Google Sheet %1$s using service account %2$s.', 'us-domain-replacer'),
-                            '<a href="' . esc_url(USDR_GSheet::spreadsheet_url()) . '" target="_blank" rel="noopener noreferrer">' . esc_html__('MCW Shortlinks Summary', 'us-domain-replacer') . '</a>',
-                            '<code>' . esc_html($service_email) . '</code>'
-                        );
-                        ?>
-                    </li>
-                </ul>
-                <?php if (!$ready) : ?>
-                    <p class="usdr-inline-error">
-                        <?php esc_html_e('Scan and replace are disabled until URL Shortify is connected properly.', 'us-domain-replacer'); ?>
-                    </p>
-                <?php endif; ?>
+        if ($ready) {
+            $pill_class = 'usdr-pill usdr-pill-ok';
+            $pill_label = __('Ready', 'us-domain-replacer');
+        } else {
+            $pill_class = 'usdr-pill usdr-pill-fail';
+            $pill_label = __('Not ready', 'us-domain-replacer');
+        }
+        ?>
+        <div class="wrap usdr-app">
+            <div class="usdr-shell">
+                <header class="usdr-hero">
+                    <div class="usdr-hero-top">
+                        <div class="usdr-brand">
+                            <div class="usdr-mark" aria-hidden="true"><span class="dashicons dashicons-admin-links"></span></div>
+                            <div>
+                                <p class="usdr-eyebrow"><?php esc_html_e('URL Shortify Tool', 'us-domain-replacer'); ?></p>
+                                <h1><?php esc_html_e('Domain Replacer', 'us-domain-replacer'); ?></h1>
+                                <p><?php esc_html_e('Bulk-update target URL domains for filtered short links. Scope is controlled by brand, language, and Google Sheet slugs.', 'us-domain-replacer'); ?></p>
+                            </div>
+                        </div>
+                        <div class="usdr-hero-meta">
+                            <span class="<?php echo esc_attr($pill_class); ?>"><?php echo esc_html($pill_label); ?></span>
+                            <span class="usdr-version-chip">v<?php echo esc_html(USDR_VERSION); ?></span>
+                        </div>
+                    </div>
+                </header>
+
+                <div id="usdr-status" class="usdr-flash-area" aria-live="polite"></div>
+
+                <div class="usdr-layout">
+                    <div class="usdr-main">
+                        <section class="usdr-card">
+                            <div class="usdr-card-head">
+                                <div>
+                                    <h2><?php esc_html_e('Configuration', 'us-domain-replacer'); ?></h2>
+                                    <p class="usdr-card-lead"><?php esc_html_e('Define the Google Sheet scope and domain swap before running a scan.', 'us-domain-replacer'); ?></p>
+                                </div>
+                            </div>
+
+                            <div class="usdr-form-section">
+                                <h3 class="usdr-form-section-title"><?php esc_html_e('Sheet filter', 'us-domain-replacer'); ?></h3>
+                                <div class="usdr-form-grid">
+                                    <div class="usdr-field">
+                                        <label for="usdr-brand"><?php esc_html_e('Brand', 'us-domain-replacer'); ?></label>
+                                        <select id="usdr-brand">
+                                            <option value=""><?php esc_html_e('Loading brands...', 'us-domain-replacer'); ?></option>
+                                        </select>
+                                        <p class="usdr-help"><?php esc_html_e('Sheet tab name. Summary tab is excluded.', 'us-domain-replacer'); ?></p>
+                                    </div>
+                                    <div class="usdr-field">
+                                        <label for="usdr-language"><?php esc_html_e('Language', 'us-domain-replacer'); ?></label>
+                                        <select id="usdr-language" disabled>
+                                            <option value=""><?php esc_html_e('Select a brand first', 'us-domain-replacer'); ?></option>
+                                        </select>
+                                        <p class="usdr-help"><?php esc_html_e('Column C. Slugs filtered from column F.', 'us-domain-replacer'); ?></p>
+                                    </div>
+                                </div>
+                                <div class="usdr-inline-action">
+                                    <button type="button" class="usdr-btn usdr-btn-ghost usdr-btn-sm" id="usdr-refresh-sheet">
+                                        <span class="dashicons dashicons-update" aria-hidden="true"></span>
+                                        <?php esc_html_e('Reload Google Sheet', 'us-domain-replacer'); ?>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="usdr-form-section">
+                                <h3 class="usdr-form-section-title"><?php esc_html_e('Domain swap', 'us-domain-replacer'); ?></h3>
+                                <div class="usdr-domain-swap">
+                                    <div class="usdr-field">
+                                        <label for="usdr-old-domain"><?php esc_html_e('Old domain', 'us-domain-replacer'); ?></label>
+                                        <input type="text" id="usdr-old-domain" placeholder="olddomain.com" autocomplete="off" spellcheck="false" />
+                                    </div>
+                                    <div class="usdr-swap-arrow" aria-hidden="true">→</div>
+                                    <div class="usdr-field">
+                                        <label for="usdr-new-domain"><?php esc_html_e('New domain', 'us-domain-replacer'); ?></label>
+                                        <input type="text" id="usdr-new-domain" placeholder="newdomain.com" autocomplete="off" spellcheck="false" />
+                                    </div>
+                                </div>
+                                <p class="usdr-help usdr-help-block"><?php esc_html_e('Only the hostname changes. Slugs and URL paths remain unchanged.', 'us-domain-replacer'); ?></p>
+                            </div>
+
+                            <div class="usdr-action-bar">
+                                <p class="usdr-action-note"><?php esc_html_e('Scan first to preview affected links, then run replace.', 'us-domain-replacer'); ?></p>
+                                <div class="usdr-actions">
+                                    <button type="button" class="usdr-btn usdr-btn-secondary" id="usdr-scan-btn" <?php disabled(!$ready); ?>>
+                                        <?php esc_html_e('Scan links', 'us-domain-replacer'); ?>
+                                    </button>
+                                    <button type="button" class="usdr-btn usdr-btn-primary" id="usdr-replace-btn" disabled>
+                                        <?php esc_html_e('Replace selected links', 'us-domain-replacer'); ?>
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <aside class="usdr-sidebar">
+                        <section class="usdr-card usdr-card-compact">
+                            <div class="usdr-card-head usdr-card-head-tight">
+                                <h2><?php esc_html_e('System status', 'us-domain-replacer'); ?></h2>
+                            </div>
+
+                            <dl class="usdr-meta">
+                                <div class="usdr-meta-row">
+                                    <dt><?php esc_html_e('URL Shortify', 'us-domain-replacer'); ?></dt>
+                                    <dd class="<?php echo !empty($status['shortify_active']) ? 'is-ok' : 'is-bad'; ?>">
+                                        <?php echo !empty($status['shortify_active'])
+                                            ? esc_html__('Active', 'us-domain-replacer')
+                                            : esc_html__('Inactive', 'us-domain-replacer'); ?>
+                                    </dd>
+                                </div>
+                                <div class="usdr-meta-row">
+                                    <dt><?php esc_html_e('Links table', 'us-domain-replacer'); ?></dt>
+                                    <dd class="<?php echo !empty($status['table_exists']) ? 'is-ok' : 'is-bad'; ?>">
+                                        <?php if (!empty($status['table_exists'])) : ?>
+                                            <?php echo esc_html(number_format_i18n((int) $status['total_links'])); ?>
+                                            <?php esc_html_e('links', 'us-domain-replacer'); ?>
+                                        <?php else : ?>
+                                            <?php esc_html_e('Not found', 'us-domain-replacer'); ?>
+                                        <?php endif; ?>
+                                    </dd>
+                                </div>
+                                <div class="usdr-meta-row">
+                                    <dt><?php esc_html_e('Sheet name', 'us-domain-replacer'); ?></dt>
+                                    <dd>
+                                        <a href="<?php echo esc_url(USDR_GSheet::spreadsheet_url()); ?>" target="_blank" rel="noopener noreferrer">
+                                            <?php echo esc_html($sheet_title); ?>
+                                        </a>
+                                    </dd>
+                                </div>
+                                <div class="usdr-meta-row">
+                                    <dt><?php esc_html_e('Service account', 'us-domain-replacer'); ?></dt>
+                                    <dd><code><?php echo esc_html($service_email); ?></code></dd>
+                                </div>
+                            </dl>
+
+                            <?php if (!$ready) : ?>
+                                <p class="usdr-inline-error">
+                                    <?php esc_html_e('Scan and replace are disabled until URL Shortify is connected properly.', 'us-domain-replacer'); ?>
+                                </p>
+                            <?php endif; ?>
+                        </section>
+                    </aside>
+                </div>
+
+                <section class="usdr-card usdr-results-panel is-hidden" id="usdr-results-section">
+                    <div class="usdr-card-head">
+                        <div>
+                            <h2><?php esc_html_e('Scan results', 'us-domain-replacer'); ?></h2>
+                            <p class="usdr-card-lead"><?php esc_html_e('Review matching links before applying the domain replacement. Uncheck rows to exclude them, or drag across rows to select or unselect multiple.', 'us-domain-replacer'); ?></p>
+                        </div>
+                    </div>
+                    <div id="usdr-summary"></div>
+                    <div id="usdr-results"></div>
+                </section>
             </div>
 
-            <div class="usdr-card">
-                <table class="form-table" role="presentation">
-                    <tr>
-                        <th scope="row">
-                            <label for="usdr-brand"><?php esc_html_e('Brand', 'us-domain-replacer'); ?></label>
-                        </th>
-                        <td>
-                            <select id="usdr-brand" class="regular-text usdr-select">
-                                <option value=""><?php esc_html_e('Loading brands...', 'us-domain-replacer'); ?></option>
-                            </select>
-                            <button type="button" class="button" id="usdr-refresh-sheet">
-                                <?php esc_html_e('Reload Google Sheet', 'us-domain-replacer'); ?>
-                            </button>
-                            <p class="description"><?php esc_html_e('Brand list comes from Google Sheet tab names. The Summary tab is skipped.', 'us-domain-replacer'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">
-                            <label for="usdr-language"><?php esc_html_e('Language', 'us-domain-replacer'); ?></label>
-                        </th>
-                        <td>
-                            <select id="usdr-language" class="regular-text usdr-select" disabled>
-                                <option value=""><?php esc_html_e('Select a brand first', 'us-domain-replacer'); ?></option>
-                            </select>
-                            <p class="description"><?php esc_html_e('Only languages that exist for the selected brand are shown. Matching slugs come from column F.', 'us-domain-replacer'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">
-                            <label for="usdr-old-domain"><?php esc_html_e('Old Domain', 'us-domain-replacer'); ?></label>
-                        </th>
-                        <td>
-                            <input type="text" id="usdr-old-domain" class="regular-text" placeholder="olddomain.com" />
-                            <p class="description"><?php esc_html_e('Domain to search for in target URLs.', 'us-domain-replacer'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">
-                            <label for="usdr-new-domain"><?php esc_html_e('New Domain', 'us-domain-replacer'); ?></label>
-                        </th>
-                        <td>
-                            <input type="text" id="usdr-new-domain" class="regular-text" placeholder="newdomain.com" />
-                            <p class="description"><?php esc_html_e('Replacement domain. Paths and slugs are preserved.', 'us-domain-replacer'); ?></p>
-                        </td>
-                    </tr>
-                </table>
-
-                <p class="submit">
-                    <button type="button" class="button button-secondary" id="usdr-scan-btn" <?php disabled(!$ready); ?>>
-                        <?php esc_html_e('Scan Links', 'us-domain-replacer'); ?>
-                    </button>
-                    <button type="button" class="button button-primary" id="usdr-replace-btn" disabled>
-                        <?php esc_html_e('Replace Filtered Links', 'us-domain-replacer'); ?>
-                    </button>
-                </p>
+            <div id="usdr-modal" class="usdr-modal" hidden aria-hidden="true">
+                <div class="usdr-modal-backdrop" data-usdr-modal-close></div>
+                <div class="usdr-modal-card" role="dialog" aria-modal="true" aria-labelledby="usdr-modal-title">
+                    <h3 id="usdr-modal-title"></h3>
+                    <p id="usdr-modal-message"></p>
+                    <div class="usdr-modal-actions">
+                        <button type="button" class="usdr-btn usdr-btn-secondary" id="usdr-modal-cancel">
+                            <?php esc_html_e('Cancel', 'us-domain-replacer'); ?>
+                        </button>
+                        <button type="button" class="usdr-btn usdr-btn-primary" id="usdr-modal-confirm">
+                            <?php esc_html_e('Replace links', 'us-domain-replacer'); ?>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <noscript>
-                <div class="notice notice-error"><p><?php esc_html_e('JavaScript is required to scan and replace links.', 'us-domain-replacer'); ?></p></div>
+                <div class="usdr-flash is-error"><?php esc_html_e('JavaScript is required to scan and replace links.', 'us-domain-replacer'); ?></div>
             </noscript>
 
-            <div id="usdr-status" class="usdr-status" aria-live="polite"></div>
-            <div id="usdr-summary" class="usdr-summary"></div>
-            <div id="usdr-results" class="usdr-results"></div>
+            <footer class="usdr-footer">
+                <span><?php esc_html_e('Developed by Aris', 'us-domain-replacer'); ?></span>
+            </footer>
         </div>
         <?php
     }
@@ -390,7 +477,22 @@ class USDR_Admin {
             wp_send_json_error(['message' => $filter->get_error_message()]);
         }
 
-        $result = USDR_Replacer::process_all($filter['old_domain'], $filter['new_domain'], $filter['slugs']);
+        $link_ids = self::request_link_ids();
+        if (empty($link_ids)) {
+            wp_send_json_error(['message' => __('Select at least one link to replace.', 'us-domain-replacer')]);
+        }
+
+        $matches = USDR_Replacer::get_all_matching_links($filter['old_domain'], $filter['slugs']);
+        $valid_ids = array_map(static function ($item) {
+            return (int) $item['id'];
+        }, $matches);
+        $link_ids = array_values(array_intersect($link_ids, $valid_ids));
+
+        if (empty($link_ids)) {
+            wp_send_json_error(['message' => __('None of the selected links match the current scan filters.', 'us-domain-replacer')]);
+        }
+
+        $result = USDR_Replacer::process_all($filter['old_domain'], $filter['new_domain'], $filter['slugs'], $link_ids);
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
@@ -442,5 +544,20 @@ class USDR_Admin {
             'new_domain' => $new_domain,
             'slugs' => $slugs,
         ];
+    }
+
+    /**
+     * @return int[]
+     */
+    private static function request_link_ids() {
+        $raw = wp_unslash($_POST['link_ids'] ?? []);
+        if (!is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        $ids = array_map('absint', $raw);
+        $ids = array_values(array_unique(array_filter($ids)));
+
+        return $ids;
     }
 }

@@ -10,6 +10,7 @@ class USDR_GSheet {
     const CACHE_TTL = 900;
     const KEYS_TRANSIENT = 'usdr_gsheet_keys';
     const INDEX_TRANSIENT = 'usdr_gsheet_index';
+    const TITLE_TRANSIENT = 'usdr_gsheet_title';
     const TOKEN_TRANSIENT = 'usdr_gsheet_access_token';
     const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 
@@ -24,6 +25,31 @@ class USDR_GSheet {
         }
 
         return (string) ($credentials['client_email'] ?? '');
+    }
+
+    public static function spreadsheet_title() {
+        $cached = get_transient(self::TITLE_TRANSIENT);
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        $data = self::api_get(
+            'https://sheets.googleapis.com/v4/spreadsheets/' . rawurlencode(self::SPREADSHEET_ID),
+            ['fields' => 'properties.title']
+        );
+
+        if (is_wp_error($data)) {
+            return __('MCW Shortlinks Summary', 'us-domain-replacer');
+        }
+
+        $title = trim((string) ($data['properties']['title'] ?? ''));
+        if ($title === '') {
+            $title = __('MCW Shortlinks Summary', 'us-domain-replacer');
+        }
+
+        set_transient(self::TITLE_TRANSIENT, $title, self::CACHE_TTL);
+
+        return $title;
     }
 
     /**
@@ -104,6 +130,7 @@ class USDR_GSheet {
 
         $keys[] = self::KEYS_TRANSIENT;
         $keys[] = self::INDEX_TRANSIENT;
+        $keys[] = self::TITLE_TRANSIENT;
 
         foreach (array_unique($keys) as $key) {
             delete_transient($key);
