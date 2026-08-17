@@ -131,6 +131,7 @@ class USDR_GSheet {
         $keys[] = self::KEYS_TRANSIENT;
         $keys[] = self::INDEX_TRANSIENT;
         $keys[] = self::TITLE_TRANSIENT;
+        $keys[] = self::TOKEN_TRANSIENT;
 
         foreach (array_unique($keys) as $key) {
             delete_transient($key);
@@ -314,6 +315,20 @@ class USDR_GSheet {
      * @return array|WP_Error
      */
     private static function api_get($url, $query = []) {
+        $result = self::api_get_once($url, $query);
+        if (is_wp_error($result) && in_array($result->get_error_code(), ['gsheet_unauthorized', 'gsheet_jwt'], true)) {
+            delete_transient(self::TOKEN_TRANSIENT);
+            $result = self::api_get_once($url, $query);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, string> $query
+     * @return array|WP_Error
+     */
+    private static function api_get_once($url, $query = []) {
         $token = self::get_access_token();
         if (is_wp_error($token)) {
             return $token;
@@ -325,6 +340,7 @@ class USDR_GSheet {
 
         $response = wp_remote_get($url, [
             'timeout' => 25,
+            'redirection' => 0,
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
                 'Accept' => 'application/json',
@@ -339,9 +355,17 @@ class USDR_GSheet {
      */
     private static function get_access_token() {
         $cached = get_transient(self::TOKEN_TRANSIENT);
-        if (is_array($cached) && !empty($cached['token']) && !empty($cached['expires']) && (int) $cached['expires'] > time() + 60) {
+        if (
+            is_array($cached)
+            && !empty($cached['token'])
+            && is_string($cached['token'])
+            && !empty($cached['expires'])
+            && (int) $cached['expires'] > time() + 60
+        ) {
             return (string) $cached['token'];
         }
+
+        delete_transient(self::TOKEN_TRANSIENT);
 
         $credentials = self::load_credentials();
         if (is_wp_error($credentials)) {
@@ -353,12 +377,25 @@ class USDR_GSheet {
             return $jwt;
         }
 
-        $response = wp_remote_post((string) $credentials['token_uri'], [
+        $token_uri = !empty($credentials['token_uri'])
+            ? (string) $credentials['token_uri']
+            : 'https://oauth2.googleapis.com/token';
+
+        $response = wp_remote_post($token_uri, [
             'timeout' => 20,
-            'body' => [
-                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion' => $jwt,
+            'headers' => [
+                'Content-Type' => 'application/x-www-form-urlencoded',
+                'Accept' => 'application/json',
             ],
+            'body' => http_build_query(
+                [
+                    'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                    'assertion' => $jwt,
+                ],
+                '',
+                '&',
+                PHP_QUERY_RFC3986
+            ),
         ]);
 
         $data = self::decode_google_response($response);
@@ -385,28 +422,71 @@ class USDR_GSheet {
      * @return string|WP_Error
      */
     private static function create_jwt(array $credentials) {
-        if (!function_exists('openssl_sign')) {
+        if (!function_exists('openssl_sign') || !function_exists('openssl_pkey_get_private')) {
             return new WP_Error('gsheet_openssl', __('PHP OpenSSL is required to authenticate with Google Sheets.', 'us-domain-replacer'));
         }
 
-        $header = self::b64url(wp_json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $private_key = openssl_pkey_get_private(self::normalize_private_key((string) $credentials['private_key']));
+        if ($private_key === false) {
+            return new WP_Error(
+                'gsheet_jwt',
+                __('Could not read the Google service account private key. Re-upload a fresh credentials.json from Google Cloud.', 'us-domain-replacer')
+            );
+        }
+
         $now = time();
-        $payload = self::b64url(wp_json_encode([
-            'iss' => $credentials['client_email'],
+        $header = [
+            'alg' => 'RS256',
+            'typ' => 'JWT',
+        ];
+
+        $payload = [
+            'iss' => (string) $credentials['client_email'],
             'scope' => self::SCOPE,
-            'aud' => $credentials['token_uri'],
+            'aud' => 'https://oauth2.googleapis.com/token',
             'iat' => $now,
             'exp' => $now + 3600,
-        ]));
+        ];
 
-        $signing_input = $header . '.' . $payload;
+        $signing_input = self::b64url(self::jwt_json($header)) . '.' . self::b64url(self::jwt_json($payload));
         $signature = '';
-        $ok = openssl_sign($signing_input, $signature, $credentials['private_key'], OPENSSL_ALGO_SHA256);
+        $ok = openssl_sign($signing_input, $signature, $private_key, 'sha256WithRSAEncryption');
+        if (!$ok || $signature === '') {
+            $ok = openssl_sign($signing_input, $signature, $private_key, OPENSSL_ALGO_SHA256);
+        }
+
         if (!$ok || $signature === '') {
             return new WP_Error('gsheet_jwt', __('Could not sign the Google service account request.', 'us-domain-replacer'));
         }
 
         return $signing_input . '.' . self::b64url($signature);
+    }
+
+    /**
+     * @param mixed $data
+     */
+    private static function jwt_json($data) {
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES);
+        return is_string($json) ? $json : '';
+    }
+
+    /**
+     * WordPress zip/unzip and some hosts flatten PEM newlines into literal \n.
+     */
+    private static function normalize_private_key($key) {
+        $key = str_replace(["\r\n", "\r"], "\n", (string) $key);
+        $key = trim($key);
+
+        if (strpos($key, '-----BEGIN') !== false && substr_count($key, "\n") < 2) {
+            $key = str_replace('\\n', "\n", $key);
+        }
+
+        if (strpos($key, "-----BEGIN PRIVATE KEY-----\n") === false) {
+            $key = str_replace('-----BEGIN PRIVATE KEY-----', "-----BEGIN PRIVATE KEY-----\n", $key);
+            $key = str_replace('-----END PRIVATE KEY-----', "\n-----END PRIVATE KEY-----", $key);
+        }
+
+        return trim($key) . "\n";
     }
 
     /**
@@ -421,10 +501,17 @@ class USDR_GSheet {
             );
         }
 
-        $decoded = json_decode((string) file_get_contents($path), true);
-        if (!is_array($decoded) || empty($decoded['client_email']) || empty($decoded['private_key']) || empty($decoded['token_uri'])) {
+        $raw = (string) file_get_contents($path);
+        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || empty($decoded['client_email']) || empty($decoded['private_key'])) {
             return new WP_Error('gsheet_credentials', __('Google service account credentials.json is invalid.', 'us-domain-replacer'));
         }
+
+        $decoded['private_key'] = self::normalize_private_key((string) $decoded['private_key']);
+        $decoded['token_uri'] = !empty($decoded['token_uri'])
+            ? (string) $decoded['token_uri']
+            : 'https://oauth2.googleapis.com/token';
 
         return $decoded;
     }
@@ -453,7 +540,24 @@ class USDR_GSheet {
         }
 
         if ($code < 200 || $code >= 300) {
-            $message = (string) ($data['error']['message'] ?? $data['error_description'] ?? '');
+            $message = self::google_error_message($data);
+            $normalized = strtolower($message);
+
+            if (strpos($normalized, 'invalid jwt signature') !== false || strpos($normalized, 'invalid_grant') !== false) {
+                delete_transient(self::TOKEN_TRANSIENT);
+                return new WP_Error(
+                    'gsheet_jwt',
+                    __('Google rejected the service account key (Invalid JWT Signature). Re-upload includes/credentials.json from Google Cloud, then click Reload Google Sheet.', 'us-domain-replacer')
+                );
+            }
+
+            if ($code === 401) {
+                return new WP_Error(
+                    'gsheet_unauthorized',
+                    __('Google Sheets authentication expired. Reloading credentials and retrying.', 'us-domain-replacer')
+                );
+            }
+
             if ($code === 403) {
                 return new WP_Error(
                     'gsheet_forbidden',
@@ -483,6 +587,25 @@ class USDR_GSheet {
         }
 
         return $data;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function google_error_message(array $data) {
+        if (!empty($data['error_description']) && is_string($data['error_description'])) {
+            return $data['error_description'];
+        }
+
+        if (!empty($data['error']['message']) && is_string($data['error']['message'])) {
+            return $data['error']['message'];
+        }
+
+        if (!empty($data['error']) && is_string($data['error'])) {
+            return $data['error'];
+        }
+
+        return '';
     }
 
     private static function b64url($data) {

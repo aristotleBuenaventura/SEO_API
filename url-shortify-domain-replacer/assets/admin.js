@@ -211,24 +211,36 @@
             $('.usdr-table tbody tr').removeClass('is-drag-hover');
         }
 
+        function toggleRow($row) {
+            const $checkbox = $row.find('.usdr-row-check');
+            $checkbox.prop('checked', !$checkbox.prop('checked'));
+        }
+
+        function paintRow($row) {
+            if (!dragSelect || !dragSelect.active || !$row.length) {
+                return;
+            }
+
+            if (dragSelect.lastPaintRow && dragSelect.lastPaintRow.is($row)) {
+                return;
+            }
+
+            toggleRow($row);
+            dragSelect.lastPaintRow = $row;
+            $('.usdr-table tbody tr').removeClass('is-drag-hover');
+            $row.addClass('is-drag-hover');
+            updateSelectionUI();
+        }
+
         function activateDragSelect() {
             if (!dragSelect || dragSelect.active) {
                 return;
             }
 
             dragSelect.active = true;
-            dragSelect.value = !dragSelect.initialChecked;
+            dragSelect.lastPaintRow = null;
             $('body').addClass('usdr-drag-selecting');
-            applyDragToRow(dragSelect.startRow);
-            dragSelect.startRow.addClass('is-drag-hover');
-        }
-
-        function applyDragToRow($row) {
-            if (!dragSelect || !dragSelect.active || !$row.length) {
-                return;
-            }
-
-            $row.find('.usdr-row-check').prop('checked', dragSelect.value);
+            paintRow(dragSelect.startRow);
         }
 
         $results.off('change.usdrSelect', '#usdr-select-all');
@@ -268,7 +280,7 @@
                 startY: e.clientY,
                 initialChecked: $checkbox.prop('checked'),
                 active: false,
-                value: null,
+                lastPaintRow: null,
             };
         });
 
@@ -287,14 +299,7 @@
                 return;
             }
 
-            if ($row.hasClass('is-drag-hover')) {
-                return;
-            }
-
-            $('.usdr-table tbody tr').removeClass('is-drag-hover');
-            applyDragToRow($row);
-            $row.addClass('is-drag-hover');
-            updateSelectionUI();
+            paintRow($row);
         });
 
         $(document).on('mousemove.usdrDrag', function (e) {
@@ -323,14 +328,7 @@
                 return;
             }
 
-            if ($row.hasClass('is-drag-hover')) {
-                return;
-            }
-
-            $('.usdr-table tbody tr').removeClass('is-drag-hover');
-            applyDragToRow($row);
-            $row.addClass('is-drag-hover');
-            updateSelectionUI();
+            paintRow($row);
         });
 
         $(document).on('mouseup.usdrDrag', function () {
@@ -512,10 +510,9 @@
             url: USDR.ajaxUrl,
             method: 'POST',
             timeout: 300000,
-            traditional: true,
             data: formPayload({
                 action: 'usdr_replace_links',
-                link_ids: linkIds || [],
+                link_ids: JSON.stringify(linkIds || []),
             }),
         }).then(function (response) {
             if (!response || !response.success) {

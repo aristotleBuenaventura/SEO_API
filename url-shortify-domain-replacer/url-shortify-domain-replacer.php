@@ -2,7 +2,7 @@
 /**
  * Plugin Name: URL Shortify Domain Replacer
  * Description: Bulk replace old domains with new domains in URL Shortify target URLs, filtered by Google Sheets brand and language.
- * Version: 1.2.7
+ * Version: 1.3.1
  * Author: Aris
  * Requires at least: 5.6
  * Requires PHP: 7.4
@@ -13,13 +13,21 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('USDR_VERSION', '1.2.7');
+define('USDR_VERSION', '1.3.1');
 define('USDR_PLUGIN_FILE', __FILE__);
 define('USDR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
 require_once USDR_PLUGIN_DIR . 'includes/class-replacer.php';
 require_once USDR_PLUGIN_DIR . 'includes/class-gsheet.php';
 require_once USDR_PLUGIN_DIR . 'includes/class-admin.php';
+
+register_activation_hook(__FILE__, static function () {
+    USDR_GSheet::clear_cache();
+});
+
+register_deactivation_hook(__FILE__, static function () {
+    USDR_GSheet::clear_cache();
+});
 
 add_action('plugins_loaded', static function () {
     if (!class_exists('KaizenCoders\URL_Shortify\Helper')) {

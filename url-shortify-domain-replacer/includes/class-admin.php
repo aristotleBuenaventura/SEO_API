@@ -550,6 +550,16 @@ class USDR_Admin {
      */
     private static function request_link_ids() {
         $raw = wp_unslash($_POST['link_ids'] ?? []);
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $raw = $decoded;
+            } else {
+                $raw = preg_split('/\s*,\s*/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+            }
+        }
+
         if (!is_array($raw)) {
             $raw = [$raw];
         }
