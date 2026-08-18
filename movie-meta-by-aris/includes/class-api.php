@@ -21,6 +21,14 @@ class MMBA_API {
             ],
         ]);
 
+        register_rest_route(self::REST_NS, '/recent', [
+            [
+                'methods'             => WP_REST_Server::READABLE,
+                'callback'            => [__CLASS__, 'get_recent'],
+                'permission_callback' => '__return_true',
+            ],
+        ]);
+
         register_rest_route(self::REST_NS, '/top', [
             [
                 'methods'             => WP_REST_Server::READABLE,
@@ -100,6 +108,26 @@ class MMBA_API {
         $movies = array_map(static function ($movie) use ($views) {
             return self::enrich_movie($movie, $views);
         }, MMBA_Storage::get_top_movies($limit));
+
+        $response = rest_ensure_response([
+            'generated_at' => gmdate('c'),
+            'count'        => count($movies),
+            'movies'       => $movies,
+        ]);
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        return $response;
+    }
+
+    public static function get_recent(WP_REST_Request $request) {
+        $limit = absint($request->get_param('limit'));
+        if ($limit < 1) {
+            $limit = 10;
+        }
+
+        $views = MMBA_Storage::get_views();
+        $movies = array_map(static function ($movie) use ($views) {
+            return self::enrich_movie($movie, $views);
+        }, MMBA_Storage::get_recent_movies($limit));
 
         $response = rest_ensure_response([
             'generated_at' => gmdate('c'),

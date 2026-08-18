@@ -464,6 +464,15 @@ class MMBA_Admin {
                                         </button>
                                     </div>
                                 </div>
+                                <div class="mmba-shortcode-item">
+                                    <span><?php esc_html_e('Just Added', 'movie-meta-by-aris'); ?></span>
+                                    <div class="mmba-copy-row">
+                                        <code>[movie_just_added]</code>
+                                        <button type="button" class="mmba-btn mmba-btn-ghost mmba-btn-sm mmba-copy-btn" data-target="[movie_just_added]">
+                                            <?php esc_html_e('Copy', 'movie-meta-by-aris'); ?>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </section>
 

@@ -668,6 +668,29 @@ class MMBA_Storage {
         return $top;
     }
 
+    /**
+     * Newest movies by created_at, then updated_at.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function get_recent_movies($limit = 10) {
+        $limit = max(1, min(50, (int) $limit));
+        $movies = self::get_movies();
+
+        usort($movies, static function ($a, $b) {
+            $ta = isset($a['created_at']) ? (string) $a['created_at'] : '';
+            $tb = isset($b['created_at']) ? (string) $b['created_at'] : '';
+            if ($ta !== $tb) {
+                return strcmp($tb, $ta);
+            }
+            $ua = isset($a['updated_at']) ? (string) $a['updated_at'] : '';
+            $ub = isset($b['updated_at']) ? (string) $b['updated_at'] : '';
+            return strcmp($ub, $ua);
+        });
+
+        return array_slice(array_values($movies), 0, $limit);
+    }
+
     private static function normalize_movie(array $movie) {
         return [
             'id'         => isset($movie['id']) ? (string) $movie['id'] : '',
