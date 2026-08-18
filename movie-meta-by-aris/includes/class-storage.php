@@ -6,6 +6,8 @@ if (!defined('ABSPATH')) {
 
 class MMBA_Storage {
 
+    private static $counted_ids = [];
+
     const OPTION_KEY = 'mmba_movies';
     const VIEWS_KEY = 'mmba_movie_views';
     const JSON_FILENAME = 'movies.json';
@@ -79,36 +81,25 @@ class MMBA_Storage {
         $base = rest_url('movie-meta/v1/movies/');
         $nonce = wp_create_nonce('wp_rest');
         $current = isset($_GET['id']) ? sanitize_text_field(wp_unslash((string) $_GET['id'])) : '';
+        if ($current === '') {
+            return;
+        }
         ?>
 <script>
 (function () {
   var base = <?php echo wp_json_encode($base); ?>;
   var nonce = <?php echo wp_json_encode($nonce); ?>;
   var current = <?php echo wp_json_encode($current); ?>;
-  function validId(id) {
-    return typeof id === 'string' && /^[a-zA-Z0-9_.-]+$/.test(id);
-  }
-  function ping(id) {
-    if (!validId(id) || !base) return;
-    fetch(base + encodeURIComponent(id) + '/view', {
-      method: 'POST',
-      credentials: 'same-origin',
-      keepalive: true,
-      headers: {
-        Accept: 'application/json',
-        'X-WP-Nonce': nonce
-      }
-    }).catch(function () {});
-  }
-  if (current) ping(current);
-  document.addEventListener('click', function (event) {
-    var link = event.target.closest('a[href]');
-    if (!link) return;
-    try {
-      var href = new URL(link.href, window.location.href);
-      ping(href.searchParams.get('id') || '');
-    } catch (e) {}
-  }, true);
+  if (!current || !base) return;
+  fetch(base + encodeURIComponent(current) + '/view', {
+    method: 'POST',
+    credentials: 'same-origin',
+    keepalive: true,
+    headers: {
+      Accept: 'application/json',
+      'X-WP-Nonce': nonce
+    }
+  }).catch(function () {});
 })();
 </script>
         <?php
@@ -600,12 +591,17 @@ class MMBA_Storage {
      */
     public static function increment_view($id) {
         $id = sanitize_text_field((string) $id);
-        if ($id === '' || !self::get_movie($id)) {
+        if ($id === '' || isset(self::$counted_ids[$id])) {
+            return false;
+        }
+        self::$counted_ids[$id] = true;
+
+        if (!self::get_movie($id) || self::is_prefetch_request()) {
             return false;
         }
 
         $ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
-        if ($ua !== '' && preg_match('/bot|crawl|spider|slurp|facebookexternalhit|preview/i', $ua)) {
+        if ($ua !== '' && preg_match('/bot|crawl|spider|slurp|facebookexternalhit/i', $ua)) {
             return false;
         }
 
@@ -621,6 +617,22 @@ class MMBA_Storage {
         self::save_views($views);
 
         return true;
+    }
+
+    private static function is_prefetch_request() {
+        $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string) $_SERVER['REQUEST_METHOD']) : 'GET';
+        if ($method === 'HEAD') {
+            return true;
+        }
+
+        $hints = strtolower(implode(' ', [
+            isset($_SERVER['HTTP_SEC_PURPOSE']) ? (string) $_SERVER['HTTP_SEC_PURPOSE'] : '',
+            isset($_SERVER['HTTP_PURPOSE']) ? (string) $_SERVER['HTTP_PURPOSE'] : '',
+            isset($_SERVER['HTTP_X_PURPOSE']) ? (string) $_SERVER['HTTP_X_PURPOSE'] : '',
+            isset($_SERVER['HTTP_X_MOZ']) ? (string) $_SERVER['HTTP_X_MOZ'] : '',
+        ]));
+
+        return strpos($hints, 'prefetch') !== false || strpos($hints, 'prerender') !== false;
     }
 
     /**
