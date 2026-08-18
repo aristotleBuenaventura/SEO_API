@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Movie Meta by Aris
+ * Plugin Name: Movie Meta
  * Description: Insert and manage movie details (title, details, cast, year, movie link, genre) and expose them as JSON for frontend display.
- * Version: 1.6.2
+ * Version: 1.8.1
  * Author: Aris
  * Requires at least: 5.6
  * Requires PHP: 7.4
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MMBA_VERSION', '1.6.2');
+define('MMBA_VERSION', '1.8.1');
 define('MMBA_PLUGIN_FILE', __FILE__);
 define('MMBA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MMBA_PLUGIN_URL', plugin_dir_url(__FILE__));

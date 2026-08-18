@@ -8,7 +8,7 @@
  * Create a WP page at /genre/ and put [movie_genre] in the content.
  * Genre rows "View all" links here as: /genre/?genre=Horror
  *
- * Requires: Movie Meta by Aris plugin (data source).
+ * Requires: Movie Meta plugin (data source).
  * Pair with snippets/genre-rows-shortcode.php → [movie_genre_rows]
  */
 
@@ -52,7 +52,7 @@ function mmgg_render_genre_page_shortcode($atts = []) {
     }
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmgg mmgg-error">' . esc_html__('Movie Meta by Aris plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmgg mmgg-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
     }
 
     $movies = [];

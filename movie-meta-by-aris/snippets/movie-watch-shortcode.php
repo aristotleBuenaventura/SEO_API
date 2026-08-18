@@ -8,8 +8,9 @@
  * Create a WP page at /watch/ and put [movie_watch] in the content.
  * Genre rows link here as: /watch/?id=MOVIE_ID
  *
- * Requires: Movie Meta by Aris plugin (data source).
+ * Requires: Movie Meta plugin (data source).
  * Pair with snippets/genre-rows-shortcode.php → [movie_genre_rows]
+ * Pair with snippets/movie-top10-shortcode.php → [movie_top10]
  */
 
 if (!defined('ABSPATH')) {
@@ -54,13 +55,17 @@ function mmw_render_watch_shortcode($atts = []) {
     }
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmw mmw-error">' . esc_html__('Movie Meta by Aris plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmw mmw-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
     }
 
     $movie = MMBA_Storage::get_movie($id);
     if (!$movie) {
         return '<div class="mmw mmw-empty">' . esc_html__('Movie not found.', 'movie-meta-by-aris') .
             ' <a class="mmw-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to catalog', 'movie-meta-by-aris') . '</a></div>';
+    }
+
+    if (method_exists('MMBA_Storage', 'increment_view')) {
+        MMBA_Storage::increment_view($id);
     }
 
     $title   = isset($movie['title']) ? (string) $movie['title'] : '';
@@ -701,6 +706,31 @@ function mmw_render_watch_shortcode($atts = []) {
 })();
 </script>
 <?php endif; ?>
+<script>
+(function () {
+  var id = <?php echo wp_json_encode($id); ?>;
+  var url = <?php echo wp_json_encode(rest_url(MMBA_API::REST_NS . '/movies/' . rawurlencode($id) . '/view')); ?>;
+  var nonce = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+  var key = 'mmba_viewed_' + id;
+  try {
+    if (window.localStorage && localStorage.getItem(key)) return;
+  } catch (e) {}
+  if (!url) return;
+  fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'X-WP-Nonce': nonce
+    }
+  }).then(function (r) {
+    if (!r.ok) return;
+    try {
+      if (window.localStorage) localStorage.setItem(key, '1');
+    } catch (e) {}
+  }).catch(function () {});
+})();
+</script>
     <?php
     return ob_get_clean();
 }

@@ -16,12 +16,34 @@ class MMBA_Admin {
         add_action('admin_post_mmba_delete_movie', [__CLASS__, 'handle_delete_movie']);
         add_action('admin_post_mmba_export_json', [__CLASS__, 'handle_export_json']);
         add_action('admin_post_mmba_import_json', [__CLASS__, 'handle_import_json']);
+        add_action('in_admin_header', [__CLASS__, 'suppress_foreign_notices'], 1000);
+        add_filter('admin_body_class', [__CLASS__, 'admin_body_class']);
+    }
+
+    public static function admin_body_class($classes) {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        if ($page === self::PAGE_SLUG) {
+            $classes .= ' mmba-admin-page';
+        }
+
+        return $classes;
+    }
+
+    /** Keep this screen free of other plugins' admin notices. */
+    public static function suppress_foreign_notices() {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        if ($page !== self::PAGE_SLUG) {
+            return;
+        }
+
+        remove_all_actions('admin_notices');
+        remove_all_actions('all_admin_notices');
     }
 
     public static function register_menu() {
         add_menu_page(
-            __('Movie Meta by Aris', 'movie-meta-by-aris'),
-            __('Movie Meta by Aris', 'movie-meta-by-aris'),
+            __('Movie Meta', 'movie-meta-by-aris'),
+            __('Movie Meta', 'movie-meta-by-aris'),
             'manage_options',
             self::PAGE_SLUG,
             [__CLASS__, 'render_page'],
@@ -44,6 +66,7 @@ class MMBA_Admin {
             return;
         }
 
+        wp_enqueue_style('dashicons');
         wp_enqueue_style(
             'mmba-admin',
             MMBA_PLUGIN_URL . 'assets/admin.css',
@@ -189,6 +212,8 @@ class MMBA_Admin {
         }
 
         $movies = MMBA_Storage::get_movies();
+        $views = MMBA_Storage::get_views();
+        $top_movies = MMBA_Storage::get_top_movies(10);
         $edit_id = isset($_GET['edit']) ? sanitize_text_field(wp_unslash($_GET['edit'])) : '';
         $editing = $edit_id !== '' ? MMBA_Storage::get_movie($edit_id) : null;
 
@@ -204,221 +229,323 @@ class MMBA_Admin {
 
         $rest_url = rest_url(MMBA_API::REST_NS . '/movies');
         $json_url = MMBA_Storage::json_file_url();
+        $movie_count = count($movies);
+        $catalog_shortcode = '[movie_meta]';
+        $flash_success = '';
+        $flash_error = '';
+
+        if (!empty($_GET['mmba_saved'])) {
+            $flash_success = __('Movie saved successfully.', 'movie-meta-by-aris');
+        } elseif (!empty($_GET['mmba_deleted'])) {
+            $flash_success = __('Movie deleted.', 'movie-meta-by-aris');
+        } elseif (!empty($_GET['mmba_imported'])) {
+            $flash_success = sprintf(
+                /* translators: 1: imported count, 2: mode */
+                __('Imported %1$d movie(s) (%2$s).', 'movie-meta-by-aris'),
+                (int) $_GET['mmba_imported'],
+                sanitize_key(wp_unslash($_GET['mmba_mode'] ?? 'merge'))
+            );
+        }
+
+        if (!empty($_GET['mmba_error'])) {
+            $flash_error = rawurldecode(wp_unslash($_GET['mmba_error']));
+        }
         ?>
-        <div class="wrap mmba-wrap">
-            <h1><?php echo esc_html__('Movie Meta by Aris', 'movie-meta-by-aris'); ?></h1>
-
-            <?php if (!empty($_GET['mmba_saved'])) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php echo esc_html__('Movie saved successfully.', 'movie-meta-by-aris'); ?></p></div>
-            <?php endif; ?>
-
-            <?php if (!empty($_GET['mmba_deleted'])) : ?>
-                <div class="notice notice-success is-dismissible"><p><?php echo esc_html__('Movie deleted.', 'movie-meta-by-aris'); ?></p></div>
-            <?php endif; ?>
-
-            <?php if (!empty($_GET['mmba_imported'])) : ?>
-                <div class="notice notice-success is-dismissible"><p>
-                    <?php
-                    echo esc_html(
-                        sprintf(
-                            /* translators: 1: imported count, 2: mode */
-                            __('Imported %1$d movie(s) (%2$s).', 'movie-meta-by-aris'),
-                            (int) $_GET['mmba_imported'],
-                            sanitize_key(wp_unslash($_GET['mmba_mode'] ?? 'merge'))
-                        )
-                    );
-                    ?>
-                </p></div>
-            <?php endif; ?>
-
-            <?php if (!empty($_GET['mmba_error'])) : ?>
-                <div class="notice notice-error is-dismissible"><p><?php echo esc_html(rawurldecode(wp_unslash($_GET['mmba_error']))); ?></p></div>
-            <?php endif; ?>
-
-            <div class="mmba-endpoints mmba-card">
-                <h2><?php echo esc_html__('Frontend JSON endpoints', 'movie-meta-by-aris'); ?></h2>
-                <p><?php echo esc_html__('Pull movie data from either of these URLs:', 'movie-meta-by-aris'); ?></p>
-                <p>
-                    <strong><?php echo esc_html__('REST API:', 'movie-meta-by-aris'); ?></strong><br>
-                    <code class="mmba-copy" data-copy="<?php echo esc_attr($rest_url); ?>"><?php echo esc_html($rest_url); ?></code>
-                    <button type="button" class="button button-small mmba-copy-btn" data-target="<?php echo esc_attr($rest_url); ?>"><?php echo esc_html__('Copy', 'movie-meta-by-aris'); ?></button>
-                </p>
-                <?php if ($json_url !== '') : ?>
-                <p>
-                    <strong><?php echo esc_html__('Static JSON file:', 'movie-meta-by-aris'); ?></strong><br>
-                    <code class="mmba-copy" data-copy="<?php echo esc_attr($json_url); ?>"><?php echo esc_html($json_url); ?></code>
-                    <button type="button" class="button button-small mmba-copy-btn" data-target="<?php echo esc_attr($json_url); ?>"><?php echo esc_html__('Copy', 'movie-meta-by-aris'); ?></button>
-                </p>
-                <?php endif; ?>
-                <p class="description"><?php echo esc_html__('Optional filter: append ?genre=Action to the REST URL.', 'movie-meta-by-aris'); ?></p>
-            </div>
-
-            <div class="mmba-card">
-                <h2><?php echo esc_html__('Export / Import JSON', 'movie-meta-by-aris'); ?></h2>
-                <div class="mmba-io-grid">
-                    <div class="mmba-io-block">
-                        <h3><?php echo esc_html__('Export', 'movie-meta-by-aris'); ?></h3>
-                        <p><?php echo esc_html__('Download all movies as a JSON file.', 'movie-meta-by-aris'); ?></p>
-                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                            <input type="hidden" name="action" value="mmba_export_json">
-                            <?php wp_nonce_field('mmba_export_json'); ?>
-                            <button type="submit" class="button button-secondary"><?php echo esc_html__('Export JSON', 'movie-meta-by-aris'); ?></button>
-                        </form>
+        <div class="wrap mmba-app">
+            <div class="mmba-shell">
+                <header class="mmba-hero">
+                    <div class="mmba-hero-top">
+                        <div class="mmba-brand">
+                            <div class="mmba-mark" aria-hidden="true"><span class="dashicons dashicons-video-alt3"></span></div>
+                            <div>
+                                <p class="mmba-eyebrow"><?php esc_html_e('Movie Catalog', 'movie-meta-by-aris'); ?></p>
+                                <h1><?php esc_html_e('Movie Meta', 'movie-meta-by-aris'); ?></h1>
+                            </div>
+                        </div>
+                        <div class="mmba-hero-meta">
+                            <?php if ($editing) : ?>
+                                <span class="mmba-pill mmba-pill-edit"><?php esc_html_e('Editing', 'movie-meta-by-aris'); ?></span>
+                            <?php else : ?>
+                                <span class="mmba-pill mmba-pill-ok">
+                                    <?php
+                                    echo esc_html(
+                                        sprintf(
+                                            /* translators: %d: movie count */
+                                            _n('%d movie', '%d movies', $movie_count, 'movie-meta-by-aris'),
+                                            $movie_count
+                                        )
+                                    );
+                                    ?>
+                                </span>
+                            <?php endif; ?>
+                            <span class="mmba-version-chip">v<?php echo esc_html(MMBA_VERSION); ?></span>
+                        </div>
                     </div>
-                    <div class="mmba-io-block">
-                        <h3><?php echo esc_html__('Import', 'movie-meta-by-aris'); ?></h3>
-                        <p><?php echo esc_html__('Upload a JSON file exported from this plugin (or any file with a movies array).', 'movie-meta-by-aris'); ?></p>
-                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data">
-                            <input type="hidden" name="action" value="mmba_import_json">
-                            <?php wp_nonce_field('mmba_import_json'); ?>
-                            <p>
-                                <input type="file" name="import_file" accept=".json,application/json" required>
-                            </p>
-                            <p>
-                                <label>
-                                    <input type="radio" name="import_mode" value="merge" checked>
-                                    <?php echo esc_html__('Merge (keep existing, update matching IDs)', 'movie-meta-by-aris'); ?>
-                                </label><br>
-                                <label>
-                                    <input type="radio" name="import_mode" value="replace">
-                                    <?php echo esc_html__('Replace all movies', 'movie-meta-by-aris'); ?>
-                                </label>
-                            </p>
-                            <button type="submit" class="button button-secondary" onclick="return confirm('<?php echo esc_js(__('Import movies from this JSON file?', 'movie-meta-by-aris')); ?>');">
-                                <?php echo esc_html__('Import JSON', 'movie-meta-by-aris'); ?>
-                            </button>
-                        </form>
+                </header>
+
+                <div class="mmba-flash-area" aria-live="polite">
+                    <?php if ($flash_success !== '') : ?>
+                        <div class="mmba-flash is-success"><?php echo esc_html($flash_success); ?></div>
+                    <?php endif; ?>
+                    <?php if ($flash_error !== '') : ?>
+                        <div class="mmba-flash is-error"><?php echo esc_html($flash_error); ?></div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="mmba-layout">
+                    <div class="mmba-main">
+                        <section class="mmba-card">
+                            <div class="mmba-card-head">
+                                <div>
+                                    <h2><?php echo $editing ? esc_html__('Edit movie', 'movie-meta-by-aris') : esc_html__('Add movie', 'movie-meta-by-aris'); ?></h2>
+                                    <p class="mmba-card-lead">
+                                        <?php echo $editing
+                                            ? esc_html__('Update the selected title, then save to apply changes.', 'movie-meta-by-aris')
+                                            : esc_html__('Enter title, metadata, and playback URL to add a title to the catalog.', 'movie-meta-by-aris'); ?>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="mmba-form">
+                                <input type="hidden" name="action" value="mmba_save_movie">
+                                <?php wp_nonce_field('mmba_save_movie'); ?>
+                                <?php if ($form['id'] !== '') : ?>
+                                    <input type="hidden" name="movie_id" value="<?php echo esc_attr($form['id']); ?>">
+                                <?php endif; ?>
+
+                                <div class="mmba-form-grid">
+                                    <div class="mmba-field mmba-field-span">
+                                        <label for="mmba-title"><?php esc_html_e('Title', 'movie-meta-by-aris'); ?></label>
+                                        <input type="text" id="mmba-title" name="title" value="<?php echo esc_attr($form['title']); ?>" required>
+                                    </div>
+                                    <div class="mmba-field">
+                                        <label for="mmba-year"><?php esc_html_e('Year', 'movie-meta-by-aris'); ?></label>
+                                        <input type="text" id="mmba-year" name="year" value="<?php echo esc_attr($form['year']); ?>" placeholder="2024" maxlength="9">
+                                    </div>
+                                    <div class="mmba-field">
+                                        <label for="mmba-genre"><?php esc_html_e('Genre', 'movie-meta-by-aris'); ?></label>
+                                        <input type="text" id="mmba-genre" name="genre" value="<?php echo esc_attr($form['genre']); ?>" placeholder="Action, Drama">
+                                    </div>
+                                    <div class="mmba-field mmba-field-span">
+                                        <label for="mmba-cast"><?php esc_html_e('Cast', 'movie-meta-by-aris'); ?></label>
+                                        <input type="text" id="mmba-cast" name="cast" value="<?php echo esc_attr($form['cast']); ?>" placeholder="Actor One, Actor Two">
+                                    </div>
+                                    <div class="mmba-field mmba-field-span">
+                                        <label for="mmba-movie-link"><?php esc_html_e('Movie link', 'movie-meta-by-aris'); ?></label>
+                                        <input type="text" id="mmba-movie-link" name="movie_link" value="<?php echo esc_attr($form['movie_link']); ?>" placeholder="https://" required autocomplete="off" spellcheck="false">
+                                    </div>
+                                    <div class="mmba-field mmba-field-span">
+                                        <label for="mmba-details"><?php esc_html_e('Details', 'movie-meta-by-aris'); ?></label>
+                                        <textarea id="mmba-details" name="details" rows="5"><?php echo esc_textarea($form['details']); ?></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="mmba-action-bar">
+                                    <?php if ($editing) : ?>
+                                        <a class="mmba-btn mmba-btn-secondary" href="<?php echo esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG)); ?>">
+                                            <?php esc_html_e('Cancel', 'movie-meta-by-aris'); ?>
+                                        </a>
+                                    <?php endif; ?>
+                                    <button type="submit" class="mmba-btn mmba-btn-primary">
+                                        <?php echo $editing ? esc_html__('Update movie', 'movie-meta-by-aris') : esc_html__('Add movie', 'movie-meta-by-aris'); ?>
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <section class="mmba-card">
+                            <div class="mmba-card-head">
+                                <div>
+                                    <h2><?php esc_html_e('Catalog', 'movie-meta-by-aris'); ?></h2>
+                                    <p class="mmba-card-lead"><?php esc_html_e('Saved titles available to shortcodes and the JSON API.', 'movie-meta-by-aris'); ?></p>
+                                </div>
+                            </div>
+
+                            <?php if (empty($movies)) : ?>
+                                <div class="mmba-empty-state">
+                                    <strong><?php esc_html_e('No movies yet', 'movie-meta-by-aris'); ?></strong>
+                                    <?php esc_html_e('Add a title using the form above.', 'movie-meta-by-aris'); ?>
+                                </div>
+                            <?php else : ?>
+                                <div class="mmba-table-wrap">
+                                    <table class="mmba-table">
+                                        <thead>
+                                            <tr>
+                                                <th><?php esc_html_e('Title', 'movie-meta-by-aris'); ?></th>
+                                                <th><?php esc_html_e('Year', 'movie-meta-by-aris'); ?></th>
+                                                <th><?php esc_html_e('Genre', 'movie-meta-by-aris'); ?></th>
+                                                <th><?php esc_html_e('Views', 'movie-meta-by-aris'); ?></th>
+                                                <th><?php esc_html_e('Cast', 'movie-meta-by-aris'); ?></th>
+                                                <th><?php esc_html_e('Shortcode', 'movie-meta-by-aris'); ?></th>
+                                                <th><?php esc_html_e('Actions', 'movie-meta-by-aris'); ?></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($movies as $movie) : ?>
+                                                <?php $movie_shortcode = '[movie_meta id="' . $movie['id'] . '"]'; ?>
+                                                <tr>
+                                                    <td class="mmba-title-cell"><?php echo esc_html($movie['title']); ?></td>
+                                                    <td><?php echo esc_html($movie['year']); ?></td>
+                                                    <td><?php echo esc_html($movie['genre']); ?></td>
+                                                    <td><?php echo esc_html(number_format_i18n(isset($views[$movie['id']]) ? (int) $views[$movie['id']] : 0)); ?></td>
+                                                    <td><?php echo esc_html(wp_trim_words($movie['cast'], 8)); ?></td>
+                                                    <td>
+                                                        <div class="mmba-copy-row">
+                                                            <code><?php echo esc_html($movie_shortcode); ?></code>
+                                                            <button type="button" class="mmba-btn mmba-btn-ghost mmba-btn-sm mmba-copy-btn" data-target="<?php echo esc_attr($movie_shortcode); ?>">
+                                                                <?php esc_html_e('Copy', 'movie-meta-by-aris'); ?>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td class="mmba-actions">
+                                                        <a class="mmba-btn mmba-btn-secondary mmba-btn-sm" href="<?php echo esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG . '&edit=' . rawurlencode($movie['id']))); ?>">
+                                                            <?php esc_html_e('Edit', 'movie-meta-by-aris'); ?>
+                                                        </a>
+                                                        <a class="mmba-btn mmba-btn-danger mmba-btn-sm" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=mmba_delete_movie&movie_id=' . rawurlencode($movie['id'])), 'mmba_delete_movie')); ?>" onclick="return confirm('<?php echo esc_js(__('Delete this movie?', 'movie-meta-by-aris')); ?>');">
+                                                            <?php esc_html_e('Delete', 'movie-meta-by-aris'); ?>
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif; ?>
+                        </section>
                     </div>
+
+                    <aside class="mmba-sidebar">
+                        <section class="mmba-card mmba-card-compact">
+                            <div class="mmba-card-head mmba-card-head-tight">
+                                <h2><?php esc_html_e('Top 10', 'movie-meta-by-aris'); ?></h2>
+                            </div>
+                            <?php if (empty($top_movies)) : ?>
+                                <p class="mmba-help"><?php esc_html_e('No movies in the catalog yet.', 'movie-meta-by-aris'); ?></p>
+                            <?php else : ?>
+                                <ol class="mmba-top-list">
+                                    <?php foreach ($top_movies as $index => $top) : ?>
+                                        <?php
+                                        $top_views = isset($top['views']) ? (int) $top['views'] : 0;
+                                        $top_title = isset($top['title']) && $top['title'] !== '' ? $top['title'] : __('Untitled', 'movie-meta-by-aris');
+                                        ?>
+                                        <li class="mmba-top-item">
+                                            <span class="mmba-top-rank"><?php echo esc_html((string) ($index + 1)); ?></span>
+                                            <span class="mmba-top-title" title="<?php echo esc_attr($top_title); ?>"><?php echo esc_html($top_title); ?></span>
+                                            <span class="mmba-top-views<?php echo $top_views === 0 ? ' is-zero' : ''; ?>">
+                                                <?php echo esc_html(number_format_i18n($top_views)); ?>
+                                            </span>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ol>
+                                <p class="mmba-help"><?php esc_html_e('Live watch counts. Open a movie, then refresh this page.', 'movie-meta-by-aris'); ?></p>
+                            <?php endif; ?>
+                        </section>
+
+                        <section class="mmba-card mmba-card-compact">
+                            <div class="mmba-card-head mmba-card-head-tight">
+                                <h2><?php esc_html_e('Shortcode', 'movie-meta-by-aris'); ?></h2>
+                            </div>
+                            <div class="mmba-shortcode-stack">
+                                <div class="mmba-shortcode-item">
+                                    <span><?php esc_html_e('All movies', 'movie-meta-by-aris'); ?></span>
+                                    <div class="mmba-copy-row">
+                                        <code><?php echo esc_html($catalog_shortcode); ?></code>
+                                        <button type="button" class="mmba-btn mmba-btn-ghost mmba-btn-sm mmba-copy-btn" data-target="<?php echo esc_attr($catalog_shortcode); ?>">
+                                            <?php esc_html_e('Copy', 'movie-meta-by-aris'); ?>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mmba-shortcode-item">
+                                    <span><?php esc_html_e('Top 10', 'movie-meta-by-aris'); ?></span>
+                                    <div class="mmba-copy-row">
+                                        <code>[movie_top10]</code>
+                                        <button type="button" class="mmba-btn mmba-btn-ghost mmba-btn-sm mmba-copy-btn" data-target="[movie_top10]">
+                                            <?php esc_html_e('Copy', 'movie-meta-by-aris'); ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="mmba-card mmba-card-compact">
+                            <div class="mmba-card-head mmba-card-head-tight">
+                                <h2><?php esc_html_e('API', 'movie-meta-by-aris'); ?></h2>
+                            </div>
+                            <dl class="mmba-meta">
+                                <div class="mmba-meta-row">
+                                    <dt><?php esc_html_e('Titles', 'movie-meta-by-aris'); ?></dt>
+                                    <dd><?php echo esc_html((string) $movie_count); ?></dd>
+                                </div>
+                            </dl>
+                            <div class="mmba-shortcode-stack mmba-shortcode-stack-spaced">
+                                <div class="mmba-shortcode-item">
+                                    <span><?php esc_html_e('REST', 'movie-meta-by-aris'); ?></span>
+                                    <div class="mmba-copy-row">
+                                        <code><?php echo esc_html($rest_url); ?></code>
+                                        <button type="button" class="mmba-btn mmba-btn-ghost mmba-btn-sm mmba-copy-btn" data-target="<?php echo esc_attr($rest_url); ?>">
+                                            <?php esc_html_e('Copy', 'movie-meta-by-aris'); ?>
+                                        </button>
+                                    </div>
+                                </div>
+                                <?php if ($json_url !== '') : ?>
+                                    <div class="mmba-shortcode-item">
+                                        <span><?php esc_html_e('JSON file', 'movie-meta-by-aris'); ?></span>
+                                        <div class="mmba-copy-row">
+                                            <code><?php echo esc_html($json_url); ?></code>
+                                            <button type="button" class="mmba-btn mmba-btn-ghost mmba-btn-sm mmba-copy-btn" data-target="<?php echo esc_attr($json_url); ?>">
+                                                <?php esc_html_e('Copy', 'movie-meta-by-aris'); ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </section>
+
+                        <section class="mmba-card mmba-card-compact">
+                            <div class="mmba-card-head mmba-card-head-tight">
+                                <h2><?php esc_html_e('Backup', 'movie-meta-by-aris'); ?></h2>
+                            </div>
+                            <div class="mmba-stack">
+                                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                    <input type="hidden" name="action" value="mmba_export_json">
+                                    <?php wp_nonce_field('mmba_export_json'); ?>
+                                    <button type="submit" class="mmba-btn mmba-btn-secondary mmba-btn-block">
+                                        <span class="dashicons dashicons-download" aria-hidden="true"></span>
+                                        <?php esc_html_e('Export JSON', 'movie-meta-by-aris'); ?>
+                                    </button>
+                                </form>
+
+                                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data">
+                                    <input type="hidden" name="action" value="mmba_import_json">
+                                    <?php wp_nonce_field('mmba_import_json'); ?>
+                                    <div class="mmba-field">
+                                        <label for="mmba-import-file"><?php esc_html_e('Import file', 'movie-meta-by-aris'); ?></label>
+                                        <input type="file" id="mmba-import-file" name="import_file" accept=".json,application/json" required>
+                                    </div>
+                                    <div class="mmba-choice-list">
+                                        <label class="mmba-choice">
+                                            <input type="radio" name="import_mode" value="merge" checked>
+                                            <span><?php esc_html_e('Merge matching IDs', 'movie-meta-by-aris'); ?></span>
+                                        </label>
+                                        <label class="mmba-choice">
+                                            <input type="radio" name="import_mode" value="replace">
+                                            <span><?php esc_html_e('Replace all movies', 'movie-meta-by-aris'); ?></span>
+                                        </label>
+                                    </div>
+                                    <button type="submit" class="mmba-btn mmba-btn-secondary mmba-btn-block" onclick="return confirm('<?php echo esc_js(__('Import movies from this JSON file?', 'movie-meta-by-aris')); ?>');">
+                                        <span class="dashicons dashicons-upload" aria-hidden="true"></span>
+                                        <?php esc_html_e('Import JSON', 'movie-meta-by-aris'); ?>
+                                    </button>
+                                </form>
+                            </div>
+                        </section>
+                    </aside>
                 </div>
             </div>
 
-            <div class="mmba-card">
-                <h2><?php echo esc_html__('Shortcode', 'movie-meta-by-aris'); ?></h2>
-                <p><?php echo esc_html__('Paste any of these into a page or post:', 'movie-meta-by-aris'); ?></p>
-                <ul class="mmba-shortcode-list">
-                    <li><code>[movie_meta]</code> — <?php echo esc_html__('all movies with details + player', 'movie-meta-by-aris'); ?></li>
-                    <li><code>[movie_meta id="MOVIE_ID"]</code> — <?php echo esc_html__('one movie', 'movie-meta-by-aris'); ?></li>
-                    <li><code>[movie_meta genre="Action"]</code> — <?php echo esc_html__('filter by genre', 'movie-meta-by-aris'); ?></li>
-                    <li><code>[movie_meta layout="grid" limit="6"]</code> — <?php echo esc_html__('grid layout, max 6', 'movie-meta-by-aris'); ?></li>
-                    <li><code>[movie_meta player="0"]</code> — <?php echo esc_html__('details only, no video player', 'movie-meta-by-aris'); ?></li>
-                    <li><code>[movie_meta show="title,year,cast,details"]</code> — <?php echo esc_html__('choose which fields to show', 'movie-meta-by-aris'); ?></li>
-                </ul>
-                <p class="description" style="margin-top:12px;">
-                    <?php echo esc_html__('Custom layouts (Code Snippets plugin): paste', 'movie-meta-by-aris'); ?>
-                    <code>snippets/genre-rows-shortcode.php</code>
-                    → <code>[movie_genre_rows]</code>
-                    <?php echo esc_html__('on the homepage;', 'movie-meta-by-aris'); ?>
-                    <code>snippets/movie-watch-shortcode.php</code>
-                    → <code>[movie_watch]</code>
-                    <?php echo esc_html__('on /watch/;', 'movie-meta-by-aris'); ?>
-                    <code>snippets/movie-genre-page-shortcode.php</code>
-                    → <code>[movie_genre]</code>
-                    <?php echo esc_html__('on /genre/ (View all links: /genre/?genre=Horror).', 'movie-meta-by-aris'); ?>
-                </p>
-            </div>
-
-            <div class="mmba-card">
-                <h2><?php echo $editing ? esc_html__('Edit movie', 'movie-meta-by-aris') : esc_html__('Add movie', 'movie-meta-by-aris'); ?></h2>
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="mmba-form">
-                    <input type="hidden" name="action" value="mmba_save_movie">
-                    <?php wp_nonce_field('mmba_save_movie'); ?>
-                    <?php if ($form['id'] !== '') : ?>
-                        <input type="hidden" name="movie_id" value="<?php echo esc_attr($form['id']); ?>">
-                    <?php endif; ?>
-
-                    <table class="form-table" role="presentation">
-                        <tr>
-                            <th scope="row"><label for="mmba-title"><?php echo esc_html__('Title', 'movie-meta-by-aris'); ?></label></th>
-                            <td><input type="text" class="regular-text" id="mmba-title" name="title" value="<?php echo esc_attr($form['title']); ?>" required></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="mmba-year"><?php echo esc_html__('Year', 'movie-meta-by-aris'); ?></label></th>
-                            <td><input type="text" class="small-text" id="mmba-year" name="year" value="<?php echo esc_attr($form['year']); ?>" placeholder="2024" maxlength="9"></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="mmba-genre"><?php echo esc_html__('Genre', 'movie-meta-by-aris'); ?></label></th>
-                            <td><input type="text" class="regular-text" id="mmba-genre" name="genre" value="<?php echo esc_attr($form['genre']); ?>" placeholder="Action, Drama, Comedy..."></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="mmba-cast"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></label></th>
-                            <td>
-                                <input type="text" class="large-text" id="mmba-cast" name="cast" value="<?php echo esc_attr($form['cast']); ?>" placeholder="Actor One, Actor Two, Actor Three">
-                                <p class="description"><?php echo esc_html__('Comma-separated actor names.', 'movie-meta-by-aris'); ?></p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="mmba-movie-link"><?php echo esc_html__('Movie link', 'movie-meta-by-aris'); ?></label></th>
-                            <td>
-                                <input type="text" class="large-text" id="mmba-movie-link" name="movie_link" value="<?php echo esc_attr($form['movie_link']); ?>" placeholder="https://ployan.me/watch/?v11#..." required>
-                                <p class="description"><?php echo esc_html__('HLS / m3u8, ployan watch URL, morencius.com/file/..., or p2pstream hash links like https://imperial.p2pstream.vip/#owgg9h (hash is required).', 'movie-meta-by-aris'); ?></p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="mmba-details"><?php echo esc_html__('Movie details', 'movie-meta-by-aris'); ?></label></th>
-                            <td><textarea class="large-text" rows="5" id="mmba-details" name="details"><?php echo esc_textarea($form['details']); ?></textarea></td>
-                        </tr>
-                    </table>
-
-                    <p class="submit">
-                        <button type="submit" class="button button-primary">
-                            <?php echo $editing ? esc_html__('Update movie', 'movie-meta-by-aris') : esc_html__('Add movie', 'movie-meta-by-aris'); ?>
-                        </button>
-                        <?php if ($editing) : ?>
-                            <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG)); ?>">
-                                <?php echo esc_html__('Cancel', 'movie-meta-by-aris'); ?>
-                            </a>
-                        <?php endif; ?>
-                    </p>
-                </form>
-            </div>
-
-            <div class="mmba-card mmba-list">
-                <h2><?php echo esc_html__('Saved movies', 'movie-meta-by-aris'); ?> <span class="mmba-count">(<?php echo esc_html((string) count($movies)); ?>)</span></h2>
-
-                <?php if (empty($movies)) : ?>
-                    <p><?php echo esc_html__('No movies yet. Add one above.', 'movie-meta-by-aris'); ?></p>
-                <?php else : ?>
-                    <div class="mmba-table-wrap">
-                        <table class="widefat striped">
-                            <thead>
-                                <tr>
-                                    <th><?php echo esc_html__('Title', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Year', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Genre', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Shortcode', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Movie details', 'movie-meta-by-aris'); ?></th>
-                                    <th><?php echo esc_html__('Actions', 'movie-meta-by-aris'); ?></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($movies as $movie) : ?>
-                                    <?php $movie_shortcode = '[movie_meta id="' . $movie['id'] . '"]'; ?>
-                                    <tr>
-                                        <td><strong><?php echo esc_html($movie['title']); ?></strong></td>
-                                        <td><?php echo esc_html($movie['year']); ?></td>
-                                        <td><?php echo esc_html($movie['genre']); ?></td>
-                                        <td><?php echo esc_html(wp_trim_words($movie['cast'], 10)); ?></td>
-                                        <td>
-                                            <code><?php echo esc_html($movie_shortcode); ?></code>
-                                            <button type="button" class="button button-small mmba-copy-btn" data-target="<?php echo esc_attr($movie_shortcode); ?>"><?php echo esc_html__('Copy', 'movie-meta-by-aris'); ?></button>
-                                        </td>
-                                        <td><?php echo esc_html(wp_trim_words($movie['details'], 18)); ?></td>
-                                        <td class="mmba-actions">
-                                            <a class="button button-small" href="<?php echo esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG . '&edit=' . rawurlencode($movie['id']))); ?>">
-                                                <?php echo esc_html__('Edit', 'movie-meta-by-aris'); ?>
-                                            </a>
-                                            <a class="button button-small button-link-delete" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=mmba_delete_movie&movie_id=' . rawurlencode($movie['id'])), 'mmba_delete_movie')); ?>" onclick="return confirm('<?php echo esc_js(__('Delete this movie?', 'movie-meta-by-aris')); ?>');">
-                                                <?php echo esc_html__('Delete', 'movie-meta-by-aris'); ?>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                <?php endif; ?>
-            </div>
+            <footer class="mmba-footer">
+                <span><?php esc_html_e('Developed by Aris', 'movie-meta-by-aris'); ?></span>
+            </footer>
         </div>
         <?php
     }

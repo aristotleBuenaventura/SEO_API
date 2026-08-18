@@ -7,10 +7,12 @@ if (!defined('ABSPATH')) {
 class MMBA_Storage {
 
     const OPTION_KEY = 'mmba_movies';
+    const VIEWS_KEY = 'mmba_movie_views';
     const JSON_FILENAME = 'movies.json';
 
     public static function init() {
-        // Intentionally empty: never write files on frontend page loads.
+        add_action('template_redirect', [__CLASS__, 'track_watch_query'], 20);
+        add_action('wp_footer', [__CLASS__, 'print_view_tracker'], 99);
     }
 
     public static function activate() {
@@ -47,6 +49,69 @@ class MMBA_Storage {
     public static function json_file_url() {
         $url = self::data_url();
         return $url === '' ? '' : trailingslashit($url) . self::JSON_FILENAME;
+    }
+
+    /**
+     * Count a watch view from ?id= even if a page-cache skipped snippet PHP.
+     */
+    public static function track_watch_query() {
+        if (is_admin() || wp_doing_ajax() || is_feed()) {
+            return;
+        }
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            return;
+        }
+        if (empty($_GET['id'])) {
+            return;
+        }
+
+        self::increment_view(sanitize_text_field(wp_unslash((string) $_GET['id'])));
+    }
+
+    /**
+     * Beacon from the plugin so plays are counted even when the watch snippet is outdated.
+     */
+    public static function print_view_tracker() {
+        if (is_admin() || is_feed()) {
+            return;
+        }
+
+        $base = rest_url('movie-meta/v1/movies/');
+        $nonce = wp_create_nonce('wp_rest');
+        $current = isset($_GET['id']) ? sanitize_text_field(wp_unslash((string) $_GET['id'])) : '';
+        ?>
+<script>
+(function () {
+  var base = <?php echo wp_json_encode($base); ?>;
+  var nonce = <?php echo wp_json_encode($nonce); ?>;
+  var current = <?php echo wp_json_encode($current); ?>;
+  function validId(id) {
+    return typeof id === 'string' && /^[a-zA-Z0-9_.-]+$/.test(id);
+  }
+  function ping(id) {
+    if (!validId(id) || !base) return;
+    fetch(base + encodeURIComponent(id) + '/view', {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: true,
+      headers: {
+        Accept: 'application/json',
+        'X-WP-Nonce': nonce
+      }
+    }).catch(function () {});
+  }
+  if (current) ping(current);
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest('a[href]');
+    if (!link) return;
+    try {
+      var href = new URL(link.href, window.location.href);
+      ping(href.searchParams.get('id') || '');
+    } catch (e) {}
+  }, true);
+})();
+</script>
+        <?php
     }
 
     public static function ensure_data_dir() {
@@ -487,7 +552,108 @@ class MMBA_Storage {
         }
 
         self::save_movies($filtered);
+
+        $views = self::get_views();
+        unset($views[(string) $id]);
+        self::save_views($views);
+
         return true;
+    }
+
+    public static function get_views() {
+        $views = get_option(self::VIEWS_KEY, []);
+        if (!is_array($views)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach ($views as $id => $count) {
+            $id = (string) $id;
+            if ($id === '') {
+                continue;
+            }
+            $clean[$id] = max(0, (int) $count);
+        }
+
+        return $clean;
+    }
+
+    public static function get_view_count($id) {
+        $views = self::get_views();
+        $id = (string) $id;
+        return isset($views[$id]) ? (int) $views[$id] : 0;
+    }
+
+    public static function save_views(array $views) {
+        $exists = get_option(self::VIEWS_KEY, null);
+        if ($exists === null) {
+            add_option(self::VIEWS_KEY, $views, '', 'no');
+        } else {
+            update_option(self::VIEWS_KEY, $views, false);
+        }
+    }
+
+    /**
+     * Count a unique watch-page view. Dedupes by IP for 2 minutes.
+     *
+     * @return bool True when the count increased.
+     */
+    public static function increment_view($id) {
+        $id = sanitize_text_field((string) $id);
+        if ($id === '' || !self::get_movie($id)) {
+            return false;
+        }
+
+        $ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
+        if ($ua !== '' && preg_match('/bot|crawl|spider|slurp|facebookexternalhit|preview/i', $ua)) {
+            return false;
+        }
+
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+        $lock = 'mmba_vlock_' . md5($id . '|' . $ip);
+        if (get_transient($lock)) {
+            return false;
+        }
+        set_transient($lock, 1, 2 * MINUTE_IN_SECONDS);
+
+        $views = self::get_views();
+        $views[$id] = (isset($views[$id]) ? (int) $views[$id] : 0) + 1;
+        self::save_views($views);
+
+        return true;
+    }
+
+    /**
+     * Movies ranked by watch views, then recency.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function get_top_movies($limit = 10) {
+        $limit = max(1, min(50, (int) $limit));
+        $movies = self::get_movies();
+        $views = self::get_views();
+
+        usort($movies, static function ($a, $b) use ($views) {
+            $aid = isset($a['id']) ? (string) $a['id'] : '';
+            $bid = isset($b['id']) ? (string) $b['id'] : '';
+            $va = isset($views[$aid]) ? (int) $views[$aid] : 0;
+            $vb = isset($views[$bid]) ? (int) $views[$bid] : 0;
+            if ($va !== $vb) {
+                return $vb - $va;
+            }
+            $ta = isset($a['created_at']) ? (string) $a['created_at'] : '';
+            $tb = isset($b['created_at']) ? (string) $b['created_at'] : '';
+            return strcmp($tb, $ta);
+        });
+
+        $top = array_slice(array_values($movies), 0, $limit);
+        foreach ($top as &$movie) {
+            $mid = isset($movie['id']) ? (string) $movie['id'] : '';
+            $movie['views'] = isset($views[$mid]) ? (int) $views[$mid] : 0;
+        }
+        unset($movie);
+
+        return $top;
     }
 
     private static function normalize_movie(array $movie) {

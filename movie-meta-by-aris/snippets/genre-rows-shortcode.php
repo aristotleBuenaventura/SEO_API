@@ -3,9 +3,11 @@
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
  * Shortcode: [movie_genre_rows]
- * Optional:  [movie_genre_rows watch_url="/watch/" genre_url="/genre/" per_row="10"]
+ * Optional:  [movie_genre_rows genre="Action"]
+ *            [movie_genre_rows genres="Action,Horror"]
+ *            [movie_genre_rows watch_url="/watch/" genre_url="/genre/" per_row="10"]
  *
- * Requires: Movie Meta by Aris plugin (data source).
+ * Requires: Movie Meta plugin (data source).
  * Poster clicks → /watch/?id=MOVIE_ID
  * "View all" → /genre/?genre=Horror  (pair with snippets/movie-genre-page-shortcode.php)
  */
@@ -17,18 +19,29 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_genre_rows', 'mmgr_render_genre_rows_shortcode');
 
 function mmgr_render_genre_rows_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
+    $genre_filter = isset($raw['genre']) ? trim((string) $raw['genre']) : '';
+    $genres_filter = isset($raw['genres']) ? trim((string) $raw['genres']) : '';
+
     $atts = shortcode_atts(
         [
+            'genre'     => '',
             'genres'    => 'Horror,Action,Drama,Comedy,Thriller,Romance,Crime,Animation,Adventure,Sci-Fi,War,Western,Documentary,Mystery,Fantasy,Family',
             'new_days'  => '45',
             'api'       => '',
             'watch_url' => '/watch/',
-            'genre_url' => '/genre/', // WP page that has [movie_genre]
+            'genre_url' => '/genre/',
             'per_row'   => '10',
         ],
-        $atts,
+        $raw,
         'movie_genre_rows'
     );
+
+    $filter_list = $genre_filter !== '' ? $genre_filter : $genres_filter;
+    $genre_only = $filter_list !== '';
+    if ($genre_only) {
+        $atts['genres'] = $filter_list;
+    }
 
     $uid = 'mmgr-' . wp_unique_id();
     $api = $atts['api'] !== ''
@@ -81,6 +94,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   data-genre-url="<?php echo esc_attr($genre_url); ?>"
   data-per-row="<?php echo esc_attr((string) $per_row); ?>"
   data-genres="<?php echo esc_attr($atts['genres']); ?>"
+  data-only="<?php echo $genre_only ? '1' : '0'; ?>"
   data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
@@ -357,6 +371,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   var GENRE_URL = root.getAttribute('data-genre-url') || '/genre/';
   var PER_ROW = parseInt(root.getAttribute('data-per-row') || '10', 10) || 10;
   var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
+  var GENRE_ONLY = root.getAttribute('data-only') === '1';
   var GENRE_ORDER = (root.getAttribute('data-genres') || '')
     .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
 
@@ -425,14 +440,28 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     });
     return map;
   }
+  function findGenreKey(map, wanted) {
+    var needle = String(wanted || '').trim().toLowerCase();
+    if (!needle) return '';
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === needle) return keys[i];
+    }
+    return '';
+  }
   function orderedGenreKeys(map) {
-    var keys = Object.keys(map), ordered = [];
+    var ordered = [];
     GENRE_ORDER.forEach(function (g) {
-      if (map[g] && map[g].length) ordered.push(g);
+      var key = map[g] ? g : findGenreKey(map, g);
+      if (key && map[key] && map[key].length && ordered.indexOf(key) === -1) {
+        ordered.push(key);
+      }
     });
-    keys.sort().forEach(function (g) {
-      if (ordered.indexOf(g) === -1) ordered.push(g);
-    });
+    if (!GENRE_ONLY) {
+      Object.keys(map).sort().forEach(function (g) {
+        if (ordered.indexOf(g) === -1) ordered.push(g);
+      });
+    }
     return ordered;
   }
   function watchHref(movie) {
@@ -524,6 +553,10 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     }
     var grouped = groupByGenre(movies);
     var keys = orderedGenreKeys(grouped);
+    if (!keys.length) {
+      root.innerHTML = '<div class="mmgr-empty">No movies found for this genre.</div>';
+      return;
+    }
     root.innerHTML = keys.map(function (g) { return rowHtml(g, grouped[g]); }).join('');
     root.querySelectorAll('.mmgr-row').forEach(wireCarousel);
   }
