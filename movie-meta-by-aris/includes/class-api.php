@@ -69,6 +69,14 @@ class MMBA_API {
     public static function get_movies(WP_REST_Request $request) {
         $movies = MMBA_Storage::get_movies();
         $genre = sanitize_text_field((string) $request->get_param('genre'));
+        $type = strtolower(sanitize_text_field((string) $request->get_param('type')));
+
+        if ($type === 'series' || $type === 'movie') {
+            $movies = array_values(array_filter($movies, static function ($movie) use ($type) {
+                $item_type = isset($movie['type']) ? (string) $movie['type'] : 'movie';
+                return $item_type === $type;
+            }));
+        }
 
         if ($genre !== '') {
             $movies = array_values(array_filter($movies, static function ($movie) use ($genre) {

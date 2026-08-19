@@ -143,6 +143,21 @@ class MMBA_Storage {
         return array_values($clean);
     }
 
+    /**
+     * Catalog titles with type=series (one row per show).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function get_series() {
+        $series = [];
+        foreach (self::get_movies() as $movie) {
+            if (isset($movie['type']) && $movie['type'] === 'series') {
+                $series[] = $movie;
+            }
+        }
+        return $series;
+    }
+
     public static function genre_matches($movie_genre, $filter) {
         $filter = strtolower(trim((string) $filter));
         if ($filter === '') {

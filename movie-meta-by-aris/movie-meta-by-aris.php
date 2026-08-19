@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Movie Meta
  * Description: Loads movie and series catalog from Google Sheets and exposes them as JSON for frontend display.
- * Version: 1.9.0
+ * Version: 1.9.1
  * Author: Aris
  * Requires at least: 5.6
  * Requires PHP: 7.4
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MMBA_VERSION', '1.9.0');
+define('MMBA_VERSION', '1.9.1');
 define('MMBA_PLUGIN_FILE', __FILE__);
 define('MMBA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MMBA_PLUGIN_URL', plugin_dir_url(__FILE__));
