@@ -110,7 +110,7 @@ function mmgg_render_genre_page_shortcode($atts = []) {
             $title = isset($movie['title']) ? (string) $movie['title'] : '';
             $year = isset($movie['year']) ? (string) $movie['year'] : '';
             $link = isset($movie['movie_link']) ? (string) $movie['movie_link'] : '';
-            $poster = MMBA_Storage::get_poster_url($link);
+            $poster = MMBA_Storage::movie_poster_url($movie);
             $href = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($id);
             $initial = $title !== '' ? strtoupper(substr($title, 0, 1)) : 'M';
             $tone = mmgg_poster_tone($title);

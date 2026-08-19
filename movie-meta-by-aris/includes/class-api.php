@@ -157,8 +157,18 @@ class MMBA_API {
         $id = isset($movie['id']) ? (string) $movie['id'] : '';
         $movie['link_type']  = MMBA_Storage::get_movie_link_type($link);
         $movie['embed_url']  = $movie['link_type'] === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
-        $movie['poster_url'] = MMBA_Storage::get_poster_url($link);
+        $movie['poster_url'] = MMBA_Storage::movie_poster_url($movie);
         $movie['views']      = isset($views[$id]) ? (int) $views[$id] : 0;
+        if (!empty($movie['episodes']) && is_array($movie['episodes'])) {
+            $movie['episodes'] = array_map(static function ($episode) {
+                $elink = isset($episode['movie_link']) ? (string) $episode['movie_link'] : '';
+                $etype = MMBA_Storage::get_movie_link_type($elink);
+                $episode['link_type']  = $etype;
+                $episode['embed_url']  = $etype === 'embed' ? MMBA_Storage::get_embed_url($elink) : $elink;
+                $episode['poster_url'] = MMBA_Storage::movie_poster_url($episode);
+                return $episode;
+            }, $movie['episodes']);
+        }
         return $movie;
     }
 }

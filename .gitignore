@@ -1,2 +1,4 @@
 url-shortify-domain-replacer/includes/credentials.json
 *.zip
+movie-meta-by-aris/credentials/google-service-account.php
+movie-meta-by-aris/credentials/*.json

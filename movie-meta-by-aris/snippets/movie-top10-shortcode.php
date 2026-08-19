@@ -48,7 +48,7 @@ function mmt10_render_top10_shortcode($atts = []) {
             $type = MMBA_Storage::get_movie_link_type($link);
             $movie['link_type']  = $type;
             $movie['embed_url']  = $type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
-            $movie['poster_url'] = MMBA_Storage::get_poster_url($link);
+            $movie['poster_url'] = MMBA_Storage::movie_poster_url($movie);
             $enriched[] = $movie;
         }
         $bootstrap = [

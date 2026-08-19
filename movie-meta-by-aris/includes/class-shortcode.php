@@ -114,7 +114,7 @@ class MMBA_Shortcode {
                 $link_type = MMBA_Storage::get_movie_link_type($link);
                 $play_url = $link_type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
                 $safe_play = MMBA_Storage::escape_play_url($play_url);
-                $poster_url = MMBA_Storage::get_poster_url($link);
+                $poster_url = MMBA_Storage::movie_poster_url($movie);
                 ?>
                 <div class="mmba-movie-media">
                     <?php if ($use_poster) : ?>

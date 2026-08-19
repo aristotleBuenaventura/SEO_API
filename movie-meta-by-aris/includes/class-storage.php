@@ -18,13 +18,13 @@ class MMBA_Storage {
     }
 
     public static function activate() {
-        $movies = get_option(self::OPTION_KEY, null);
-        if ($movies === null) {
-            add_option(self::OPTION_KEY, [], '', 'no');
-            $movies = [];
-        }
+        MMBA_Sheets::schedule();
+        MMBA_Sheets::sync(true);
+        self::sync_json_file(self::get_movies());
+    }
 
-        self::sync_json_file(is_array($movies) ? $movies : []);
+    public static function deactivate() {
+        MMBA_Sheets::unschedule();
     }
 
     public static function data_dir() {
@@ -129,10 +129,8 @@ class MMBA_Storage {
     }
 
     public static function get_movies() {
-        $movies = get_option(self::OPTION_KEY, []);
-        if (!is_array($movies)) {
-            return [];
-        }
+        $payload = MMBA_Sheets::get_payload();
+        $movies = isset($payload['catalog']) && is_array($payload['catalog']) ? $payload['catalog'] : [];
 
         $clean = [];
         foreach ($movies as $movie) {
@@ -167,12 +165,38 @@ class MMBA_Storage {
 
     public static function get_movie($id) {
         $id = (string) $id;
-        foreach (self::get_movies() as $movie) {
-            if ((string) $movie['id'] === $id) {
-                return $movie;
+        if ($id === '') {
+            return null;
+        }
+
+        $payload = MMBA_Sheets::get_payload();
+        $by_id = isset($payload['by_id']) && is_array($payload['by_id']) ? $payload['by_id'] : [];
+        if (!isset($by_id[$id]) || !is_array($by_id[$id])) {
+            return null;
+        }
+
+        $movie = self::normalize_movie($by_id[$id]);
+        if (($movie['type'] ?? '') === 'series') {
+            $episodes = isset($payload['series_episodes'][$id]) && is_array($payload['series_episodes'][$id])
+                ? $payload['series_episodes'][$id]
+                : [];
+            $movie['episodes'] = array_map([__CLASS__, 'normalize_movie'], $episodes);
+        } elseif (($movie['type'] ?? '') === 'episode') {
+            $series_id = isset($movie['series_id']) ? (string) $movie['series_id'] : '';
+            if ($series_id !== '' && isset($by_id[$series_id]) && is_array($by_id[$series_id])) {
+                $parent = self::normalize_movie($by_id[$series_id]);
+                $parent['episodes'] = isset($payload['series_episodes'][$series_id]) && is_array($payload['series_episodes'][$series_id])
+                    ? array_map([__CLASS__, 'normalize_movie'], $payload['series_episodes'][$series_id])
+                    : [];
+                $parent['current_episode_id'] = $id;
+                $parent['movie_link'] = $movie['movie_link'];
+                $parent['season'] = $movie['season'];
+                $parent['episode'] = $movie['episode'];
+                return $parent;
             }
         }
-        return null;
+
+        return $movie;
     }
 
     public static function save_movies(array $movies) {
@@ -423,6 +447,23 @@ class MMBA_Storage {
     }
 
     /**
+     * Sheet Poster column if set, otherwise the previous host-based default.
+     */
+    public static function movie_poster_url($movie) {
+        if (!is_array($movie)) {
+            return self::get_poster_url((string) $movie);
+        }
+
+        $custom = isset($movie['poster']) ? trim((string) $movie['poster']) : '';
+        if ($custom !== '' && preg_match('#^https?://#i', $custom)) {
+            return $custom;
+        }
+
+        $link = isset($movie['movie_link']) ? (string) $movie['movie_link'] : '';
+        return self::get_poster_url($link);
+    }
+
+    /**
      * Optional poster thumbnail for known hosts.
      */
     public static function get_poster_url($url) {
@@ -493,62 +534,15 @@ class MMBA_Storage {
     }
 
     public static function add_movie($input) {
-        $movie = self::sanitize_movie($input);
-        if (is_wp_error($movie)) {
-            return $movie;
-        }
-
-        $movies = self::get_movies();
-        array_unshift($movies, $movie);
-        self::save_movies($movies);
-
-        return $movie;
+        return new WP_Error('mmba_readonly', __('The catalog is read-only. Add titles in Google Sheets.', 'movie-meta-by-aris'));
     }
 
     public static function update_movie($id, $input) {
-        $movies = self::get_movies();
-        $found = false;
-
-        foreach ($movies as $index => $existing) {
-            if ((string) $existing['id'] !== (string) $id) {
-                continue;
-            }
-
-            $movie = self::sanitize_movie($input, $id);
-            if (is_wp_error($movie)) {
-                return $movie;
-            }
-
-            $movies[$index] = $movie;
-            $found = true;
-            break;
-        }
-
-        if (!$found) {
-            return new WP_Error('mmba_not_found', __('Movie not found.', 'movie-meta-by-aris'));
-        }
-
-        self::save_movies($movies);
-        return self::get_movie($id);
+        return new WP_Error('mmba_readonly', __('The catalog is read-only. Edit titles in Google Sheets.', 'movie-meta-by-aris'));
     }
 
     public static function delete_movie($id) {
-        $movies = self::get_movies();
-        $filtered = array_values(array_filter($movies, static function ($movie) use ($id) {
-            return (string) $movie['id'] !== (string) $id;
-        }));
-
-        if (count($filtered) === count($movies)) {
-            return new WP_Error('mmba_not_found', __('Movie not found.', 'movie-meta-by-aris'));
-        }
-
-        self::save_movies($filtered);
-
-        $views = self::get_views();
-        unset($views[(string) $id]);
-        self::save_views($views);
-
-        return true;
+        return new WP_Error('mmba_readonly', __('The catalog is read-only. Remove titles in Google Sheets.', 'movie-meta-by-aris'));
     }
 
     public static function get_views() {
@@ -691,17 +685,31 @@ class MMBA_Storage {
         return array_slice(array_values($movies), 0, $limit);
     }
 
-    private static function normalize_movie(array $movie) {
+    public static function normalize_movie(array $movie) {
+        $type = isset($movie['type']) ? strtolower((string) $movie['type']) : 'movie';
+        if (!in_array($type, ['movie', 'series', 'episode'], true)) {
+            $type = 'movie';
+        }
+
         return [
-            'id'         => isset($movie['id']) ? (string) $movie['id'] : '',
-            'title'      => isset($movie['title']) ? (string) $movie['title'] : '',
-            'details'    => isset($movie['details']) ? (string) $movie['details'] : '',
-            'cast'       => isset($movie['cast']) ? (string) $movie['cast'] : '',
-            'year'       => isset($movie['year']) ? (string) $movie['year'] : '',
-            'movie_link' => isset($movie['movie_link']) ? (string) $movie['movie_link'] : '',
-            'genre'      => isset($movie['genre']) ? (string) $movie['genre'] : '',
-            'created_at' => isset($movie['created_at']) ? (string) $movie['created_at'] : '',
-            'updated_at' => isset($movie['updated_at']) ? (string) $movie['updated_at'] : '',
+            'id'            => isset($movie['id']) ? (string) $movie['id'] : '',
+            'series_id'     => isset($movie['series_id']) ? (string) $movie['series_id'] : '',
+            'type'          => $type,
+            'title'         => isset($movie['title']) ? (string) $movie['title'] : '',
+            'details'       => isset($movie['details']) ? (string) $movie['details'] : '',
+            'cast'          => isset($movie['cast']) ? (string) $movie['cast'] : '',
+            'year'          => isset($movie['year']) ? (string) $movie['year'] : '',
+            'movie_link'    => isset($movie['movie_link']) ? (string) $movie['movie_link'] : '',
+            'genre'         => isset($movie['genre']) ? (string) $movie['genre'] : '',
+            'poster'        => isset($movie['poster']) ? (string) $movie['poster'] : '',
+            'season'        => isset($movie['season']) ? (string) $movie['season'] : '',
+            'episode'       => isset($movie['episode']) ? (string) $movie['episode'] : '',
+            'season_n'      => isset($movie['season_n']) ? (int) $movie['season_n'] : 0,
+            'episode_n'     => isset($movie['episode_n']) ? (int) $movie['episode_n'] : 0,
+            'episode_count' => isset($movie['episode_count']) ? (int) $movie['episode_count'] : 0,
+            'season_count'  => isset($movie['season_count']) ? (int) $movie['season_count'] : 0,
+            'created_at'    => isset($movie['created_at']) ? (string) $movie['created_at'] : '',
+            'updated_at'    => isset($movie['updated_at']) ? (string) $movie['updated_at'] : '',
         ];
     }
 

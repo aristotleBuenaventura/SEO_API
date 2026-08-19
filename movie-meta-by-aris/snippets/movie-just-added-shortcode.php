@@ -58,7 +58,7 @@ function mmja_render_just_added_shortcode($atts = []) {
             $type = MMBA_Storage::get_movie_link_type($link);
             $movie['link_type']  = $type;
             $movie['embed_url']  = $type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
-            $movie['poster_url'] = MMBA_Storage::get_poster_url($link);
+            $movie['poster_url'] = MMBA_Storage::movie_poster_url($movie);
             $enriched[] = $movie;
         }
         $bootstrap = [
@@ -224,7 +224,7 @@ function mmja_render_just_added_shortcode($atts = []) {
     align-items: center;
     padding: 0.22rem 0.55rem;
     border-radius: 6px;
-    background: linear-gradient(90deg, #2563eb 0%, #60a5fa 100%);
+    background: linear-gradient(90deg, #68ad69 0%, #3d7a7a 48%, #2d4c72 100%);
     color: #fff;
     font-size: 0.62rem;
     font-weight: 700;
