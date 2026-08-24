@@ -5,11 +5,13 @@
  * Shortcode: [movie_genre]
  * Optional:  [movie_genre home_url="/" watch_url="/watch/"]
  *
- * Create a WP page at /genre/ and put [movie_genre] in the content.
- * Genre rows "View all" links here as: /genre/?genre=Horror
+ * Create a WP page at /genre/ (slug: genre) and put [movie_genre] in the content.
+ * Pretty URLs (via genre-pretty-urls-seo.php): /Genre/Horror  /Genre/Action  /Teen
+ * Legacy query still works (301 → pretty): /genre/?genre=Horror
  *
  * Requires: Movie Meta plugin (data source).
  * Pair with snippets/genre-rows-shortcode.php → [movie_genre_rows]
+ * Pair with snippets/genre-pretty-urls-seo.php (rewrites + meta)
  */
 
 if (!defined('ABSPATH')) {
@@ -30,8 +32,20 @@ function mmgg_render_genre_page_shortcode($atts = []) {
     );
 
     $genre = $atts['genre'] !== '' ? sanitize_text_field($atts['genre']) : '';
+    if ($genre === '' && function_exists('mmba_genre_from_request')) {
+        $genre = mmba_genre_from_request();
+    }
+    if ($genre === '') {
+        $qv = get_query_var('mmba_genre');
+        if (is_string($qv) && $qv !== '') {
+            $genre = sanitize_text_field(rawurldecode($qv));
+        }
+    }
     if ($genre === '' && isset($_GET['genre'])) {
         $genre = sanitize_text_field(wp_unslash((string) $_GET['genre']));
+    }
+    if ($genre !== '' && function_exists('mmba_genre_filter_label')) {
+        $genre = mmba_genre_filter_label($genre);
     }
 
     $home_url = $atts['home_url'];

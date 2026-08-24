@@ -5,11 +5,11 @@
  * Shortcode: [movie_genre_rows]
  * Optional:  [movie_genre_rows genre="Action"]
  *            [movie_genre_rows genres="Action,Horror"]
- *            [movie_genre_rows watch_url="/watch/" genre_url="/genre/" per_row="10"]
+ *            [movie_genre_rows watch_url="/watch/" genre_url="/Genre/" per_row="10"]
  *
  * Requires: Movie Meta plugin (data source).
  * Poster clicks → /watch/?id=MOVIE_ID
- * "View all" → /genre/?genre=Horror  (pair with snippets/movie-genre-page-shortcode.php)
+ * "View all" → /Genre/Horror  (pair with movie-genre-page + genre-pretty-urls-seo)
  */
 
 if (!defined('ABSPATH')) {
@@ -30,7 +30,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
             'new_days'  => '45',
             'api'       => '',
             'watch_url' => '/watch/',
-            'genre_url' => '/genre/',
+            'genre_url' => '/Genre/',
             'per_row'   => '10',
         ],
         $raw,
@@ -54,8 +54,14 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     }
     $watch_url = esc_url($watch_url);
 
+    // Prefer absolute pretty base from SEO snippet helpers when present.
     $genre_url = $atts['genre_url'];
-    if ($genre_url !== '' && strpos($genre_url, 'http') !== 0) {
+    if (function_exists('mmba_genre_pretty_url')) {
+        // Base path only; JS appends slug. Strip a sample genre path → /Genre/
+        $sample = mmba_genre_pretty_url('Action');
+        $genre_url = preg_replace('#/Action/?$#i', '/', $sample);
+        $genre_url = untrailingslashit($genre_url) . '/';
+    } elseif ($genre_url !== '' && strpos($genre_url, 'http') !== 0) {
         $genre_url = home_url($genre_url);
     }
     $genre_url = esc_url($genre_url);
@@ -368,10 +374,34 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
 
   var API = root.getAttribute('data-api') || '';
   var WATCH_URL = root.getAttribute('data-watch-url') || '/watch/';
-  var GENRE_URL = root.getAttribute('data-genre-url') || '/genre/';
+  var GENRE_URL = root.getAttribute('data-genre-url') || '/Genre/';
   var PER_ROW = parseInt(root.getAttribute('data-per-row') || '10', 10) || 10;
   var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
   var GENRE_ONLY = root.getAttribute('data-only') === '1';
+  var GENRE_SLUG = {
+    'sci-fi': 'Sci-fi',
+    'scifi': 'Sci-fi',
+    'sci fi': 'Sci-fi',
+    'lgbtq': 'lgbtq',
+    'lgbtq+': 'lgbtq',
+    'lgbt': 'lgbtq',
+    'horror': 'Horror',
+    'animation': 'Animation',
+    'comedy': 'Comedy',
+    'action': 'Action',
+    'romance': 'Romance',
+    'teen': 'Teen',
+    'adventure': 'Adventure',
+    'drama': 'Drama',
+    'family': 'Family',
+    'western': 'Western',
+    'war': 'War',
+    'fantasy': 'Fantasy',
+    'thriller': 'Thriller',
+    'crime': 'Crime',
+    'documentary': 'Documentary',
+    'mystery': 'Mystery'
+  };
   var GENRE_ORDER = (root.getAttribute('data-genres') || '')
     .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
 
@@ -469,10 +499,27 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     var join = base.indexOf('?') === -1 ? '?' : '&';
     return base + join + 'id=' + encodeURIComponent(movie.id || '');
   }
+  function genreSlug(genre) {
+    var g = String(genre || '').trim();
+    if (!g) return '';
+    var mapped = GENRE_SLUG[g.toLowerCase()];
+    return mapped || g;
+  }
   function genreHref(genre) {
-    var base = GENRE_URL || '/genre/';
-    var join = base.indexOf('?') === -1 ? '?' : '&';
-    return base + join + 'genre=' + encodeURIComponent(genre || '');
+    var slug = genreSlug(genre);
+    if (!slug) return GENRE_URL || '/Genre/';
+    // Sheet special-case: Teen lives at /Teen (not /Genre/Teen).
+    if (slug.toLowerCase() === 'teen') {
+      try {
+        var u = new URL(GENRE_URL || (location.origin + '/Genre/'), location.origin);
+        return u.origin + '/Teen/';
+      } catch (e) {
+        return '/Teen/';
+      }
+    }
+    var base = GENRE_URL || '/Genre/';
+    if (base.charAt(base.length - 1) !== '/') base += '/';
+    return base + encodeURIComponent(slug) + '/';
   }
   function cardHtml(movie) {
     var poster = movie.poster_url || '';
