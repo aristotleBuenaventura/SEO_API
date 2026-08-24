@@ -52,6 +52,66 @@ function bundesliga_team_logo($api_logo, $team_name = '') {
         return 'https://img-live.bannershive.dev/h001_uploads/images/EintrachtFrankfurt.png';
     }
 
+    if (strpos($name, 'augsburg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Augsburg.png';
+    }
+
+    if (strpos($name, 'leverkusen') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/BayerLeverkusen.png';
+    }
+
+    if (strpos($name, 'bayern') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/BayernMunich.png';
+    }
+
+    if (strpos($name, 'schalke') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Schalke.png';
+    }
+
+    if (strpos($name, 'leipzig') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/RBLeipzig.png';
+    }
+
+    if (strpos($name, 'union berlin') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/UnionBerlin.png';
+    }
+
+    if (strpos($name, 'mainz') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Mainz.png';
+    }
+
+    if (strpos($name, 'paderborn') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Paderborn.png';
+    }
+
+    if (strpos($name, 'hoffenheim') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Hoffenheim.png';
+    }
+
+    if (strpos($name, 'hamburger') !== false || $name === 'hsv' || strpos($name, 'hamburg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/HamburgerSV.png';
+    }
+
+    if (strpos($name, 'freiburg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Freiburg.png';
+    }
+
+    if (strpos($name, 'koln') !== false || strpos($name, 'köln') !== false || strpos($name, 'cologne') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/FCColn.png';
+    }
+
+    if (strpos($name, 'dortmund') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Dortmund.png';
+    }
+
+    if (strpos($name, 'werder') !== false || strpos($name, 'bremen') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/WerderBremen.png';
+    }
+
+    if (strpos($name, 'monchengladbach') !== false || strpos($name, 'mönchengladbach') !== false || strpos($name, 'gladbach') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/BorussiaMonchengladbach.png';
+    }
+
     if (!empty($api_logo)) {
         return $api_logo;
     }

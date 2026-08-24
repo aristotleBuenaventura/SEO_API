@@ -29,6 +29,66 @@ function bundesliga_standing_team_logo($api_logo, $team_name = '') {
         return 'https://img-live.bannershive.dev/h001_uploads/images/EintrachtFrankfurt.png';
     }
 
+    if (strpos($name, 'augsburg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Augsburg.png';
+    }
+
+    if (strpos($name, 'leverkusen') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/BayerLeverkusen.png';
+    }
+
+    if (strpos($name, 'bayern') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/BayernMunich.png';
+    }
+
+    if (strpos($name, 'schalke') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Schalke.png';
+    }
+
+    if (strpos($name, 'leipzig') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/RBLeipzig.png';
+    }
+
+    if (strpos($name, 'union berlin') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/UnionBerlin.png';
+    }
+
+    if (strpos($name, 'mainz') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Mainz.png';
+    }
+
+    if (strpos($name, 'paderborn') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Paderborn.png';
+    }
+
+    if (strpos($name, 'hoffenheim') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Hoffenheim.png';
+    }
+
+    if (strpos($name, 'hamburger') !== false || $name === 'hsv' || strpos($name, 'hamburg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/HamburgerSV.png';
+    }
+
+    if (strpos($name, 'freiburg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Freiburg.png';
+    }
+
+    if (strpos($name, 'koln') !== false || strpos($name, 'köln') !== false || strpos($name, 'cologne') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/FCColn.png';
+    }
+
+    if (strpos($name, 'dortmund') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Dortmund.png';
+    }
+
+    if (strpos($name, 'werder') !== false || strpos($name, 'bremen') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/WerderBremen.png';
+    }
+
+    if (strpos($name, 'monchengladbach') !== false || strpos($name, 'mönchengladbach') !== false || strpos($name, 'gladbach') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/BorussiaMonchengladbach.png';
+    }
+
     if (!empty($api_logo)) {
         return $api_logo;
     }
@@ -238,21 +298,26 @@ function bundesliga_standings_shortcode() {
 
     $uid       = uniqid('bl_standings_');
     $cfg       = bundesliga_standings_config();
-    $cache_key = 'bundesliga_standings_2026_v7_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
-    $cached    = get_transient($cache_key);
+    // Cache standings DATA only — logos resolve on every render so URL overrides show immediately.
+    $cache_key = 'bundesliga_standings_data_2026_v8_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $data      = get_transient($cache_key);
 
-    if ($cached !== false) {
-        return $cached;
-    }
+    if ($data === false || !is_array($data) || empty($data)) {
+        $data = bundesliga_standings_api($cfg['league_id'], $cfg['season']);
 
-    $data = bundesliga_standings_api($cfg['league_id'], $cfg['season']);
+        // Historical seasons (and empty current season) — build from fixtures.
+        if (empty($data) || !bundesliga_standings_have_played($data)) {
+            $fixtures = bundesliga_fixtures_api($cfg['league_id'], $cfg['from'], $cfg['to']);
+            $computed = bundesliga_standings_from_fixtures($fixtures, $cfg['season']);
+            if (!empty($computed)) {
+                $data = $computed;
+            }
+        }
 
-    // Historical seasons (and empty current season) — build from fixtures.
-    if (empty($data) || !bundesliga_standings_have_played($data)) {
-        $fixtures = bundesliga_fixtures_api($cfg['league_id'], $cfg['from'], $cfg['to']);
-        $computed = bundesliga_standings_from_fixtures($fixtures, $cfg['season']);
-        if (!empty($computed)) {
-            $data = $computed;
+        if (!empty($data)) {
+            set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
+        } else {
+            delete_transient($cache_key);
         }
     }
 
@@ -642,10 +707,7 @@ function bundesliga_standings_shortcode() {
     </div>
 
     <?php
-    $html = ob_get_clean();
-    set_transient($cache_key, $html, 30 * MINUTE_IN_SECONDS);
-
-    return $html;
+    return ob_get_clean();
 }
 
 add_shortcode('bundesliga_standings', 'bundesliga_standings_shortcode');
