@@ -42,6 +42,20 @@ function mmt10_render_top10_shortcode($atts = []) {
     $bootstrap = null;
     if (class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'get_top_movies')) {
         $movies = MMBA_Storage::get_top_movies($limit);
+        if (!is_array($movies)) {
+            $movies = [];
+        }
+        $movies = array_values(array_filter($movies, static function ($movie) {
+            if (!is_array($movie)) {
+                return false;
+            }
+            $type = isset($movie['type']) ? (string) $movie['type'] : '';
+            if ($type !== '') {
+                return strcasecmp($type, 'series') !== 0;
+            }
+            return empty($movie['episodes']) && empty($movie['season_count']) && empty($movie['episode_count']);
+        }));
+        $movies = array_slice($movies, 0, $limit);
         $enriched = [];
         foreach ($movies as $movie) {
             $link = isset($movie['movie_link']) ? (string) $movie['movie_link'] : '';
@@ -377,7 +391,11 @@ function mmt10_render_top10_shortcode($atts = []) {
     update();
   }
   function render(movies) {
-    movies = (movies || []).slice(0, LIMIT);
+    movies = (movies || []).filter(function (movie) {
+      var type = String((movie && movie.type) || '').toLowerCase();
+      if (type) return type !== 'series';
+      return !movie || (!movie.episodes && !movie.season_count && !movie.episode_count);
+    }).slice(0, LIMIT);
     if (!movies.length) {
       root.innerHTML = '<div class="mmt10-empty">No movies found.</div>';
       return;
