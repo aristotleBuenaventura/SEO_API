@@ -1,4 +1,3 @@
-<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
@@ -29,9 +28,11 @@ function mmt10_render_top10_shortcode($atts = []) {
 
     $uid = 'mmt10-' . wp_unique_id();
     $limit = max(1, min(20, absint($atts['limit'])));
+    // Over-fetch so series filtered out below still leave enough movies for $limit.
+    $fetch_limit = min(50, max($limit * 5, $limit));
     $api = $atts['api'] !== ''
         ? esc_url_raw($atts['api'])
-        : esc_url_raw(rest_url('movie-meta/v1/top?limit=' . $limit));
+        : esc_url_raw(rest_url('movie-meta/v1/top?limit=' . $fetch_limit));
 
     $watch_url = $atts['watch_url'];
     if ($watch_url !== '' && strpos($watch_url, 'http') !== 0) {
@@ -41,7 +42,7 @@ function mmt10_render_top10_shortcode($atts = []) {
 
     $bootstrap = null;
     if (class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'get_top_movies')) {
-        $movies = MMBA_Storage::get_top_movies($limit);
+        $movies = MMBA_Storage::get_top_movies($fetch_limit);
         if (!is_array($movies)) {
             $movies = [];
         }
@@ -104,11 +105,14 @@ function mmt10_render_top10_shortcode($atts = []) {
     --mmt10-font: "Sora", "Avenir Next", "Segoe UI", system-ui, sans-serif;
     color: var(--mmt10-ink);
     font-family: var(--mmt10-font);
-    max-width: 1200px;
+    max-width: 100%;
     width: 100%;
     margin: 0 auto;
     padding: 1.25rem 1rem 2.5rem;
     overflow-x: clip;
+    background: url(/wp-content/uploads/2026/08/top-mov-bg.jpg) no-repeat 0 0;
+    background-size: cover;
+    border-radius: 20px;
   }
   .mmt10-loading, .mmt10-empty, .mmt10-error {
     color: var(--mmt10-muted);
@@ -132,6 +136,7 @@ function mmt10_render_top10_shortcode($atts = []) {
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.25;
+    color: #fff;
   }
   .mmt10-title::before {
     content: "";
@@ -202,23 +207,26 @@ function mmt10_render_top10_shortcode($atts = []) {
   }
   .mmt10-rank {
     position: absolute;
-    left: -0.08em;
-    bottom: -0.12em;
+    left: 0;
+    bottom: -0.35em;
     z-index: 3;
     margin: 0;
-    font-size: clamp(5.4rem, 16vw, 8.4rem);
+    font-size: clamp(5.4rem, 16vw, 7.1rem);
     font-weight: 800;
-    line-height: 0.72;
+    line-height: normal;
     letter-spacing: -0.08em;
     font-variant-numeric: lining-nums;
-    background: linear-gradient(180deg, var(--mmt10-rank-from) 0%, var(--mmt10-rank-mid) 48%, var(--mmt10-rank-to) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 4px 10px rgba(18, 21, 26, 0.28));
     pointer-events: none;
     user-select: none;
+    font-family: "Poppins", sans-serif;
+    width: 100%;
+    background: url(/wp-content/uploads/2026/08/texture.jpg);
+    -webkit-background-clip: text;
+    -moz-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   .mmt10-poster {
     position: relative;
@@ -231,6 +239,7 @@ function mmt10_render_top10_shortcode($atts = []) {
     overflow: hidden;
     box-shadow: 0 10px 24px rgba(18, 21, 26, 0.1);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px #fff solid;
   }
   @media (hover: hover) {
     .mmt10-card:hover .mmt10-poster {
@@ -274,12 +283,14 @@ function mmt10_render_top10_shortcode($atts = []) {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    color: #fff;
   }
   .mmt10-card-meta {
     margin: 0.35rem 0 0;
     color: var(--mmt10-muted);
     font-size: 0.78rem;
     line-height: 1.35;
+    color: #fff;
   }
   @media (max-width: 900px) {
     .mmt10 { --mmt10-card-w: 150px; }

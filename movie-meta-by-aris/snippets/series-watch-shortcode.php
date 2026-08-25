@@ -1,4 +1,3 @@
-<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
@@ -346,11 +345,10 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     width: 100%;
     max-width: 100%;
     padding: 1rem max(0px, env(safe-area-inset-right)) 3.5rem max(0px, env(safe-area-inset-left));
-    background: #f3f5f8 !important;
     overflow-x: clip;
   }
   .mmsw-shell {
-    max-width: 1120px;
+    max-width: 98%;
     width: 100%;
     margin: 0 auto;
     padding: 1.25rem 1.15rem 1.5rem;

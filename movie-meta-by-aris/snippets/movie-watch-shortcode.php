@@ -1,4 +1,3 @@
-<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
@@ -8,9 +7,8 @@
  * Create a WP page at /watch/ and put [movie_watch] in the content.
  * Genre rows link here as: /watch/?id=MOVIE_ID
  *
- * Requires: Movie Meta plugin (data source).
+ * Requires: Movie Meta by Aris plugin (data source).
  * Pair with snippets/genre-rows-shortcode.php → [movie_genre_rows]
- * Pair with snippets/movie-top10-shortcode.php → [movie_top10]
  */
 
 if (!defined('ABSPATH')) {
@@ -55,7 +53,7 @@ function mmw_render_watch_shortcode($atts = []) {
     }
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmw mmw-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmw mmw-error">' . esc_html__('Movie Meta by Aris plugin is required.', 'movie-meta-by-aris') . '</div>';
     }
 
     $movie = MMBA_Storage::get_movie($id);
@@ -64,27 +62,16 @@ function mmw_render_watch_shortcode($atts = []) {
             ' <a class="mmw-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to catalog', 'movie-meta-by-aris') . '</a></div>';
     }
 
-    $season_q = isset($_GET['season']) ? sanitize_text_field(wp_unslash((string) $_GET['season'])) : '';
-    $episode_q = isset($_GET['episode']) ? sanitize_text_field(wp_unslash((string) $_GET['episode'])) : '';
-    $picked = mmw_pick_episode($movie, $season_q, $episode_q);
-    $is_series = !empty($picked['episodes']);
-    $catalog_id = isset($picked['id']) ? (string) $picked['id'] : $id;
-    $current = $picked['current'];
-
-    if (method_exists('MMBA_Storage', 'increment_view')) {
-        MMBA_Storage::increment_view($catalog_id);
-    }
-
     $title   = isset($movie['title']) ? (string) $movie['title'] : '';
-    $details = isset($current['details']) && $current['details'] !== '' ? (string) $current['details'] : (isset($movie['details']) ? (string) $movie['details'] : '');
-    $cast    = isset($current['cast']) && $current['cast'] !== '' ? (string) $current['cast'] : (isset($movie['cast']) ? (string) $movie['cast'] : '');
-    $year    = isset($current['year']) && $current['year'] !== '' ? (string) $current['year'] : (isset($movie['year']) ? (string) $movie['year'] : '');
-    $genre   = isset($current['genre']) && $current['genre'] !== '' ? (string) $current['genre'] : (isset($movie['genre']) ? (string) $movie['genre'] : '');
-    $link    = isset($current['movie_link']) ? (string) $current['movie_link'] : (isset($movie['movie_link']) ? (string) $movie['movie_link'] : '');
+    $details = isset($movie['details']) ? (string) $movie['details'] : '';
+    $cast    = isset($movie['cast']) ? (string) $movie['cast'] : '';
+    $year    = isset($movie['year']) ? (string) $movie['year'] : '';
+    $genre   = isset($movie['genre']) ? (string) $movie['genre'] : '';
+    $link    = isset($movie['movie_link']) ? (string) $movie['movie_link'] : '';
     $link_type = MMBA_Storage::get_movie_link_type($link);
     $play_url  = $link_type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
     $play_src  = MMBA_Storage::escape_play_url($play_url);
-    $poster    = MMBA_Storage::movie_poster_url($current);
+    $poster    = MMBA_Storage::get_poster_url($link);
 
     $genres = mmw_split_list($genre);
     $cast_list = mmw_split_list($cast);
@@ -93,20 +80,6 @@ function mmw_render_watch_shortcode($atts = []) {
     $uid = 'mmw-' . wp_unique_id();
     $needs_hls = ($link_type === 'hls' && $play_url !== '');
     $display_title = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
-    $current_season_n = isset($current['season_n']) ? (int) $current['season_n'] : 0;
-    $current_episode_n = isset($current['episode_n']) ? (int) $current['episode_n'] : 0;
-    $seasons = [];
-    if ($is_series) {
-        foreach ($picked['episodes'] as $ep) {
-            $sn = isset($ep['season_n']) ? (int) $ep['season_n'] : 0;
-            $slabel = isset($ep['season']) && $ep['season'] !== '' ? (string) $ep['season'] : ('Season ' . $sn);
-            if (!isset($seasons[$sn])) {
-                $seasons[$sn] = ['label' => $slabel, 'episodes' => []];
-            }
-            $seasons[$sn]['episodes'][] = $ep;
-        }
-        ksort($seasons, SORT_NUMERIC);
-    }
 
     ob_start();
     ?>
@@ -126,12 +99,6 @@ function mmw_render_watch_shortcode($atts = []) {
         <h1 class="mmw-title"><?php echo esc_html($display_title); ?></h1>
         <div class="mmw-chips" role="list">
           <span class="mmw-chip mmw-chip-hd" role="listitem">HD</span>
-          <?php if ($is_series) : ?>
-            <span class="mmw-chip" role="listitem"><?php echo esc_html__('Series', 'movie-meta-by-aris'); ?></span>
-            <?php if ($current_season_n || $current_episode_n) : ?>
-              <span class="mmw-chip mmw-chip-soft" role="listitem"><?php echo esc_html(sprintf('S%d E%d', $current_season_n, $current_episode_n)); ?></span>
-            <?php endif; ?>
-          <?php endif; ?>
           <?php if ($year !== '') : ?>
             <span class="mmw-chip" role="listitem"><?php echo esc_html($year); ?></span>
           <?php endif; ?>
@@ -168,31 +135,6 @@ function mmw_render_watch_shortcode($atts = []) {
         <?php endif; ?>
       </div>
     </div>
-
-    <?php if ($is_series && !empty($seasons)) : ?>
-    <section class="mmw-episodes" aria-label="<?php echo esc_attr__('Seasons and episodes', 'movie-meta-by-aris'); ?>">
-      <div class="mmw-season-tabs" role="tablist">
-        <?php foreach ($seasons as $sn => $block) :
-            $shref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($catalog_id) . '&season=' . rawurlencode((string) $sn);
-            $active = ((int) $sn === $current_season_n);
-            ?>
-          <a class="mmw-season-tab<?php echo $active ? ' is-active' : ''; ?>" href="<?php echo esc_url($shref); ?>"><?php echo esc_html($block['label']); ?></a>
-        <?php endforeach; ?>
-      </div>
-      <?php if (isset($seasons[$current_season_n])) : ?>
-      <div class="mmw-ep-grid">
-        <?php foreach ($seasons[$current_season_n]['episodes'] as $ep) :
-            $en = isset($ep['episode_n']) ? (int) $ep['episode_n'] : 0;
-            $ehref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($catalog_id) . '&season=' . rawurlencode((string) $current_season_n) . '&episode=' . rawurlencode((string) $en);
-            $eactive = ($en === $current_episode_n);
-            $elabel = isset($ep['episode']) && $ep['episode'] !== '' ? (string) $ep['episode'] : ('Episode ' . $en);
-            ?>
-          <a class="mmw-ep<?php echo $eactive ? ' is-active' : ''; ?>" href="<?php echo esc_url($ehref); ?>"><?php echo esc_html($elabel); ?></a>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
-    </section>
-    <?php endif; ?>
 
     <?php if ($details !== '' || $cast !== '' || $year !== '' || !empty($genres)) : ?>
     <section class="mmw-info" aria-label="<?php echo esc_attr__('Movie information', 'movie-meta-by-aris'); ?>">
@@ -256,7 +198,7 @@ function mmw_render_watch_shortcode($atts = []) {
             $rgenres = mmw_split_list($rgenre);
             $rprimary = !empty($rgenres) ? $rgenres[0] : '';
             $rlink = isset($item['movie_link']) ? (string) $item['movie_link'] : '';
-            $rposter = MMBA_Storage::movie_poster_url($item);
+            $rposter = MMBA_Storage::get_poster_url($rlink);
             $rhref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($rid);
             $initial = $rtitle !== '' ? strtoupper(substr($rtitle, 0, 1)) : 'M';
             $tone = mmw_poster_tone($rtitle);
@@ -328,11 +270,10 @@ function mmw_render_watch_shortcode($atts = []) {
     width: 100%;
     max-width: 100%;
     padding: 1rem max(0px, env(safe-area-inset-right)) 3.5rem max(0px, env(safe-area-inset-left));
-    background: #f3f5f8 !important;
     overflow-x: clip;
   }
   .mmw-shell {
-    max-width: 1120px;
+    max-width: 98%;
     width: 100%;
     margin: 0 auto;
     padding: 1.25rem 1.15rem 1.5rem;
@@ -409,52 +350,6 @@ function mmw_render_watch_shortcode($atts = []) {
     color: #1f2937 !important;
   }
   .mmw-player-stage { margin: 0 0 1.75rem; }
-  .mmw-episodes { margin: 0 0 1.75rem; }
-  .mmw-season-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    margin: 0 0 0.75rem;
-  }
-  .mmw-season-tab {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.38rem 0.75rem;
-    border-radius: 999px;
-    border: 1px solid rgba(18, 21, 26, 0.14);
-    background: #ffffff !important;
-    color: #12151a !important;
-    text-decoration: none !important;
-    font-size: 0.82rem;
-    font-weight: 600;
-  }
-  .mmw-season-tab.is-active {
-    background: #12151a !important;
-    border-color: #12151a !important;
-    color: #ffffff !important;
-  }
-  .mmw-ep-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-  }
-  .mmw-ep {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4rem 0.7rem;
-    border-radius: 10px;
-    border: 1px solid rgba(18, 21, 26, 0.12);
-    background: #eef1f5 !important;
-    color: #12151a !important;
-    text-decoration: none !important;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-  .mmw-ep.is-active {
-    background: #1d4ed8 !important;
-    border-color: #1d4ed8 !important;
-    color: #ffffff !important;
-  }
   .mmw-player-wrap {
     position: relative;
     border-radius: calc(var(--mmw-radius) + 2px);
@@ -804,94 +699,8 @@ function mmw_render_watch_shortcode($atts = []) {
 })();
 </script>
 <?php endif; ?>
-<script>
-(function () {
-  var id = <?php echo wp_json_encode($catalog_id); ?>;
-  var url = <?php echo wp_json_encode(rest_url(MMBA_API::REST_NS . '/movies/' . rawurlencode($catalog_id) . '/view')); ?>;
-  var nonce = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
-  var key = 'mmba_viewed_' + id;
-  try {
-    if (window.localStorage && localStorage.getItem(key)) return;
-  } catch (e) {}
-  if (!url) return;
-  fetch(url, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {
-      Accept: 'application/json',
-      'X-WP-Nonce': nonce
-    }
-  }).then(function (r) {
-    if (!r.ok) return;
-    try {
-      if (window.localStorage) localStorage.setItem(key, '1');
-    } catch (e) {}
-  }).catch(function () {});
-})();
-</script>
     <?php
     return ob_get_clean();
-}
-
-function mmw_pick_episode(array $movie, $season_q = '', $episode_q = '') {
-    $episodes = isset($movie['episodes']) && is_array($movie['episodes']) ? $movie['episodes'] : [];
-    $current = [
-        'id'         => isset($movie['id']) ? (string) $movie['id'] : '',
-        'movie_link' => isset($movie['movie_link']) ? (string) $movie['movie_link'] : '',
-        'poster'     => isset($movie['poster']) ? (string) $movie['poster'] : '',
-        'details'    => isset($movie['details']) ? (string) $movie['details'] : '',
-        'cast'       => isset($movie['cast']) ? (string) $movie['cast'] : '',
-        'year'       => isset($movie['year']) ? (string) $movie['year'] : '',
-        'genre'      => isset($movie['genre']) ? (string) $movie['genre'] : '',
-        'season'     => isset($movie['season']) ? (string) $movie['season'] : '',
-        'episode'    => isset($movie['episode']) ? (string) $movie['episode'] : '',
-        'season_n'   => isset($movie['season_n']) ? (int) $movie['season_n'] : 0,
-        'episode_n'  => isset($movie['episode_n']) ? (int) $movie['episode_n'] : 0,
-    ];
-
-    if (empty($episodes)) {
-        return ['episodes' => [], 'current' => $current, 'id' => $current['id']];
-    }
-
-    $season_n = 0;
-    $episode_n = 0;
-    if (preg_match('/(\d+)/', (string) $season_q, $m)) {
-        $season_n = (int) $m[1];
-    }
-    if (preg_match('/(\d+)/', (string) $episode_q, $m)) {
-        $episode_n = (int) $m[1];
-    }
-
-    $wanted_id = isset($movie['current_episode_id']) ? (string) $movie['current_episode_id'] : '';
-    $match = null;
-    foreach ($episodes as $ep) {
-        if ($wanted_id !== '' && isset($ep['id']) && (string) $ep['id'] === $wanted_id && $season_q === '' && $episode_q === '') {
-            $match = $ep;
-            break;
-        }
-        $esn = isset($ep['season_n']) ? (int) $ep['season_n'] : 0;
-        $een = isset($ep['episode_n']) ? (int) $ep['episode_n'] : 0;
-        if ($season_n && $esn !== $season_n) {
-            continue;
-        }
-        if ($episode_n && $een === $episode_n && ($season_n === 0 || $esn === $season_n)) {
-            $match = $ep;
-            break;
-        }
-        if ($season_n && !$episode_n && $esn === $season_n && $match === null) {
-            $match = $ep;
-        }
-    }
-
-    if ($match === null) {
-        $match = $episodes[0];
-    }
-
-    return [
-        'episodes' => $episodes,
-        'current'  => $match,
-        'id'       => isset($movie['id']) ? (string) $movie['id'] : '',
-    ];
 }
 
 /**

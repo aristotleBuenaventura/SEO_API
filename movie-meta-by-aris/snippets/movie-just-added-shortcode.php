@@ -1,4 +1,3 @@
-<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
@@ -58,7 +57,7 @@ function mmja_render_just_added_shortcode($atts = []) {
             $type = MMBA_Storage::get_movie_link_type($link);
             $movie['link_type']  = $type;
             $movie['embed_url']  = $type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
-            $movie['poster_url'] = MMBA_Storage::movie_poster_url($movie);
+            $movie['poster_url'] = MMBA_Storage::get_poster_url($link);
             $enriched[] = $movie;
         }
         $bootstrap = [
@@ -97,11 +96,12 @@ function mmja_render_just_added_shortcode($atts = []) {
     --mmja-font: "Sora", "Avenir Next", "Segoe UI", system-ui, sans-serif;
     color: var(--mmja-ink);
     font-family: var(--mmja-font);
-    max-width: 1200px;
+    max-width: 100%;
     width: 100%;
     margin: 0 auto;
     padding: 1.25rem 1rem 2.5rem;
     overflow-x: clip;
+    padding-bottom: 0;
   }
   .mmja-loading, .mmja-empty, .mmja-error {
     color: var(--mmja-muted);
@@ -171,6 +171,7 @@ function mmja_render_just_added_shortcode($atts = []) {
     overscroll-behavior-x: contain;
     touch-action: pan-x;
     scrollbar-width: none;
+    padding-bottom: 0;
   }
   .mmja-track::-webkit-scrollbar { display: none; }
   .mmja-card {

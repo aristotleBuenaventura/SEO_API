@@ -1,4 +1,3 @@
-<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
@@ -125,7 +124,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     --mmgr-font: "Sora", "Avenir Next", "Segoe UI", system-ui, sans-serif;
     color: var(--mmgr-ink);
     font-family: var(--mmgr-font);
-    max-width: 1200px;
+    max-width: 100%;
     width: 100%;
     margin: 0 auto;
     padding: 1.25rem 1rem 2.5rem;
