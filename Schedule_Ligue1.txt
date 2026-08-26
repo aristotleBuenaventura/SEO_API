@@ -1,0 +1,618 @@
+function ligue1_api($leagueId, $from, $to) {
+
+    $APIkey   = "75d4149d2873e1afd455cebbd0ec25255cea79295120d9726c22fdca3ed306be";
+    $timezone = "Asia/Manila";
+
+    $url = "https://apiv2.allsportsapi.com/football/?met=Fixtures"
+        . "&APIkey={$APIkey}"
+        . "&leagueId={$leagueId}"
+        . "&timezone={$timezone}"
+        . "&from={$from}"
+        . "&to={$to}";
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING => "gzip,deflate"
+    ]);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    curl_close($ch);
+
+    if ($http_code !== 200 || !$response) {
+        return [];
+    }
+
+    $json = json_decode($response, true);
+    $result = $json['result'] ?? [];
+
+    return is_array($result) ? array_values($result) : [];
+}
+
+function ligue1_team_logo($api_logo, $team_name = '') {
+
+    if (!empty($api_logo)) {
+        return $api_logo;
+    }
+
+    return '/wp-content/uploads/2025/09/tba.webp';
+}
+
+
+function ligue1_match_field($match, $key, $default = '') {
+    if (is_array($match)) {
+        return $match[$key] ?? $default;
+    }
+    if (is_object($match)) {
+        return $match->$key ?? $default;
+    }
+    return $default;
+}
+
+function ligue1_schedule_shortcode() {
+
+    $unique_id = uniqid("ligue1_");
+
+    // Current season 2026/2027
+    $leagueId = 168;
+    $from     = "2026-08-22";
+    $to       = "2027-05-31";
+
+    $cache_key = "ligue1_sched_2026_v1_" . md5($leagueId . $from . $to);
+    $data = get_transient($cache_key);
+
+    if ($data === false || !is_array($data) || empty($data)) {
+        $data = ligue1_api($leagueId, $from, $to);
+
+        if (!empty($data)) {
+            set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
+        } else {
+            delete_transient($cache_key);
+        }
+    }
+
+    if (empty($data)) {
+        return "<p>Upcoming Ligue 1 matches will be available soon.</p>";
+    }
+
+    usort($data, function($a, $b) {
+        return strtotime(ligue1_match_field($a, 'event_date')) - strtotime(ligue1_match_field($b, 'event_date'));
+    });
+
+    // Start on yesterday so finished matches (with scores) show first;
+    // upcoming matches appear when navigating next. Moves forward each day.
+    // Exception: on/after the last match day — show last games at the end.
+    $tz = new DateTimeZone('Asia/Manila');
+    $yesterday = (new DateTime('now', $tz))->modify('-1 day')->format('Y-m-d');
+    $today     = (new DateTime('now', $tz))->format('Y-m-d');
+
+    $initial_slide = 0;
+    $at_last_games = false;
+    $yesterday_index = null;
+    $last_past_day_start = null;
+    $current_past_day = null;
+    $last_match_date = '';
+
+    foreach ($data as $i => $match) {
+        $match_date = (string) ligue1_match_field($match, 'event_date');
+        if ($match_date === '') {
+            continue;
+        }
+
+        if ($match_date !== $last_match_date) {
+            $last_match_date = $match_date;
+        }
+
+        if ($match_date === $yesterday && $yesterday_index === null) {
+            $yesterday_index = $i;
+        }
+
+        if ($match_date < $today) {
+            if ($match_date !== $current_past_day) {
+                $current_past_day = $match_date;
+                $last_past_day_start = $i;
+            }
+        }
+    }
+
+    if ($last_match_date !== '' && $today >= $last_match_date) {
+        $at_last_games = true;
+        $initial_slide = max(0, count($data) - 3);
+    } elseif ($yesterday_index !== null) {
+        $initial_slide = $yesterday_index;
+    } elseif ($last_past_day_start !== null) {
+        $initial_slide = $last_past_day_start;
+    }
+
+    $max_start = max(0, count($data) - 1);
+    $initial_slide = min(max(0, (int) $initial_slide), $max_start);
+    $total_cards = count($data);
+
+    ob_start();
+    ?>
+
+    <div id="<?php echo esc_attr($unique_id); ?>"
+         class="bl-schedule-root"
+         data-initial="<?php echo (int) $initial_slide; ?>"
+         data-at-last="<?php echo $at_last_games ? '1' : '0'; ?>"
+         data-total="<?php echo (int) $total_cards; ?>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <div class="bl-schedule-header">
+        <h3 class="bl-schedule-title"><span>Ligue 1</span> Schedule</h3>
+        <div class="bl-schedule-season">2026/2027</div>
+    </div>
+
+    <div class="bl-carousel">
+        <button type="button" class="bl-nav bl-nav-prev" aria-label="Previous matches">&#8249;</button>
+
+        <div class="bl-track" tabindex="0">
+        <?php foreach ($data as $v): ?>
+            <?php
+                $home = ligue1_match_field($v, 'event_home_team', 'TBA');
+                $away = ligue1_match_field($v, 'event_away_team', 'TBA');
+
+                $home_logo = ligue1_team_logo(ligue1_match_field($v, 'home_team_logo'), $home);
+                $away_logo = ligue1_team_logo(ligue1_match_field($v, 'away_team_logo'), $away);
+
+                $final_result = ligue1_match_field($v, 'event_final_result');
+                $has_score = !empty($final_result) && $final_result !== '-';
+                $score = $has_score ? $final_result : 'UPCOMING MATCH';
+
+                $event_date = ligue1_match_field($v, 'event_date');
+                $date = !empty($event_date) ? date('M d, Y', strtotime($event_date)) : '';
+
+                $venue = ligue1_match_field($v, 'event_stadium', 'TBA');
+                if ($venue === '') {
+                    $venue = 'TBA';
+                }
+            ?>
+
+            <article class="bl-card">
+                <div class="fixture-date"><?php echo esc_html($date); ?></div>
+
+                <div class="fixture-body">
+                    <div class="team">
+                        <span class="team-logo">
+                            <img src="<?php echo esc_url($home_logo); ?>" width="40" height="40" alt="" draggable="false">
+                        </span>
+                        <div class="team-name"><?php echo esc_html($home); ?></div>
+                    </div>
+
+                    <div class="fixture-score <?php echo $has_score ? 'has-score' : 'is-upcoming'; ?>">
+                        <?php echo esc_html($score); ?>
+                    </div>
+
+                    <div class="team">
+                        <span class="team-logo">
+                            <img src="<?php echo esc_url($away_logo); ?>" width="40" height="40" alt="" draggable="false">
+                        </span>
+                        <div class="team-name"><?php echo esc_html($away); ?></div>
+                    </div>
+                </div>
+
+                <div class="fixture-teams">Ligue 1</div>
+                <div class="fixture-venue"><?php echo esc_html($venue); ?></div>
+            </article>
+
+        <?php endforeach; ?>
+        </div>
+
+        <button type="button" class="bl-nav bl-nav-next" aria-label="Next matches">&#8250;</button>
+    </div>
+
+    <style>
+    #<?php echo esc_attr($unique_id); ?> {
+        --bl-ink:#121417;
+        --bl-muted:#6b7280;
+        --bl-line:#e8eaed;
+        --bl-soft:#f4f6f8;
+        --bl-panel:#ffffff;
+        --bl-accent:#111111;
+        --bl-gap:12px;
+        box-sizing:border-box;
+        width:100%;
+        max-width:100%;
+        font-family:"Manrope",Helvetica,Arial,sans-serif;
+        color:var(--bl-ink);
+        background:linear-gradient(180deg,#f7f8fa 0%,#ffffff 48%);
+        border:1px solid var(--bl-line);
+        border-radius:16px;
+        padding:20px 14px 16px;
+        overflow:hidden;
+        line-height:1.25;
+        overscroll-behavior-x:contain;
+    }
+    #<?php echo esc_attr($unique_id); ?> *{ box-sizing:border-box; }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-header{
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap:12px;
+        margin:0 6px 16px;
+        padding:0 4px 14px;
+        border-bottom:1px solid var(--bl-line);
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title{
+        margin:0;
+        font-size:20px;
+        font-weight:800;
+        letter-spacing:-0.02em;
+        color:var(--bl-ink);
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-title span{ color:var(--bl-accent); }
+    #<?php echo esc_attr($unique_id); ?> .bl-schedule-season{
+        font-size:12px;
+        font-weight:600;
+        color:var(--bl-muted);
+        letter-spacing:0.04em;
+        text-transform:uppercase;
+        white-space:nowrap;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-carousel{
+        position:relative;
+        display:block;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-track{
+        display:flex;
+        gap:var(--bl-gap);
+        overflow-x:auto;
+        overflow-y:hidden;
+        scroll-snap-type:x mandatory;
+        scroll-behavior:smooth;
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior-x:contain;
+        touch-action:pan-x pinch-zoom;
+        scrollbar-width:none;
+        padding:4px 0 8px;
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-track::-webkit-scrollbar{ display:none; }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-card{
+        flex:0 0 100%;
+        width:100%;
+        min-width:100%;
+        max-width:100%;
+        scroll-snap-align:start;
+        scroll-snap-stop:always;
+        background:var(--bl-panel);
+        border:1px solid var(--bl-line);
+        border-radius:14px;
+        padding:16px 14px;
+        text-align:center;
+        box-shadow:0 2px 8px rgba(18,20,23,0.06);
+        display:flex;
+        flex-direction:column;
+        justify-content:space-between;
+        min-height:220px;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .fixture-date{
+        font-size:11px;
+        font-weight:700;
+        margin-bottom:6px;
+        color:var(--bl-muted);
+        letter-spacing:0.06em;
+        text-transform:uppercase;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-body{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin:10px 0;
+        gap:6px;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:8px;
+        width:90px;
+        min-width:0;
+        flex:0 1 30%;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team-logo{
+        width:52px;
+        height:52px;
+        border-radius:12px;
+        background:var(--bl-soft);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        overflow:hidden;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team-logo img{
+        width:36px;
+        height:36px;
+        object-fit:contain;
+        display:block;
+        pointer-events:none;
+        -webkit-user-drag:none;
+        user-select:none;
+    }
+    #<?php echo esc_attr($unique_id); ?> .team-name{
+        font-size:12px;
+        font-weight:600;
+        color:var(--bl-ink);
+        text-align:center;
+        line-height:1.2;
+        max-width:100%;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-score{
+        font-size:18px;
+        font-weight:800;
+        color:var(--bl-ink);
+        min-width:0;
+        flex:1 1 auto;
+        text-align:center;
+        text-transform:uppercase;
+        letter-spacing:0.4px;
+        line-height:1.2;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming{
+        font-size:12px;
+        color:var(--bl-accent);
+        background:rgba(17,17,17,0.08);
+        border-radius:8px;
+        padding:8px 6px;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score{
+        color:var(--bl-accent);
+        font-size:22px;
+        letter-spacing:0.02em;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-teams{
+        font-size:11px;
+        font-weight:700;
+        color:var(--bl-accent);
+        margin-top:4px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    #<?php echo esc_attr($unique_id); ?> .fixture-venue{
+        font-size:11px;
+        font-weight:500;
+        color:var(--bl-muted);
+        margin-top:4px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+
+    #<?php echo esc_attr($unique_id); ?> .bl-nav{
+        position:absolute;
+        top:50%;
+        transform:translateY(-50%);
+        z-index:3;
+        width:auto;
+        height:auto;
+        min-width:28px;
+        min-height:28px;
+        border:none;
+        border-radius:0;
+        background:transparent;
+        color:var(--bl-accent);
+        font-size:34px;
+        font-weight:300;
+        line-height:1;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        cursor:pointer;
+        padding:4px;
+        box-shadow:none;
+        -webkit-tap-highlight-color:transparent;
+    }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:2px; }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:2px; }
+    #<?php echo esc_attr($unique_id); ?> .bl-nav:disabled{
+        opacity:0.28;
+        cursor:default;
+        pointer-events:none;
+    }
+
+    @media (min-width:768px){
+        #<?php echo esc_attr($unique_id); ?>{ --bl-gap:16px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-carousel{ padding:0 28px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:4px 0 8px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-card{
+            flex:0 0 calc((100% - (var(--bl-gap) * 2)) / 3);
+            width:calc((100% - (var(--bl-gap) * 2)) / 3);
+            min-width:calc((100% - (var(--bl-gap) * 2)) / 3);
+            max-width:calc((100% - (var(--bl-gap) * 2)) / 3);
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
+    }
+    @media (max-width:767px){
+        #<?php echo esc_attr($unique_id); ?>{
+            padding:14px 8px 12px;
+            border-radius:14px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-schedule-header{
+            flex-direction:column;
+            align-items:flex-start;
+            gap:6px;
+            margin:0 2px 12px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-schedule-title{ font-size:17px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-carousel{ padding:0 22px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-track{ padding:2px 0 6px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-card{
+            flex:0 0 100%;
+            width:100%;
+            min-width:100%;
+            max-width:100%;
+            min-height:200px;
+            padding:14px 12px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .team{ width:72px; gap:6px; }
+        #<?php echo esc_attr($unique_id); ?> .team-logo{ width:44px; height:44px; }
+        #<?php echo esc_attr($unique_id); ?> .team-logo img{ width:28px; height:28px; }
+        #<?php echo esc_attr($unique_id); ?> .team-name{ font-size:11px; }
+        #<?php echo esc_attr($unique_id); ?> .fixture-score.is-upcoming{ font-size:11px; }
+        #<?php echo esc_attr($unique_id); ?> .fixture-score.has-score{ font-size:20px; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav{
+            font-size:30px;
+        }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-prev{ left:0; }
+        #<?php echo esc_attr($unique_id); ?> .bl-nav-next{ right:0; }
+    }
+    </style>
+
+    <script>
+    (function () {
+        var root = document.getElementById(<?php echo wp_json_encode($unique_id); ?>);
+        if (!root) return;
+
+        var track = root.querySelector(".bl-track");
+        var prevBtn = root.querySelector(".bl-nav-prev");
+        var nextBtn = root.querySelector(".bl-nav-next");
+        var cards = Array.prototype.slice.call(root.querySelectorAll(".bl-card"));
+        if (!track || !cards.length) return;
+
+        var initialIndex = parseInt(root.getAttribute("data-initial") || "0", 10) || 0;
+        var atLast = root.getAttribute("data-at-last") === "1";
+        var scrolling = false;
+
+        function perView() {
+            var w = window.innerWidth || document.documentElement.clientWidth;
+            return w >= 768 ? 3 : 1;
+        }
+
+        function maxIndex() {
+            return Math.max(0, cards.length - perView());
+        }
+
+        function currentIndex() {
+            var left = track.scrollLeft;
+            var best = 0;
+            var bestDist = Infinity;
+            for (var i = 0; i < cards.length; i++) {
+                var dist = Math.abs(cards[i].offsetLeft - left);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = i;
+                }
+            }
+            return best;
+        }
+
+        function updateNav() {
+            var idx = currentIndex();
+            var max = maxIndex();
+            prevBtn.disabled = idx <= 0;
+            nextBtn.disabled = idx >= max;
+        }
+
+        function goTo(index, smooth) {
+            var max = maxIndex();
+            var target = Math.max(0, Math.min(index, max));
+            var card = cards[target];
+            if (!card) return;
+
+            scrolling = true;
+            track.scrollTo({
+                left: card.offsetLeft,
+                behavior: smooth === false ? "auto" : "smooth"
+            });
+
+            window.setTimeout(function () {
+                scrolling = false;
+                updateNav();
+            }, smooth === false ? 40 : 320);
+        }
+
+        function step(dir) {
+            goTo(currentIndex() + dir, true);
+        }
+
+        prevBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            step(-1);
+        });
+        nextBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            step(1);
+        });
+
+        var scrollTimer = null;
+        track.addEventListener("scroll", function () {
+            if (scrollTimer) window.clearTimeout(scrollTimer);
+            scrollTimer = window.setTimeout(function () {
+                if (scrolling) return;
+
+                // Snap-lock to nearest card after finger swipe.
+                var idx = currentIndex();
+                var max = maxIndex();
+                if (idx > max) idx = max;
+                var card = cards[idx];
+                if (!card) return;
+
+                if (Math.abs(track.scrollLeft - card.offsetLeft) > 2) {
+                    goTo(idx, true);
+                } else {
+                    updateNav();
+                }
+            }, 80);
+        }, { passive: true });
+
+        // Block browser back/forward edge gestures while touching the track.
+        track.addEventListener("touchstart", function (e) {
+            if (e.touches && e.touches.length === 1) {
+                track.setAttribute("data-touching", "1");
+            }
+        }, { passive: true });
+        track.addEventListener("touchend", function () {
+            track.removeAttribute("data-touching");
+            updateNav();
+        }, { passive: true });
+
+        function boot() {
+            var start = initialIndex;
+            if (atLast) {
+                start = maxIndex();
+            }
+            goTo(start, false);
+            updateNav();
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+
+        window.addEventListener("resize", function () {
+            goTo(Math.min(currentIndex(), maxIndex()), false);
+        });
+    })();
+    </script>
+
+    </div>
+
+    <?php
+    return ob_get_clean();
+}
+
+add_shortcode("ligue1_schedule", "ligue1_schedule_shortcode");

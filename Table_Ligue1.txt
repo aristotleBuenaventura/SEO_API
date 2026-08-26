@@ -1,0 +1,635 @@
+function ligue1_standings_api_key() {
+    return '75d4149d2873e1afd455cebbd0ec25255cea79295120d9726c22fdca3ed306be';
+}
+
+
+function ligue1_standings_config() {
+    return [
+        'league_id' => 168,
+        'season'    => '2026/2027',
+        'from'      => '2026-08-22',
+        'to'        => '2027-05-31',
+    ];
+}
+
+
+function ligue1_standing_team_logo($api_logo, $team_name = '') {
+
+    if (!empty($api_logo)) {
+        return $api_logo;
+    }
+
+    return '/wp-content/uploads/2025/09/tba.webp';
+}
+
+
+
+function ligue1_standings_api($league_id, $season) {
+
+    $url = 'https://apiv2.allsportsapi.com/football/?met=Standings'
+        . '&APIkey=' . ligue1_standings_api_key()
+        . '&leagueId=' . $league_id
+        . '&season=' . urlencode((string) $season);
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING       => 'gzip,deflate',
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) {
+        return [];
+    }
+
+    $json  = json_decode($response, true);
+    $total = $json['result']['total'] ?? [];
+
+    return is_array($total) ? array_values($total) : [];
+}
+
+
+function ligue1_fixtures_api($league_id, $from, $to) {
+
+    $url = 'https://apiv2.allsportsapi.com/football/?met=Fixtures'
+        . '&APIkey=' . ligue1_standings_api_key()
+        . '&leagueId=' . $league_id
+        . '&timezone=Asia/Manila'
+        . '&from=' . $from
+        . '&to=' . $to;
+
+    $ch = curl_init();
+
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING       => 'gzip,deflate',
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) {
+        return [];
+    }
+
+    $json = json_decode($response, true);
+    $result = $json['result'] ?? [];
+
+    return is_array($result) ? array_values($result) : [];
+}
+
+
+function ligue1_normalize_team_name($team_name) {
+
+    $name = trim((string) $team_name);
+    $map  = [
+        'Paris Saint Germain' => 'PSG',
+        'Paris Saint-Germain' => 'PSG',
+        'Olympique Marseille' => 'Marseille',
+        'Olympique Lyonnais'  => 'Lyon',
+    ];
+
+    return $map[$name] ?? $name;
+}
+
+
+function ligue1_standings_from_fixtures($fixtures, $season) {
+
+    $teams = [];
+
+    foreach ($fixtures as $fixture) {
+        if (($fixture['league_season'] ?? '') !== $season) {
+            continue;
+        }
+
+        $result = $fixture['event_final_result'] ?? '';
+        if ($result === '' || $result === '-' || !preg_match('/(\d+)\s*-\s*(\d+)/', $result, $m)) {
+            continue;
+        }
+
+        $home_goals = (int) $m[1];
+        $away_goals = (int) $m[2];
+        $home_team  = ligue1_normalize_team_name($fixture['event_home_team'] ?? '');
+        $away_team  = ligue1_normalize_team_name($fixture['event_away_team'] ?? '');
+
+        if ($home_team === '' || $away_team === '') {
+            continue;
+        }
+
+        $sides = [
+            [$home_team, $home_goals, $away_goals, $fixture['home_team_logo'] ?? '', $fixture['home_team_key'] ?? 0],
+            [$away_team, $away_goals, $home_goals, $fixture['away_team_logo'] ?? '', $fixture['away_team_key'] ?? 0],
+        ];
+
+        foreach ($sides as $side) {
+            list($team_name, $gf, $ga, $logo, $team_key) = $side;
+
+            if (!isset($teams[$team_name])) {
+                $teams[$team_name] = [
+                    'standing_team' => $team_name,
+                    'team_logo'     => $logo,
+                    'team_key'      => $team_key,
+                    'league_season' => $season,
+                    'standing_P'    => 0,
+                    'standing_W'    => 0,
+                    'standing_D'    => 0,
+                    'standing_L'    => 0,
+                    'standing_F'    => 0,
+                    'standing_A'    => 0,
+                    'standing_GD'   => 0,
+                    'standing_PTS'  => 0,
+                ];
+            }
+
+            $row = &$teams[$team_name];
+            if (empty($row['team_logo']) && !empty($logo)) {
+                $row['team_logo'] = $logo;
+            }
+
+            $row['standing_P']++;
+            $row['standing_F'] += $gf;
+            $row['standing_A'] += $ga;
+
+            if ($gf > $ga) {
+                $row['standing_W']++;
+                $row['standing_PTS'] += 3;
+            } elseif ($gf === $ga) {
+                $row['standing_D']++;
+                $row['standing_PTS'] += 1;
+            } else {
+                $row['standing_L']++;
+            }
+
+            unset($row);
+        }
+    }
+
+    // Keep regular-season clubs only (drop sparse aliases / odd entries).
+    $teams = array_filter($teams, function ($row) {
+        return (int) ($row['standing_P'] ?? 0) >= 1;
+    });
+
+    $standings = array_values($teams);
+
+    foreach ($standings as &$row) {
+        $row['standing_GD'] = (int) $row['standing_F'] - (int) $row['standing_A'];
+    }
+    unset($row);
+
+    usort($standings, function ($a, $b) {
+        if ($a['standing_PTS'] !== $b['standing_PTS']) {
+            return $b['standing_PTS'] <=> $a['standing_PTS'];
+        }
+        if ($a['standing_GD'] !== $b['standing_GD']) {
+            return $b['standing_GD'] <=> $a['standing_GD'];
+        }
+        return $b['standing_F'] <=> $a['standing_F'];
+    });
+
+    foreach ($standings as $i => &$row) {
+        $row['standing_place'] = $i + 1;
+    }
+    unset($row);
+
+    return $standings;
+}
+
+
+function ligue1_standings_have_played($data) {
+    foreach ($data as $row) {
+        if ((int) ($row['standing_P'] ?? 0) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+function ligue1_standings_shortcode() {
+
+    $uid       = uniqid('l1_standings_');
+    $cfg       = ligue1_standings_config();
+    // Cache standings DATA only — logos resolve on every render so URL overrides show immediately.
+    $cache_key = 'ligue1_standings_data_2026_v1_' . md5($cfg['league_id'] . $cfg['season'] . ($cfg['from'] ?? '') . ($cfg['to'] ?? ''));
+    $data      = get_transient($cache_key);
+
+    if ($data === false || !is_array($data) || empty($data)) {
+        $data = ligue1_standings_api($cfg['league_id'], $cfg['season']);
+
+        // Historical seasons (and empty current season) — build from fixtures.
+        if (empty($data) || !ligue1_standings_have_played($data)) {
+            $fixtures = ligue1_fixtures_api($cfg['league_id'], $cfg['from'], $cfg['to']);
+            $computed = ligue1_standings_from_fixtures($fixtures, $cfg['season']);
+            if (!empty($computed)) {
+                $data = $computed;
+            }
+        }
+
+        if (!empty($data)) {
+            set_transient($cache_key, $data, 30 * MINUTE_IN_SECONDS);
+        } else {
+            delete_transient($cache_key);
+        }
+    }
+
+    if (empty($data)) {
+        return '<p>Ligue 1 standings will be available soon.</p>';
+    }
+
+    usort($data, function ($a, $b) {
+        return ((int) ($a['standing_place'] ?? 99)) <=> ((int) ($b['standing_place'] ?? 99));
+    });
+
+    $max_name_len = 1;
+    foreach ($data as $team_row) {
+        $name_len = function_exists('mb_strlen')
+            ? mb_strlen((string) ($team_row['standing_team'] ?? ''))
+            : strlen((string) ($team_row['standing_team'] ?? ''));
+        if ($name_len > $max_name_len) {
+            $max_name_len = $name_len;
+        }
+    }
+
+    // Rank + gaps + logo + longest club name (ch).
+    $club_col_desktop = 'calc(22px + 12px + 32px + 12px + ' . (int) $max_name_len . 'ch)';
+    $club_col_mobile  = 'calc(18px + 8px + 28px + 8px + ' . (int) $max_name_len . 'ch)';
+    $club_col_small   = 'calc(16px + 6px + 24px + 6px + ' . (int) $max_name_len . 'ch)';
+
+    ob_start();
+    ?>
+
+    <div id="<?php echo esc_attr($uid); ?>"
+         class="bl-standings-root"
+         style="--bl-club-desktop: <?php echo esc_attr($club_col_desktop); ?>; --bl-club-mobile: <?php echo esc_attr($club_col_mobile); ?>; --bl-club-small: <?php echo esc_attr($club_col_small); ?>;">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+    #<?php echo esc_attr($uid); ?>{
+        --bl-ink:#121417;
+        --bl-muted:#6b7280;
+        --bl-line:#e8eaed;
+        --bl-soft:#f4f6f8;
+        --bl-panel:#ffffff;
+        --bl-accent:#111111;
+        box-sizing:border-box;
+        width:100%;
+        max-width:100%;
+        font-family:"Manrope",Helvetica,Arial,sans-serif;
+        color:var(--bl-ink);
+        background:linear-gradient(180deg,#f7f8fa 0%,#ffffff 48%);
+        line-height:1.25;
+        border:1px solid var(--bl-line);
+        border-radius:16px;
+        padding:20px 18px 16px;
+        overflow:hidden;
+    }
+    #<?php echo esc_attr($uid); ?> *{
+        box-sizing:border-box;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-header{
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap:12px;
+        margin:0 0 18px;
+        padding:0 4px 14px;
+        border-bottom:1px solid var(--bl-line);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-title{
+        margin:0;
+        font-size:20px;
+        font-weight:800;
+        letter-spacing:-0.02em;
+        color:var(--bl-ink);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-title span{
+        color:var(--bl-accent);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-season{
+        font-size:12px;
+        font-weight:600;
+        color:var(--bl-muted);
+        letter-spacing:0.04em;
+        text-transform:uppercase;
+        white-space:nowrap;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-scroll{
+        width:100%;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-table{
+        width:100%;
+        min-width:620px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row{
+        display:grid;
+        grid-template-columns:var(--bl-club-desktop) repeat(7,minmax(36px,1fr)) minmax(44px,0.8fr);
+        align-items:center;
+        column-gap:4px;
+        margin:0;
+        padding:11px 10px;
+        border:none;
+        border-radius:10px;
+        background:transparent;
+        position:relative;
+        transition:background 0.18s ease;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-head{
+        padding:8px 10px 10px;
+        border-radius:0;
+        position:sticky;
+        top:0;
+        z-index:2;
+        background:rgba(255,255,255,0.92);
+        backdrop-filter:blur(6px);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-body + .bl-row-body{
+        margin-top:2px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-row-body:hover{
+        background:var(--bl-soft);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-lbl-club,
+    #<?php echo esc_attr($uid); ?> .bl-lbl-stat{
+        text-align:center;
+        font-size:11px;
+        font-weight:700;
+        color:var(--bl-muted);
+        letter-spacing:0.06em;
+        text-transform:uppercase;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-lbl-club{
+        text-align:left;
+        padding-left:46px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-lbl-pts{
+        color:var(--bl-ink);
+    }
+    #<?php echo esc_attr($uid); ?> .bl-team-cell{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        min-width:0;
+        text-align:left;
+        padding-left:6px;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-rank{
+        flex:0 0 22px;
+        width:22px;
+        font-size:13px;
+        font-weight:700;
+        color:var(--bl-muted);
+        text-align:center;
+        font-variant-numeric:tabular-nums;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-logo{
+        flex:0 0 32px;
+        width:32px;
+        height:32px;
+        border-radius:9px;
+        background:var(--bl-soft);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        overflow:hidden;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-logo img{
+        width:22px;
+        height:22px;
+        object-fit:contain;
+        display:block;
+        border:none;
+        margin:0;
+        padding:0;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-name{
+        flex:1;
+        min-width:0;
+        font-size:14px;
+        font-weight:600;
+        color:var(--bl-ink);
+        white-space:nowrap;
+        overflow:visible;
+        text-overflow:clip;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-val-stat,
+    #<?php echo esc_attr($uid); ?> .bl-val-pts{
+        text-align:center;
+        font-size:14px;
+        font-weight:500;
+        color:var(--bl-ink);
+        font-variant-numeric:tabular-nums;
+    }
+    #<?php echo esc_attr($uid); ?> .bl-val-pts{
+        font-weight:800;
+        color:var(--bl-accent);
+        background:rgba(17,17,17,0.08);
+        border-radius:8px;
+        padding:6px 0;
+    }
+
+    @media (max-width:1024px){
+        #<?php echo esc_attr($uid); ?> .bl-row{
+            grid-template-columns:var(--bl-club-desktop) repeat(7,minmax(32px,1fr)) minmax(40px,0.8fr);
+            padding:10px 8px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club{
+            padding-left:40px;
+        }
+    }
+
+    @media (max-width:768px){
+        #<?php echo esc_attr($uid); ?>{
+            padding:16px 10px 12px;
+            border-radius:14px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-title{
+            font-size:18px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-header{
+            align-items:flex-start;
+            flex-direction:column;
+            gap:6px;
+            margin:0 0 14px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-scroll{
+            margin:0 -2px;
+            padding-bottom:4px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-table{
+            min-width:0;
+            width:max-content;
+            max-width:none;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row{
+            grid-template-columns:var(--bl-club-mobile) repeat(7,28px) 34px;
+            column-gap:2px;
+            padding:10px 6px;
+            border-radius:8px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club,
+        #<?php echo esc_attr($uid); ?> .bl-lbl-stat{
+            font-size:10px;
+            letter-spacing:0.04em;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club{
+            padding-left:0;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-team-cell{
+            gap:8px;
+            padding-left:4px;
+            overflow:hidden;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-rank{
+            flex:0 0 18px;
+            width:18px;
+            font-size:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo{
+            flex:0 0 28px;
+            width:28px;
+            height:28px;
+            border-radius:8px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo img{
+            width:18px;
+            height:18px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-name{
+            font-size:12px;
+            white-space:nowrap;
+            overflow:visible;
+            text-overflow:clip;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-val-stat,
+        #<?php echo esc_attr($uid); ?> .bl-val-pts{
+            font-size:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-val-pts{
+            padding:5px 0;
+            border-radius:6px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-lbl-club,
+        #<?php echo esc_attr($uid); ?> .bl-team-cell{
+            position:sticky;
+            left:0;
+            z-index:3;
+            background:#fff;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row-head .bl-lbl-club{
+            background:rgba(255,255,255,0.96);
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row-body:hover .bl-team-cell{
+            background:var(--bl-soft);
+        }
+    }
+
+    @media (max-width:480px){
+        #<?php echo esc_attr($uid); ?>{
+            padding:14px 8px 10px;
+            border-radius:12px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-title{
+            font-size:16px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-season{
+            font-size:11px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-row{
+            grid-template-columns:var(--bl-club-small) repeat(7,26px) 32px;
+            padding:9px 4px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-name{
+            font-size:11px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-val-stat,
+        #<?php echo esc_attr($uid); ?> .bl-val-pts{
+            font-size:11px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo{
+            flex:0 0 24px;
+            width:24px;
+            height:24px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-logo img{
+            width:16px;
+            height:16px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-rank{
+            flex:0 0 16px;
+            width:16px;
+            font-size:11px;
+        }
+        #<?php echo esc_attr($uid); ?> .bl-team-cell{
+            gap:6px;
+        }
+    }
+    </style>
+
+    <div class="bl-header">
+        <h3 class="bl-title"><span>Ligue 1</span> Table</h3>
+        <div class="bl-season"><?php echo esc_html($cfg['season']); ?></div>
+    </div>
+
+    <div class="bl-scroll">
+    <div class="bl-table">
+
+        <div class="bl-row bl-row-head">
+            <div class="bl-lbl-club">Club</div>
+            <div class="bl-lbl-stat">MP</div>
+            <div class="bl-lbl-stat">W</div>
+            <div class="bl-lbl-stat">D</div>
+            <div class="bl-lbl-stat">L</div>
+            <div class="bl-lbl-stat">GF</div>
+            <div class="bl-lbl-stat">GA</div>
+            <div class="bl-lbl-stat">GD</div>
+            <div class="bl-lbl-stat bl-lbl-pts">Pts</div>
+        </div>
+
+        <?php foreach ($data as $t): ?>
+
+        <div class="bl-row bl-row-body">
+            <div class="bl-team-cell">
+                <span class="bl-rank"><?php echo esc_html($t['standing_place'] ?? ''); ?></span>
+                <span class="bl-logo">
+                    <img src="<?php echo esc_url(ligue1_standing_team_logo($t['team_logo'] ?? '', $t['standing_team'] ?? '')); ?>" alt="">
+                </span>
+                <span class="bl-name"><?php echo esc_html($t['standing_team'] ?? ''); ?></span>
+            </div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_P'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_W'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_D'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_L'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_F'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_A'] ?? 0); ?></div>
+            <div class="bl-val-stat"><?php echo esc_html($t['standing_GD'] ?? 0); ?></div>
+            <div class="bl-val-pts"><?php echo esc_html($t['standing_PTS'] ?? 0); ?></div>
+        </div>
+
+        <?php endforeach; ?>
+
+    </div>
+    </div>
+
+    </div>
+
+    <?php
+    return ob_get_clean();
+}
+
+add_shortcode('ligue1_standings', 'ligue1_standings_shortcode');
