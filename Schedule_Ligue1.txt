@@ -38,6 +38,80 @@ function ligue1_api($leagueId, $from, $to) {
 
 function ligue1_team_logo($api_logo, $team_name = '') {
 
+    $name = strtolower(trim((string) $team_name));
+
+    if (strpos($name, 'marseille') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Marseille.png';
+    }
+
+    if (strpos($name, 'lens') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Lens.png';
+    }
+
+    if (strpos($name, 'lille') !== false || $name === 'losc') {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/LOSC.png';
+    }
+
+    if (strpos($name, 'lyon') !== false || $name === 'ol') {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/OL.png';
+    }
+
+    if (strpos($name, 'monaco') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Monaco.png';
+    }
+
+    if ($name === 'psg' || strpos($name, 'paris saint') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/PSG.png';
+    }
+
+    if (strpos($name, 'brest') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Brest.png';
+    }
+
+    if (strpos($name, 'le mans') !== false || strpos($name, 'lemans') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/LeMans.png';
+    }
+
+    if (strpos($name, 'rennes') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Rennes.png';
+    }
+
+    if (strpos($name, 'nice') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Nice.png';
+    }
+
+    if (strpos($name, 'lorient') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Lorient.png';
+    }
+
+    if (strpos($name, 'troyes') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Troyes.png';
+    }
+
+    if (strpos($name, 'paris fc') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/ParisFC.png';
+    }
+
+    if (strpos($name, 'le havre') !== false || strpos($name, 'havre') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/LeHavre.png';
+    }
+
+    if (strpos($name, 'angers') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Angers.png';
+    }
+
+    if (strpos($name, 'toulouse') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Toulouse.png';
+    }
+
+    if (strpos($name, 'auxerre') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Auxerre.png';
+    }
+
+    if (strpos($name, 'strasbourg') !== false) {
+        return 'https://img-live.bannershive.dev/h001_uploads/images/Strasbourg.png';
+    }
+
     if (!empty($api_logo)) {
         return $api_logo;
     }
@@ -149,7 +223,7 @@ function ligue1_schedule_shortcode() {
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <div class="bl-schedule-header">
-        <h3 class="bl-schedule-title"><span>Ligue 1</span> Schedule</h3>
+        <h3 class="bl-schedule-title">Lịch thi đấu <span>Ligue 1</span></h3>
         <div class="bl-schedule-season">2026/2027</div>
     </div>
 
