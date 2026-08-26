@@ -62,6 +62,11 @@ function mmw_render_watch_shortcode($atts = []) {
             ' <a class="mmw-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to catalog', 'movie-meta-by-aris') . '</a></div>';
     }
 
+    $catalog_id = isset($movie['id']) ? (string) $movie['id'] : $id;
+    if (method_exists('MMBA_Storage', 'increment_view')) {
+        MMBA_Storage::increment_view($catalog_id);
+    }
+
     $title   = isset($movie['title']) ? (string) $movie['title'] : '';
     $details = isset($movie['details']) ? (string) $movie['details'] : '';
     $cast    = isset($movie['cast']) ? (string) $movie['cast'] : '';
@@ -703,6 +708,23 @@ function mmw_render_watch_shortcode($atts = []) {
 })();
 </script>
 <?php endif; ?>
+<script>
+(function () {
+  var id = <?php echo wp_json_encode($catalog_id); ?>;
+  var url = <?php echo wp_json_encode(rest_url('movie-meta/v1/movies/' . rawurlencode($catalog_id) . '/view')); ?>;
+  var nonce = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+  if (!id || !url) return;
+  fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    keepalive: true,
+    headers: {
+      Accept: 'application/json',
+      'X-WP-Nonce': nonce
+    }
+  }).catch(function () {});
+})();
+</script>
     <?php
     return ob_get_clean();
 }

@@ -107,7 +107,7 @@ class MMBA_Admin {
 
         $movies = MMBA_Storage::get_movies();
         $views = MMBA_Storage::get_views();
-        $top_movies = MMBA_Storage::get_top_movies(10);
+        $top_movies = MMBA_Storage::get_top_movies(10, 'movie');
         $rest_url = rest_url(MMBA_API::REST_NS . '/movies');
         $json_url = MMBA_Storage::json_file_url();
         $movie_count = count($movies);
@@ -272,7 +272,7 @@ class MMBA_Admin {
 
                         <section class="mmba-card mmba-card-compact">
                             <div class="mmba-card-head mmba-card-head-tight">
-                                <h2><?php esc_html_e('Top 10', 'movie-meta-by-aris'); ?></h2>
+                                <h2><?php esc_html_e('Top 10 Movies', 'movie-meta-by-aris'); ?></h2>
                             </div>
                             <?php if (empty($top_movies)) : ?>
                                 <p class="mmba-help"><?php esc_html_e('No titles in the catalog yet.', 'movie-meta-by-aris'); ?></p>

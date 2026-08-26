@@ -112,14 +112,20 @@ class MMBA_API {
             $limit = 10;
         }
 
+        $type = strtolower(sanitize_text_field((string) $request->get_param('type')));
+        if (!in_array($type, ['all', 'movie', 'series'], true)) {
+            $type = 'movie';
+        }
+
         $views = MMBA_Storage::get_views();
         $movies = array_map(static function ($movie) use ($views) {
             return self::enrich_movie($movie, $views);
-        }, MMBA_Storage::get_top_movies($limit));
+        }, MMBA_Storage::get_top_movies($limit, $type));
 
         $response = rest_ensure_response([
             'generated_at' => gmdate('c'),
             'count'        => count($movies),
+            'type'         => $type,
             'movies'       => $movies,
         ]);
         $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');

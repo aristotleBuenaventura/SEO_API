@@ -4,7 +4,7 @@
  * Shortcode: [movie_top10]
  * Optional:  [movie_top10 title="Top 10 Movies" limit="10" watch_url="/watch/"]
  *
- * Requires: Movie Meta plugin 1.8.0+ (watch-page view tracking).
+ * Requires: Movie Meta plugin 1.9.3+ (movies-only top ranking + watch view tracking).
  * Ranked by unique /watch/?id= views. Poster clicks → /watch/?id=MOVIE_ID
  */
 
@@ -28,11 +28,9 @@ function mmt10_render_top10_shortcode($atts = []) {
 
     $uid = 'mmt10-' . wp_unique_id();
     $limit = max(1, min(20, absint($atts['limit'])));
-    // Over-fetch so series filtered out below still leave enough movies for $limit.
-    $fetch_limit = min(50, max($limit * 5, $limit));
     $api = $atts['api'] !== ''
         ? esc_url_raw($atts['api'])
-        : esc_url_raw(rest_url('movie-meta/v1/top?limit=' . $fetch_limit));
+        : esc_url_raw(rest_url('movie-meta/v1/top?type=movie&limit=' . $limit));
 
     $watch_url = $atts['watch_url'];
     if ($watch_url !== '' && strpos($watch_url, 'http') !== 0) {
@@ -42,7 +40,7 @@ function mmt10_render_top10_shortcode($atts = []) {
 
     $bootstrap = null;
     if (class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'get_top_movies')) {
-        $movies = MMBA_Storage::get_top_movies($fetch_limit);
+        $movies = MMBA_Storage::get_top_movies($limit, 'movie');
         if (!is_array($movies)) {
             $movies = [];
         }

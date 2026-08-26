@@ -72,6 +72,7 @@ class MMBA_Storage {
 
     /**
      * Beacon from the plugin so plays are counted even when the watch snippet is outdated.
+     * Reads ?id= from the live URL so full-page caches cannot bake in the wrong title.
      */
     public static function print_view_tracker() {
         if (is_admin() || is_feed()) {
@@ -80,18 +81,21 @@ class MMBA_Storage {
 
         $base = rest_url('movie-meta/v1/movies/');
         $nonce = wp_create_nonce('wp_rest');
-        $current = isset($_GET['id']) ? sanitize_text_field(wp_unslash((string) $_GET['id'])) : '';
-        if ($current === '') {
-            return;
-        }
         ?>
 <script>
 (function () {
   var base = <?php echo wp_json_encode($base); ?>;
   var nonce = <?php echo wp_json_encode($nonce); ?>;
-  var current = <?php echo wp_json_encode($current); ?>;
-  if (!current || !base) return;
-  fetch(base + encodeURIComponent(current) + '/view', {
+  if (!base) return;
+  var id = '';
+  try {
+    id = new URLSearchParams(window.location.search).get('id') || '';
+  } catch (e) {
+    return;
+  }
+  id = String(id || '').trim();
+  if (!id) return;
+  fetch(base + encodeURIComponent(id) + '/view', {
     method: 'POST',
     credentials: 'same-origin',
     keepalive: true,
@@ -659,11 +663,33 @@ class MMBA_Storage {
     /**
      * Movies ranked by watch views, then recency.
      *
+     * @param int    $limit Max items to return (1–50).
+     * @param string $type  'all', 'movie', or 'series'.
      * @return array<int, array<string, mixed>>
      */
-    public static function get_top_movies($limit = 10) {
+    public static function get_top_movies($limit = 10, $type = 'all') {
         $limit = max(1, min(50, (int) $limit));
+        $type = strtolower(trim((string) $type));
+        if (!in_array($type, ['all', 'movie', 'series'], true)) {
+            $type = 'all';
+        }
+
         $movies = self::get_movies();
+        if ($type === 'movie' || $type === 'series') {
+            $movies = array_values(array_filter($movies, static function ($movie) use ($type) {
+                if (!is_array($movie)) {
+                    return false;
+                }
+                $item_type = isset($movie['type']) ? strtolower((string) $movie['type']) : '';
+                if ($item_type !== '') {
+                    return $item_type === $type;
+                }
+                // Legacy rows without type: treat as movie unless series-shaped.
+                $looks_series = !empty($movie['episodes']) || !empty($movie['season_count']) || !empty($movie['episode_count']);
+                return $type === 'series' ? $looks_series : !$looks_series;
+            }));
+        }
+
         $views = self::get_views();
 
         usort($movies, static function ($a, $b) use ($views) {
