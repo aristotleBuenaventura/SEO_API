@@ -462,6 +462,18 @@ class MMBA_Storage {
     }
 
     /**
+     * SEO/accessibility title for poster images.
+     * Format: "{Movie Title} DesiMoviesHub Free Watch"
+     */
+    public static function poster_image_meta($title) {
+        $title = trim((string) $title);
+        if ($title === '') {
+            $title = 'Untitled';
+        }
+        return $title . ' DesiMoviesHub Free Watch';
+    }
+
+    /**
      * Sheet Poster column if set, otherwise the previous host-based default.
      */
     public static function movie_poster_url($movie) {

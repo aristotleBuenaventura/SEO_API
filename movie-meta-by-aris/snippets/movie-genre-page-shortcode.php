@@ -129,11 +129,14 @@ function mmgg_render_genre_page_shortcode($atts = []) {
             $tone = mmgg_poster_tone($title);
             $display = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
             $meta_bits = array_filter([$year, $genre]);
+            $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
+                ? MMBA_Storage::poster_image_meta($display)
+                : ($display . ' DesiMoviesHub Free Watch');
             ?>
           <a class="mmgg-card" href="<?php echo esc_url($href); ?>">
             <div class="mmgg-poster mmgg-tone-<?php echo (int) $tone; ?>">
               <?php if ($poster !== '') : ?>
-                <img class="mmgg-poster-img" src="<?php echo esc_url($poster); ?>" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                <img class="mmgg-poster-img" src="<?php echo esc_url($poster); ?>" alt="<?php echo esc_attr($img_meta); ?>" title="<?php echo esc_attr($img_meta); ?>" loading="lazy" decoding="async" referrerpolicy="no-referrer"
                   onerror="this.style.display='none';var f=this.parentNode.querySelector('.mmgg-poster-fallback');if(f){f.hidden=false;f.removeAttribute('hidden');}">
                 <div class="mmgg-poster-fallback" hidden aria-hidden="true">
                   <span class="mmgg-poster-letter"><?php echo esc_html($initial); ?></span>

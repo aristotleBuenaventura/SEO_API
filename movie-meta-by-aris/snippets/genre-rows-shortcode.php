@@ -524,8 +524,9 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     var poster = movie.poster_url || '';
     var title = movie.title || 'Untitled';
     var href = watchHref(movie);
+    var imgMeta = esc(title) + ' DesiMoviesHub Free Watch';
     var posterInner = poster
-      ? '<img class="mmgr-poster-img" src="' + esc(poster) + '" alt="" loading="lazy" onerror="this.remove();var f=this.parentNode.querySelector(\'.mmgr-poster-fallback\');if(f)f.hidden=false;">' +
+      ? '<img class="mmgr-poster-img" src="' + esc(poster) + '" alt="' + imgMeta + '" title="' + imgMeta + '" loading="lazy" onerror="this.remove();var f=this.parentNode.querySelector(\'.mmgr-poster-fallback\');if(f)f.hidden=false;">' +
         '<span class="mmgr-poster-fallback" hidden>' + esc(initial(title)) + '</span>'
       : '<span class="mmgr-poster-fallback">' + esc(initial(title)) + '</span>';
     return (

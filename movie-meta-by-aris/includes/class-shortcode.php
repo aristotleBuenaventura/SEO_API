@@ -127,12 +127,18 @@ class MMBA_Shortcode {
                             data-title="<?php echo esc_attr($title); ?>"
                             aria-label="<?php echo esc_attr(sprintf(__('Play %s', 'movie-meta-by-aris'), $title)); ?>"
                         >
-                            <?php if ($poster_url !== '') : ?>
-                                <span
+                            <?php
+                            $img_meta = MMBA_Storage::poster_image_meta($title !== '' ? $title : __('Untitled', 'movie-meta-by-aris'));
+                            if ($poster_url !== '') :
+                                ?>
+                                <img
                                     class="mmba-poster-art mmba-poster-thumb"
-                                    style="background-image:url('<?php echo esc_url($poster_url); ?>');"
-                                    aria-hidden="true"
-                                ></span>
+                                    src="<?php echo esc_url($poster_url); ?>"
+                                    alt="<?php echo esc_attr($img_meta); ?>"
+                                    title="<?php echo esc_attr($img_meta); ?>"
+                                    loading="lazy"
+                                    decoding="async"
+                                >
                             <?php else : ?>
                                 <span class="mmba-poster-art mmba-tone-<?php echo esc_attr((string) $tone); ?>" aria-hidden="true">
                                     <span class="mmba-poster-initial"><?php echo esc_html($initial); ?></span>

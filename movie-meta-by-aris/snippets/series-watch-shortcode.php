@@ -278,11 +278,15 @@ function mmsw_render_series_watch_shortcode($atts = []) {
             $initial = $rtitle !== '' ? strtoupper(substr($rtitle, 0, 1)) : 'S';
             $tone = mmsw_poster_tone($rtitle);
             $meta_bits = array_filter([$ryear, $rprimary]);
+            $rdisplay = $rtitle !== '' ? $rtitle : __('Untitled', 'movie-meta-by-aris');
+            $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
+                ? MMBA_Storage::poster_image_meta($rdisplay)
+                : ($rdisplay . ' DesiMoviesHub Free Watch');
             ?>
           <a class="mmsw-card" href="<?php echo esc_url($rhref); ?>">
             <div class="mmsw-poster mmsw-tone-<?php echo (int) $tone; ?>">
               <?php if ($rposter !== '') : ?>
-                <img class="mmsw-poster-img" src="<?php echo esc_url($rposter); ?>" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                <img class="mmsw-poster-img" src="<?php echo esc_url($rposter); ?>" alt="<?php echo esc_attr($img_meta); ?>" title="<?php echo esc_attr($img_meta); ?>" loading="lazy" decoding="async" referrerpolicy="no-referrer"
                   onerror="this.style.display='none';var f=this.parentNode.querySelector('.mmsw-poster-fallback');if(f){f.hidden=false;f.removeAttribute('hidden');}">
                 <div class="mmsw-poster-fallback" hidden aria-hidden="true">
                   <span class="mmsw-poster-letter"><?php echo esc_html($initial); ?></span>

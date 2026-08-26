@@ -109,11 +109,14 @@ function mmsa_render_series_all_shortcode($atts = []) {
                 $year,
                 $eps > 0 ? sprintf(_n('%d episode', '%d episodes', $eps, 'movie-meta-by-aris'), $eps) : '',
             ]);
+            $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
+                ? MMBA_Storage::poster_image_meta($display)
+                : ($display . ' DesiMoviesHub Free Watch');
             ?>
           <a class="mmsa-card" href="<?php echo esc_url($href); ?>">
             <div class="mmsa-poster mmsa-tone-<?php echo (int) $tone; ?>">
               <?php if ($poster !== '') : ?>
-                <img class="mmsa-poster-img" src="<?php echo esc_url($poster); ?>" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                <img class="mmsa-poster-img" src="<?php echo esc_url($poster); ?>" alt="<?php echo esc_attr($img_meta); ?>" title="<?php echo esc_attr($img_meta); ?>" loading="lazy" decoding="async" referrerpolicy="no-referrer"
                   onerror="this.style.display='none';var f=this.parentNode.querySelector('.mmsa-poster-fallback');if(f){f.hidden=false;f.removeAttribute('hidden');}">
                 <div class="mmsa-poster-fallback" hidden aria-hidden="true">
                   <span class="mmsa-poster-letter"><?php echo esc_html($initial); ?></span>

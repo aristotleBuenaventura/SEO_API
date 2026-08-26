@@ -267,6 +267,9 @@ function mmsrch_render_search_results_shortcode($atts = []) {
                     }
 
                     $meta_bits = array_filter([$year, $episode_bit]);
+                    $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
+                        ? MMBA_Storage::poster_image_meta($display)
+                        : ($display . ' DesiMoviesHub Free Watch');
                     ?>
                     <a class="mmsa-card" href="<?php echo esc_url($href); ?>">
                       <div class="mmsa-poster mmsa-tone-<?php echo (int) $tone; ?>">
@@ -274,7 +277,8 @@ function mmsrch_render_search_results_shortcode($atts = []) {
                           <img
                             class="mmsa-poster-img"
                             src="<?php echo esc_url($poster); ?>"
-                            alt=""
+                            alt="<?php echo esc_attr($img_meta); ?>"
+                            title="<?php echo esc_attr($img_meta); ?>"
                             loading="lazy"
                             decoding="async"
                             referrerpolicy="no-referrer"
@@ -320,6 +324,9 @@ function mmsrch_render_search_results_shortcode($atts = []) {
                     $tone = mmsrch_poster_tone($title);
                     $display = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
                     $meta_bits = array_filter([$year, $genre]);
+                    $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
+                        ? MMBA_Storage::poster_image_meta($display)
+                        : ($display . ' DesiMoviesHub Free Watch');
                     ?>
                     <a class="mmsa-card" href="<?php echo esc_url($href); ?>">
                       <div class="mmsa-poster mmsa-tone-<?php echo (int) $tone; ?>">
@@ -327,7 +334,8 @@ function mmsrch_render_search_results_shortcode($atts = []) {
                           <img
                             class="mmsa-poster-img"
                             src="<?php echo esc_url($poster); ?>"
-                            alt=""
+                            alt="<?php echo esc_attr($img_meta); ?>"
+                            title="<?php echo esc_attr($img_meta); ?>"
                             loading="lazy"
                             decoding="async"
                             referrerpolicy="no-referrer"

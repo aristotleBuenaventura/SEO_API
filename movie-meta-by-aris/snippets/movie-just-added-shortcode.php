@@ -199,6 +199,14 @@ function mmja_render_just_added_shortcode($atts = []) {
     background-size: cover;
     background-position: center;
   }
+  .mmja-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
   .mmja-bg::after {
     content: "";
     position: absolute;
@@ -341,10 +349,13 @@ function mmja_render_just_added_shortcode($atts = []) {
     var poster = movie.poster_url || '';
     var desc = blurb(movie);
     var href = watchHref(movie);
-    var bgStyle = poster ? ' style="background-image:url(\'' + esc(poster) + '\')"' : '';
+    var imgMeta = esc(title) + ' DesiMoviesHub Free Watch';
+    var posterInner = poster
+      ? '<img class="mmja-bg-img" src="' + esc(poster) + '" alt="' + imgMeta + '" title="' + imgMeta + '" loading="lazy">'
+      : '';
     return (
       '<a class="mmja-card" href="' + esc(href) + '">' +
-        '<div class="mmja-bg mmja-tone-' + tone(title) + '"' + bgStyle + '></div>' +
+        '<div class="mmja-bg mmja-tone-' + tone(title) + '">' + posterInner + '</div>' +
         '<div class="mmja-body">' +
           '<span class="mmja-badge">New Release</span>' +
           '<h3 class="mmja-card-title">' + esc(title) + '</h3>' +
