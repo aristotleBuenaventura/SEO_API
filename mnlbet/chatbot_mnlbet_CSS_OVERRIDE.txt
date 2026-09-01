@@ -1,0 +1,192 @@
+<style>
+/* Layout CSS - OPEN LANG, huwag i-force kapag closed */
+div#wp-chatbot-board-container.active-chat-board {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 370px !important;
+  height: 600px !important;
+  max-height: 85vh !important;
+  overflow: hidden !important;
+  background-image: none !important;
+  background-color: #fff !important;
+}
+
+div#wp-chatbot-board-container.active-chat-board .wp-chatbot-header {
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  min-height: 44px !important;
+  background: #fff !important;
+}
+
+#wp-chatbot-desktop-expand {
+  display: none !important;
+}
+
+.wpbot-header-label {
+  flex: 1 !important;
+  color: #000 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  margin-left: 10px !important;
+}
+
+div#wp-chatbot-board-container.active-chat-board .wp-chatbot-ball-inner.wp-chatbot-content,
+div#wp-chatbot-board-container.active-chat-board .wp-chatbot-content,
+div#wp-chatbot-board-container.active-chat-board .slimScrollDiv {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #f5f5f5 !important;
+}
+
+div#wp-chatbot-board-container.active-chat-board .wp-chatbot-footer {
+  flex-shrink: 0 !important;
+  display: block !important;
+  background: #fff !important;
+}
+
+div#wp-chatbot-board-container.active-chat-board.qcld-global-bg,
+div#wp-chatbot-board-container.active-chat-board .wp-chatbot-container {
+  background-image: none !important;
+}
+
+#wp-chatbot-ball-container > .wpbot-saas-live-chat {
+  display: none !important;
+}
+
+#wp-chatbot-messages-container .wp-chatbot-avatar img {
+  width: 36px !important;
+  height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  object-fit: cover !important;
+}
+
+#wp-chatbot-messages-container img.emoji {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+#wp-chatbot-chat-container,
+#wp-chatbot-chat-container.wp-chatbot-mobile-full-screen {
+  width: 370px !important;
+  height: auto !important;
+  right: 50px !important;
+  bottom: 50px !important;
+  top: auto !important;
+  left: auto !important;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    function clearWPBotStorage() {
+        Object.keys(localStorage).forEach(function (key) {
+            if (
+                key.toLowerCase().includes("wp") ||
+                key.toLowerCase().includes("chat")
+            ) {
+                localStorage.removeItem(key);
+            }
+        });
+
+        Object.keys(sessionStorage).forEach(function (key) {
+            if (
+                key.toLowerCase().includes("wp") ||
+                key.toLowerCase().includes("chat")
+            ) {
+                sessionStorage.removeItem(key);
+            }
+        });
+    }
+
+    function replaceLanguageWithHeaderText() {
+        var header = document.querySelector(".wp-chatbot-header");
+        if (!header) return;
+
+        var langSelect = document.getElementById("wpbot_language");
+        if (langSelect) {
+            langSelect.remove();
+        }
+
+        if (document.querySelector(".wpbot-header-label")) return;
+
+        var label = document.createElement("div");
+        label.className = "wpbot-header-label";
+        label.textContent = "MNLBET 24/7 CS";
+        label.style.color = "#000";
+        label.style.fontSize = "14px";
+        label.style.fontWeight = "600";
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        label.style.marginLeft = "10px";
+
+        header.prepend(label);
+    }
+
+    function hardResetChat() {
+        var tries = 0;
+
+        var interval = setInterval(function () {
+
+            var msgContainer = document.getElementById("wp-chatbot-messages-container");
+            var resetBtn = document.getElementById("wp-chatbot-desktop-reload");
+
+            if (msgContainer) {
+                msgContainer.innerHTML = "";
+            }
+
+            if (resetBtn) {
+                resetBtn.click();
+                clearInterval(interval);
+            }
+
+            tries++;
+            if (tries > 50) clearInterval(interval);
+
+        }, 100);
+    }
+
+    /* Siguraduhing CLOSED muna on load */
+    function ensureChatClosed() {
+        var chatBall = document.getElementById("wp-chatbot-ball");
+        var chatBoard = document.getElementById("wp-chatbot-board-container");
+
+        if (chatBall && chatBoard && chatBoard.classList.contains("active-chat-board")) {
+            chatBall.click();
+        }
+    }
+
+    function autoOpen() {
+        setTimeout(function () {
+
+            var chatBall = document.getElementById("wp-chatbot-ball");
+            var chatBoard = document.getElementById("wp-chatbot-board-container");
+
+            if (!chatBall || !chatBoard) return;
+
+            if (!chatBoard.classList.contains("active-chat-board")) {
+                chatBall.click();
+            }
+
+        }, 5000);
+    }
+
+    clearWPBotStorage();
+    replaceLanguageWithHeaderText();
+
+    /* Close muna kung accidentally open */
+    ensureChatClosed();
+    setTimeout(ensureChatClosed, 500);
+    setTimeout(ensureChatClosed, 1500);
+
+    hardResetChat();
+    autoOpen();
+
+});
+</script>

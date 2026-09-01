@@ -241,7 +241,7 @@ function ligue1_schedule_shortcode() {
 
                 $final_result = ligue1_match_field($v, 'event_final_result');
                 $has_score = !empty($final_result) && $final_result !== '-';
-                $score = $has_score ? $final_result : 'UPCOMING MATCH';
+                $score = $has_score ? $final_result : 'TRẬN ĐẤU SẮP TỚI';
 
                 $event_date = ligue1_match_field($v, 'event_date');
                 $date = !empty($event_date) ? date('M d, Y', strtotime($event_date)) : '';
