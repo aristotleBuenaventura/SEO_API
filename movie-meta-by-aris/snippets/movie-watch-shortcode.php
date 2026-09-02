@@ -76,7 +76,7 @@ function mmw_render_watch_shortcode($atts = []) {
     $link_type = MMBA_Storage::get_movie_link_type($link);
     $play_url  = $link_type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
     $play_src  = MMBA_Storage::escape_play_url($play_url);
-    $poster    = MMBA_Storage::get_poster_url($link);
+    $poster    = MMBA_Storage::movie_poster_url($movie);
 
     $genres = mmw_split_list($genre);
     $cast_list = mmw_split_list($cast);
@@ -202,8 +202,7 @@ function mmw_render_watch_shortcode($atts = []) {
             $rgenre = isset($item['genre']) ? (string) $item['genre'] : '';
             $rgenres = mmw_split_list($rgenre);
             $rprimary = !empty($rgenres) ? $rgenres[0] : '';
-            $rlink = isset($item['movie_link']) ? (string) $item['movie_link'] : '';
-            $rposter = MMBA_Storage::get_poster_url($rlink);
+            $rposter = MMBA_Storage::movie_poster_url($item);
             $rhref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($rid);
             $initial = $rtitle !== '' ? strtoupper(substr($rtitle, 0, 1)) : 'M';
             $tone = mmw_poster_tone($rtitle);
