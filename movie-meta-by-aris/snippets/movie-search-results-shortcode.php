@@ -91,29 +91,45 @@ function mmsrch_render_search_results_shortcode($atts = []) {
           </div>
         </div>
         <style>
+          .mmsa,
+          .mmsa *,
+          .mmsa h1,
+          .mmsa h2,
+          .mmsa p,
+          .mmsa span,
+          .mmsa a,
+          .mmsa div {
+            color: inherit;
+          }
           .mmsa, .mmsa *::before, .mmsa *::after { box-sizing: border-box; }
           .mmsa {
             --mmsa-font: "Sora", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-            width: 100%;
-            max-width: 100%;
-            overflow-x: clip;
             color: #12151a !important;
             font-family: var(--mmsa-font);
-            padding: 1rem max(0.55rem, env(safe-area-inset-right)) 3rem max(0.55rem, env(safe-area-inset-left));
-            background: #f3f5f8 !important;
+            isolation: isolate;
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            padding: 1rem max(0px, env(safe-area-inset-right)) 3.5rem max(0px, env(safe-area-inset-left));
+            overflow-x: clip;
           }
           .mmsa-shell {
-            max-width: 1120px;
+            max-width: 98%;
             width: 100%;
             margin: 0 auto;
-            padding: 1.25rem 1.15rem 1.75rem;
+            padding: 1.25rem 1.15rem 1.5rem;
             background: #ffffff !important;
             border: 1px solid rgba(18, 21, 26, 0.08);
             border-radius: 18px;
             box-shadow: 0 12px 36px rgba(18, 21, 26, 0.06);
             color: #12151a !important;
+            animation: mmsa-in 0.45s ease both;
           }
-          .mmsa-nav { margin: 0 0 1.15rem; }
+          @keyframes mmsa-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: none; }
+          }
+          .mmsa-nav { margin: 0 0 1.35rem; }
           .mmsa-back {
             display: inline-flex;
             align-items: center;
@@ -124,12 +140,13 @@ function mmsrch_render_search_results_shortcode($atts = []) {
             font-weight: 500;
             padding: 0.35rem 0.55rem 0.35rem 0.25rem;
             border-radius: 999px;
+            transition: color 0.18s ease, background 0.18s ease;
           }
           .mmsa-back svg { width: 18px; height: 18px; display: block; stroke: currentColor; }
           .mmsa-back:hover { color: #12151a !important; background: #eef1f5; }
-          .mmsa-header { margin: 0 0 1.35rem; }
+          .mmsa-header { margin: 0 0 1.25rem; }
           .mmsa-kicker {
-            margin: 0 0 0.4rem;
+            margin: 0 0 0.45rem;
             font-size: 0.72rem;
             font-weight: 700;
             letter-spacing: 0.12em;
@@ -138,10 +155,10 @@ function mmsrch_render_search_results_shortcode($atts = []) {
           }
           .mmsa-title {
             margin: 0;
-            font-size: clamp(1.45rem, 4vw, 2.2rem);
+            font-size: clamp(1.65rem, 3.6vw, 2.45rem);
             font-weight: 700;
-            letter-spacing: -0.03em;
-            line-height: 1.15;
+            letter-spacing: -0.035em;
+            line-height: 1.12;
             color: #12151a !important;
           }
           .mmsa-count {
@@ -155,12 +172,42 @@ function mmsrch_render_search_results_shortcode($atts = []) {
             color: #6b7280 !important;
             font-size: 0.95rem;
           }
+          @media (max-width: 900px) {
+            .mmsa-shell { padding: 1.1rem 1rem 1.35rem; }
+          }
+          @media (max-width: 640px) {
+            .mmsa {
+              padding: 0.65rem max(0.55rem, env(safe-area-inset-right)) 2.5rem max(0.55rem, env(safe-area-inset-left));
+            }
+            .mmsa-shell {
+              padding: 0.95rem 0.8rem 1.15rem;
+              border-radius: 14px;
+            }
+            .mmsa-nav { margin-bottom: 0.95rem; }
+            .mmsa-header { margin-bottom: 0.95rem; }
+            .mmsa-title {
+              font-size: clamp(1.35rem, 7vw, 1.85rem);
+              line-height: 1.15;
+            }
+          }
+          @media (max-width: 380px) {
+            .mmsa-shell { padding: 0.85rem 0.7rem 1rem; }
+            .mmsa-back span { font-size: 0.84rem; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .mmsa-shell { animation: none; }
+            .mmsa-back { transition: none; }
+          }
         </style>
         <?php
         return ob_get_clean();
     }
 
     $q_norm = mmsrch_normalize_query($q);
+
+    if (method_exists('MMBA_Storage', 'increment_search')) {
+        MMBA_Storage::increment_search($q);
+    }
 
     $catalog = MMBA_Storage::get_movies();
     if (!is_array($catalog)) {
@@ -374,26 +421,32 @@ function mmsrch_render_search_results_shortcode($atts = []) {
       .mmsa, .mmsa *, .mmsa *::before, .mmsa *::after { box-sizing: border-box; }
       .mmsa {
         --mmsa-font: "Sora", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-        width: 100%;
-        max-width: 100%;
-        overflow-x: clip;
         color: #12151a !important;
         font-family: var(--mmsa-font);
-        padding: 1rem max(0.55rem, env(safe-area-inset-right)) 3rem max(0.55rem, env(safe-area-inset-left));
-        background: #f3f5f8 !important;
+        isolation: isolate;
+        position: relative;
+        width: 100%;
+        max-width: 100%;
+        padding: 1rem max(0px, env(safe-area-inset-right)) 3.5rem max(0px, env(safe-area-inset-left));
+        overflow-x: clip;
       }
       .mmsa-shell {
-        max-width: 1120px;
+        max-width: 98%;
         width: 100%;
         margin: 0 auto;
-        padding: 1.25rem 1.15rem 1.75rem;
+        padding: 1.25rem 1.15rem 1.5rem;
         background: #ffffff !important;
         border: 1px solid rgba(18, 21, 26, 0.08);
         border-radius: 18px;
         box-shadow: 0 12px 36px rgba(18, 21, 26, 0.06);
         color: #12151a !important;
+        animation: mmsa-in 0.45s ease both;
       }
-      .mmsa-nav { margin: 0 0 1.15rem; }
+      @keyframes mmsa-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+      }
+      .mmsa-nav { margin: 0 0 1.35rem; }
       .mmsa-back {
         display: inline-flex;
         align-items: center;
@@ -404,12 +457,13 @@ function mmsrch_render_search_results_shortcode($atts = []) {
         font-weight: 500;
         padding: 0.35rem 0.55rem 0.35rem 0.25rem;
         border-radius: 999px;
+        transition: color 0.18s ease, background 0.18s ease;
       }
       .mmsa-back svg { width: 18px; height: 18px; display: block; stroke: currentColor; }
       .mmsa-back:hover { color: #12151a !important; background: #eef1f5; }
-      .mmsa-header { margin: 0 0 1.35rem; }
+      .mmsa-header { margin: 0 0 1.25rem; }
       .mmsa-kicker {
-        margin: 0 0 0.4rem;
+        margin: 0 0 0.45rem;
         font-size: 0.72rem;
         font-weight: 700;
         letter-spacing: 0.12em;
@@ -418,10 +472,10 @@ function mmsrch_render_search_results_shortcode($atts = []) {
       }
       .mmsa-title {
         margin: 0;
-        font-size: clamp(1.45rem, 4vw, 2.2rem);
+        font-size: clamp(1.65rem, 3.6vw, 2.45rem);
         font-weight: 700;
-        letter-spacing: -0.03em;
-        line-height: 1.15;
+        letter-spacing: -0.035em;
+        line-height: 1.12;
         color: #12151a !important;
       }
       .mmsa-count {
@@ -527,26 +581,48 @@ function mmsrch_render_search_results_shortcode($atts = []) {
         color: #12151a !important;
       }
       .mmsa-empty, .mmsa-error {
-        max-width: 1120px;
+        max-width: 98%;
         margin: 0 auto;
-        padding: 2rem 1rem;
+        padding: 2.5rem 1.15rem;
         color: #4b5563 !important;
         font-family: var(--mmsa-font, system-ui, sans-serif);
         background: #fff;
         border-radius: 12px;
       }
       .mmsa-error { color: #b91c1c !important; }
+      @media (max-width: 900px) {
+        .mmsa-shell { padding: 1.1rem 1rem 1.35rem; }
+      }
       @media (max-width: 720px) {
-        .mmsa-shell { padding: 1rem 0.85rem 1.25rem; border-radius: 14px; }
         .mmsa-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.9rem 0.65rem; }
         .mmsa-card-title { font-size: 0.8rem; }
         .mmsa-poster { border-radius: 12px; }
       }
+      @media (max-width: 640px) {
+        .mmsa {
+          padding: 0.65rem max(0.55rem, env(safe-area-inset-right)) 2.5rem max(0.55rem, env(safe-area-inset-left));
+        }
+        .mmsa-shell {
+          padding: 0.95rem 0.8rem 1.15rem;
+          border-radius: 14px;
+        }
+        .mmsa-nav { margin-bottom: 0.95rem; }
+        .mmsa-header { margin-bottom: 0.95rem; }
+        .mmsa-title {
+          font-size: clamp(1.35rem, 7vw, 1.85rem);
+          line-height: 1.15;
+        }
+      }
       @media (max-width: 420px) {
         .mmsa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
+      @media (max-width: 380px) {
+        .mmsa-shell { padding: 0.85rem 0.7rem 1rem; }
+        .mmsa-back span { font-size: 0.84rem; }
+      }
       @media (prefers-reduced-motion: reduce) {
-        .mmsa-card { transition: none; }
+        .mmsa-shell { animation: none; }
+        .mmsa-card, .mmsa-back { transition: none; }
       }
     </style>
     <?php

@@ -13,6 +13,7 @@ class MMBA_Admin {
         add_filter('plugin_action_links_' . plugin_basename(MMBA_PLUGIN_FILE), [__CLASS__, 'plugin_action_links']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('admin_post_mmba_sync_sheet', [__CLASS__, 'handle_sync_sheet']);
+        add_action('admin_post_mmba_sync_top_searches', [__CLASS__, 'handle_sync_top_searches']);
         add_action('in_admin_header', [__CLASS__, 'suppress_foreign_notices'], 1000);
         add_filter('admin_body_class', [__CLASS__, 'admin_body_class']);
     }
@@ -100,6 +101,26 @@ class MMBA_Admin {
         exit;
     }
 
+    public static function handle_sync_top_searches() {
+        if (!current_user_can('manage_options')) {
+            wp_die(esc_html__('You do not have permission to sync top searches.', 'movie-meta-by-aris'));
+        }
+
+        check_admin_referer('mmba_sync_top_searches');
+        delete_transient(MMBA_Sheets::TOKEN_KEY);
+        $result = MMBA_Sheets::sync_top_searches();
+
+        $redirect = admin_url('admin.php?page=' . self::PAGE_SLUG);
+        if (is_wp_error($result)) {
+            $redirect = add_query_arg('mmba_top_searches_error', rawurlencode($result->get_error_message()), $redirect);
+        } else {
+            $redirect = add_query_arg('mmba_top_searches_synced', '1', $redirect);
+        }
+
+        wp_safe_redirect($redirect);
+        exit;
+    }
+
     public static function render_page() {
         if (!current_user_can('manage_options')) {
             return;
@@ -108,6 +129,10 @@ class MMBA_Admin {
         $movies = MMBA_Storage::get_movies();
         $views = MMBA_Storage::get_views();
         $top_movies = MMBA_Storage::get_top_movies(10, 'movie');
+        $weekly_top_searches = MMBA_Storage::get_top_searches(100, 'weekly');
+        $overall_top_searches = MMBA_Storage::get_top_searches(100, 'overall');
+        $top_searches_sheet_synced_at = MMBA_Sheets::top_searches_last_synced_at();
+        $top_searches_sheet_error = MMBA_Sheets::top_searches_last_error();
         $rest_url = rest_url(MMBA_API::REST_NS . '/movies');
         $json_url = MMBA_Storage::json_file_url();
         $movie_count = count($movies);
@@ -135,6 +160,14 @@ class MMBA_Admin {
             $flash_error = rawurldecode(wp_unslash($_GET['mmba_error']));
         } elseif ($sheet_error !== '') {
             $flash_error = $sheet_error;
+        }
+
+        if (!empty($_GET['mmba_top_searches_synced'])) {
+            $flash_success = __('Top searches synced to Google Sheets.', 'movie-meta-by-aris');
+        }
+
+        if (!empty($_GET['mmba_top_searches_error'])) {
+            $top_searches_sheet_error = rawurldecode(wp_unslash($_GET['mmba_top_searches_error']));
         }
         ?>
         <div class="wrap mmba-app">
@@ -231,6 +264,75 @@ class MMBA_Admin {
                                 </div>
                             <?php endif; ?>
                         </section>
+
+                        <section class="mmba-card">
+                            <div class="mmba-card-head">
+                                <div>
+                                    <h2><?php esc_html_e('Top searches', 'movie-meta-by-aris'); ?></h2>
+                                    <p class="mmba-card-lead">
+                                        <?php esc_html_e('Saved when visitors search from the site. Weekly list resets every Sunday at 11:59 PM. Rankings sync to the Top Searches sheet in Google Sheets.', 'movie-meta-by-aris'); ?>
+                                    </p>
+                                    <?php if (!MMBA_Sheets::can_sync_top_searches_to_sheet()) : ?>
+                                        <p class="mmba-help">
+                                            <?php
+                                            echo esc_html(
+                                                sprintf(
+                                                    /* translators: %s: site host */
+                                                    __('Google Sheets write is disabled on this site (%s). Only production desimovieshub.com may update the Top Searches sheet.', 'movie-meta-by-aris'),
+                                                    (string) wp_parse_url(home_url(), PHP_URL_HOST)
+                                                )
+                                            );
+                                            ?>
+                                        </p>
+                                    <?php elseif ($top_searches_sheet_synced_at !== '') : ?>
+                                        <p class="mmba-help">
+                                            <?php
+                                            echo esc_html(
+                                                sprintf(
+                                                    /* translators: %s: datetime */
+                                                    __('Last sheet sync: %s', 'movie-meta-by-aris'),
+                                                    date_i18n('Y-m-d H:i', strtotime($top_searches_sheet_synced_at))
+                                                )
+                                            );
+                                            ?>
+                                        </p>
+                                    <?php endif; ?>
+                                    <?php if ($top_searches_sheet_error !== '') : ?>
+                                        <p class="mmba-help" style="color:#b03a3a;">
+                                            <?php
+                                            echo esc_html(
+                                                sprintf(
+                                                    /* translators: %s: error message */
+                                                    __('Sheet sync error: %s', 'movie-meta-by-aris'),
+                                                    $top_searches_sheet_error
+                                                )
+                                            );
+                                            ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (MMBA_Sheets::can_sync_top_searches_to_sheet()) : ?>
+                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top:0.75rem;">
+                                        <input type="hidden" name="action" value="mmba_sync_top_searches">
+                                        <?php wp_nonce_field('mmba_sync_top_searches'); ?>
+                                        <button type="submit" class="mmba-btn mmba-btn-secondary mmba-btn-sm">
+                                            <?php esc_html_e('Push top searches to Google Sheet', 'movie-meta-by-aris'); ?>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="mmba-search-top-grid">
+                                <?php self::render_search_top_panel(
+                                    __('Weekly top 100', 'movie-meta-by-aris'),
+                                    $weekly_top_searches
+                                ); ?>
+                                <?php self::render_search_top_panel(
+                                    __('Overall top 100', 'movie-meta-by-aris'),
+                                    $overall_top_searches
+                                ); ?>
+                            </div>
+                        </section>
                     </div>
 
                     <aside class="mmba-sidebar">
@@ -239,7 +341,7 @@ class MMBA_Admin {
                                 <h2><?php esc_html_e('Google Sheets', 'movie-meta-by-aris'); ?></h2>
                             </div>
                             <p class="mmba-help">
-                                <?php esc_html_e('1) Enable the Google Sheets API on the GCP project. 2) Share the spreadsheet (Viewer) with:', 'movie-meta-by-aris'); ?>
+                                <?php esc_html_e('1) Enable the Google Sheets API on the GCP project. 2) Share the spreadsheet (Editor) with:', 'movie-meta-by-aris'); ?>
                                 <code><?php echo esc_html(MMBA_Sheets::service_email()); ?></code>
                             </p>
                             <dl class="mmba-meta">
@@ -364,6 +466,52 @@ class MMBA_Admin {
             <footer class="mmba-footer">
                 <span><?php esc_html_e('Developed by Aris', 'movie-meta-by-aris'); ?></span>
             </footer>
+        </div>
+        <?php
+    }
+
+    /**
+     * @param string $title
+     * @param array<int, array{query: string, count: int}> $rows
+     */
+    private static function render_search_top_panel($title, array $rows) {
+        ?>
+        <div class="mmba-search-top-panel">
+            <div class="mmba-search-top-head">
+                <h3><?php echo esc_html($title); ?></h3>
+                <span class="mmba-pill"><?php echo esc_html(number_format_i18n(count($rows))); ?></span>
+            </div>
+            <?php if (empty($rows)) : ?>
+                <p class="mmba-help"><?php esc_html_e('No searches recorded yet.', 'movie-meta-by-aris'); ?></p>
+            <?php else : ?>
+                <div class="mmba-search-top-wrap">
+                    <table class="mmba-table mmba-search-top-table">
+                        <thead>
+                            <tr>
+                                <th><?php esc_html_e('#', 'movie-meta-by-aris'); ?></th>
+                                <th><?php esc_html_e('Search', 'movie-meta-by-aris'); ?></th>
+                                <th><?php esc_html_e('Count', 'movie-meta-by-aris'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($rows as $index => $row) : ?>
+                                <?php
+                                $query = isset($row['query']) ? (string) $row['query'] : '';
+                                $count = isset($row['count']) ? (int) $row['count'] : 0;
+                                if ($query === '') {
+                                    continue;
+                                }
+                                ?>
+                                <tr>
+                                    <td><?php echo esc_html((string) ($index + 1)); ?></td>
+                                    <td class="mmba-title-cell"><?php echo esc_html($query); ?></td>
+                                    <td><?php echo esc_html(number_format_i18n($count)); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
         </div>
         <?php
     }

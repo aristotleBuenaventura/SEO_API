@@ -10,11 +10,15 @@ class MMBA_Storage {
 
     const OPTION_KEY = 'mmba_movies';
     const VIEWS_KEY = 'mmba_movie_views';
+    const SEARCHES_KEY = 'mmba_search_counts';
+    const SEARCHES_WEEKLY_KEY = 'mmba_search_counts_weekly';
     const JSON_FILENAME = 'movies.json';
 
     public static function init() {
         add_action('template_redirect', [__CLASS__, 'track_watch_query'], 20);
+        add_action('template_redirect', [__CLASS__, 'track_search_query'], 21);
         add_action('wp_footer', [__CLASS__, 'print_view_tracker'], 99);
+        add_action('wp_footer', [__CLASS__, 'print_search_tracker'], 99);
     }
 
     public static function activate() {
@@ -103,6 +107,73 @@ class MMBA_Storage {
       Accept: 'application/json',
       'X-WP-Nonce': nonce
     }
+  }).catch(function () {});
+})();
+</script>
+        <?php
+    }
+
+    /**
+     * Count a search from ?q= on /search/ even when a full-page cache skips snippet PHP.
+     */
+    public static function track_search_query() {
+        if (is_admin() || wp_doing_ajax() || is_feed()) {
+            return;
+        }
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            return;
+        }
+
+        $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+        if ($uri === '' || stripos($uri, '/search') === false) {
+            return;
+        }
+
+        $q = '';
+        if (isset($_GET['q'])) {
+            $q = sanitize_text_field(wp_unslash((string) $_GET['q']));
+        }
+        $q = trim($q);
+        if ($q === '') {
+            return;
+        }
+
+        self::increment_search($q);
+    }
+
+    /**
+     * Beacon so searches are counted even when the search results snippet is cached out.
+     */
+    public static function print_search_tracker() {
+        if (is_admin() || is_feed()) {
+            return;
+        }
+
+        $base = rest_url('movie-meta/v1/search');
+        ?>
+<script>
+(function () {
+  var base = <?php echo wp_json_encode($base); ?>;
+  if (!base) return;
+  var q = '';
+  try {
+    var u = new URL(window.location.href);
+    if (u.pathname.indexOf('/search') === -1) return;
+    q = u.searchParams.get('q') || '';
+  } catch (e) {
+    return;
+  }
+  q = String(q || '').trim();
+  if (q.length < 2) return;
+  fetch(base, {
+    method: 'POST',
+    credentials: 'same-origin',
+    keepalive: true,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ q: q })
   }).catch(function () {});
 })();
 </script>
@@ -658,6 +729,239 @@ class MMBA_Storage {
         ]));
 
         return strpos($hints, 'prefetch') !== false || strpos($hints, 'prerender') !== false;
+    }
+
+    /**
+     * Current search week key (Monday date, site timezone).
+     * Weekly counts reset after Sunday 23:59 when the week rolls over.
+     */
+    public static function get_search_week_key() {
+        if (function_exists('wp_timezone')) {
+            $tz = wp_timezone();
+        } else {
+            $tz = new DateTimeZone('UTC');
+        }
+
+        $now = new DateTime('now', $tz);
+        $day = (int) $now->format('N');
+        $monday = clone $now;
+        if ($day !== 1) {
+            $monday->modify('-' . ($day - 1) . ' days');
+        }
+        $monday->setTime(0, 0, 0);
+
+        return $monday->format('Y-m-d');
+    }
+
+    /**
+     * @return array<string, array{query: string, count: int, updated_at: string}>
+     */
+    public static function get_searches() {
+        return self::clean_search_rows(get_option(self::SEARCHES_KEY, []));
+    }
+
+    public static function save_searches(array $searches) {
+        $exists = get_option(self::SEARCHES_KEY, null);
+        if ($exists === null) {
+            add_option(self::SEARCHES_KEY, $searches, '', 'no');
+        } else {
+            update_option(self::SEARCHES_KEY, $searches, false);
+        }
+    }
+
+    /**
+     * @return array<string, array{query: string, count: int, updated_at: string}>
+     */
+    public static function get_weekly_searches() {
+        $payload = get_option(self::SEARCHES_WEEKLY_KEY, []);
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+
+        $current_week = self::get_search_week_key();
+        $stored_week = isset($payload['week_key']) ? (string) $payload['week_key'] : '';
+
+        if ($stored_week !== $current_week) {
+            self::save_weekly_searches($current_week, []);
+            return [];
+        }
+
+        $searches = isset($payload['searches']) && is_array($payload['searches']) ? $payload['searches'] : [];
+        return self::clean_search_rows($searches);
+    }
+
+    public static function save_weekly_searches($week_key, array $searches) {
+        $payload = [
+            'week_key' => (string) $week_key,
+            'searches' => $searches,
+        ];
+        $exists = get_option(self::SEARCHES_WEEKLY_KEY, null);
+        if ($exists === null) {
+            add_option(self::SEARCHES_WEEKLY_KEY, $payload, '', 'no');
+        } else {
+            update_option(self::SEARCHES_WEEKLY_KEY, $payload, false);
+        }
+    }
+
+    /**
+     * @param mixed $searches
+     * @return array<string, array{query: string, count: int, updated_at: string}>
+     */
+    private static function clean_search_rows($searches) {
+        if (!is_array($searches)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach ($searches as $key => $row) {
+            $key = self::normalize_search_key((string) $key);
+            if ($key === '' || !is_array($row)) {
+                continue;
+            }
+            $query = isset($row['query']) ? sanitize_text_field((string) $row['query']) : $key;
+            if ($query === '') {
+                continue;
+            }
+            $clean[$key] = [
+                'query'      => $query,
+                'count'      => max(0, (int) ($row['count'] ?? 0)),
+                'updated_at' => isset($row['updated_at']) ? (string) $row['updated_at'] : '',
+            ];
+        }
+
+        return $clean;
+    }
+
+    public static function normalize_search_key($query) {
+        $query = sanitize_text_field(wp_unslash((string) $query));
+        $query = trim(preg_replace('/\s+/u', ' ', $query));
+        if ($query === '') {
+            return '';
+        }
+        if (function_exists('mb_strtolower')) {
+            return mb_strtolower($query, 'UTF-8');
+        }
+        return strtolower($query);
+    }
+
+    /**
+     * @return bool True when at least one bucket was incremented.
+     */
+    public static function increment_search($query) {
+        $query = sanitize_text_field(wp_unslash((string) $query));
+        $query = trim(preg_replace('/\s+/u', ' ', $query));
+        if ($query === '') {
+            return false;
+        }
+
+        $min_len = function_exists('mb_strlen') ? (int) mb_strlen($query) : (int) strlen($query);
+        if ($min_len < 2) {
+            return false;
+        }
+
+        if (self::is_prefetch_request()) {
+            return false;
+        }
+
+        $ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
+        if ($ua !== '' && preg_match('/bot|crawl|spider|slurp|facebookexternalhit/i', $ua)) {
+            return false;
+        }
+
+        $key = self::normalize_search_key($query);
+        if ($key === '') {
+            return false;
+        }
+
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+        $lock = 'mmba_slock_' . md5($key . '|' . $ip);
+        if (get_transient($lock)) {
+            return false;
+        }
+        set_transient($lock, 1, 2 * MINUTE_IN_SECONDS);
+
+        $now = gmdate('c');
+        $overall = self::increment_search_bucket(self::get_searches(), $key, $query, $now);
+        self::save_searches($overall);
+
+        $weekly = self::increment_search_bucket(self::get_weekly_searches(), $key, $query, $now);
+        self::save_weekly_searches(self::get_search_week_key(), $weekly);
+
+        if (class_exists('MMBA_Sheets') && method_exists('MMBA_Sheets', 'queue_top_searches_sync')) {
+            MMBA_Sheets::queue_top_searches_sync();
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, array{query: string, count: int, updated_at: string}> $searches
+     * @return array<string, array{query: string, count: int, updated_at: string}>
+     */
+    private static function increment_search_bucket(array $searches, $key, $query, $now) {
+        $row = isset($searches[$key]) && is_array($searches[$key]) ? $searches[$key] : [
+            'query'      => $query,
+            'count'      => 0,
+            'updated_at' => '',
+        ];
+        $row['query'] = $query;
+        $row['count'] = (int) ($row['count'] ?? 0) + 1;
+        $row['updated_at'] = $now;
+        $searches[$key] = $row;
+
+        if (count($searches) > 500) {
+            uasort($searches, static function ($a, $b) {
+                $ca = (int) ($a['count'] ?? 0);
+                $cb = (int) ($b['count'] ?? 0);
+                if ($ca !== $cb) {
+                    return $cb - $ca;
+                }
+                return strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
+            });
+            $searches = array_slice($searches, 0, 500, true);
+        }
+
+        return $searches;
+    }
+
+    /**
+     * @param int    $limit Max items (1–100).
+     * @param string $scope 'overall' or 'weekly'.
+     * @return array<int, array{query: string, count: int}>
+     */
+    public static function get_top_searches($limit = 100, $scope = 'overall') {
+        $limit = max(1, min(100, (int) $limit));
+        $scope = strtolower(trim((string) $scope));
+        $searches = ($scope === 'weekly') ? self::get_weekly_searches() : self::get_searches();
+        if (empty($searches)) {
+            return [];
+        }
+
+        uasort($searches, static function ($a, $b) {
+            $ca = (int) ($a['count'] ?? 0);
+            $cb = (int) ($b['count'] ?? 0);
+            if ($ca !== $cb) {
+                return $cb - $ca;
+            }
+            return strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
+        });
+
+        $top = [];
+        foreach (array_slice(array_values($searches), 0, $limit) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $query = isset($row['query']) ? (string) $row['query'] : '';
+            if ($query === '') {
+                continue;
+            }
+            $top[] = [
+                'query' => $query,
+                'count' => (int) ($row['count'] ?? 0),
+            ];
+        }
+
+        return $top;
     }
 
     /**

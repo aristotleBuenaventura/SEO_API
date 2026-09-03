@@ -51,6 +51,20 @@ class MMBA_API {
             ],
         ]);
 
+        register_rest_route(self::REST_NS, '/search', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [__CLASS__, 'record_search'],
+                'permission_callback' => '__return_true',
+                'args'                => [
+                    'q' => [
+                        'required' => true,
+                        'type'     => 'string',
+                    ],
+                ],
+            ],
+        ]);
+
         register_rest_route(self::REST_NS, '/movies/(?P<id>[a-zA-Z0-9_\-\.]+)', [
             [
                 'methods'             => WP_REST_Server::READABLE,
@@ -161,6 +175,18 @@ class MMBA_API {
             'counted' => (bool) $counted,
             'views'   => MMBA_Storage::get_view_count($id),
         ]);
+    }
+
+    public static function record_search(WP_REST_Request $request) {
+        $q = sanitize_text_field((string) $request->get_param('q'));
+        $counted = MMBA_Storage::increment_search($q);
+
+        $response = rest_ensure_response([
+            'q'       => $q,
+            'counted' => (bool) $counted,
+        ]);
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        return $response;
     }
 
     /**

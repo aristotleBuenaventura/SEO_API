@@ -8,7 +8,9 @@ class MMBA_Sheets {
 
     const SPREADSHEET_ID = '1g5I-9IPvlWQe72jkDYe4T-UNWWy5XLfEeoDAjHw28B8';
     const RANGE = 'A1:J5000';
-    const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+    const TOP_SEARCHES_SHEET = 'Top Searches';
+    const TOP_SEARCHES_LIMIT = 100;
+    const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
     const TOKEN_URL = 'https://oauth2.googleapis.com/token';
     const SERVICE_EMAIL = 'movie-660@fifth-branch-506015-f9.iam.gserviceaccount.com';
 
@@ -17,6 +19,44 @@ class MMBA_Sheets {
     const FRESH_KEY = 'mmba_sheet_fresh';
     const TOKEN_KEY = 'mmba_gs_token';
     const CACHE_TTL = 600;
+    const TOP_SEARCHES_ERROR_KEY = 'mmba_top_searches_error';
+    const TOP_SEARCHES_SYNCED_KEY = 'mmba_top_searches_synced_at';
+    const TOP_SEARCHES_DIRTY_KEY = 'mmba_top_searches_dirty';
+    const TOP_SEARCHES_SYNC_LOCK = 'mmba_top_searches_sync_lock';
+
+    /**
+     * Production hosts allowed to push top searches to Google Sheets.
+     *
+     * @return array<int, string>
+     */
+    public static function top_searches_write_hosts() {
+        $hosts = [
+            'desimovieshub.com',
+            'www.desimovieshub.com',
+        ];
+
+        /**
+         * Filter which site hosts may write top searches to Google Sheets.
+         *
+         * @param array<int, string> $hosts
+         */
+        return apply_filters('mmba_top_searches_write_hosts', $hosts);
+    }
+
+    /**
+     * Only production may write top searches (staging/local must not overwrite the sheet).
+     */
+    public static function can_sync_top_searches_to_sheet() {
+        $host = wp_parse_url(home_url(), PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return false;
+        }
+
+        $host = strtolower($host);
+        $allowed = array_map('strtolower', self::top_searches_write_hosts());
+
+        return in_array($host, $allowed, true);
+    }
 
     public static function spreadsheet_id() {
         return self::SPREADSHEET_ID;
@@ -40,6 +80,8 @@ class MMBA_Sheets {
 
     public static function init() {
         add_action('mmba_sync_sheet', [__CLASS__, 'sync']);
+        add_action('mmba_sync_top_searches', [__CLASS__, 'sync_top_searches']);
+        add_action('shutdown', [__CLASS__, 'maybe_sync_top_searches_on_shutdown'], 20);
     }
 
     public static function schedule() {
@@ -52,6 +94,11 @@ class MMBA_Sheets {
         $timestamp = wp_next_scheduled('mmba_sync_sheet');
         if ($timestamp) {
             wp_unschedule_event($timestamp, 'mmba_sync_sheet');
+        }
+
+        $top_timestamp = wp_next_scheduled('mmba_sync_top_searches');
+        if ($top_timestamp) {
+            wp_unschedule_event($top_timestamp, 'mmba_sync_top_searches');
         }
     }
 
@@ -104,7 +151,164 @@ class MMBA_Sheets {
             MMBA_Storage::sync_json_file($payload['catalog']);
         }
 
+        self::sync_top_searches();
+
         return $payload;
+    }
+
+    public static function top_searches_last_error() {
+        $err = get_option(self::TOP_SEARCHES_ERROR_KEY, '');
+        return is_string($err) ? $err : '';
+    }
+
+    public static function top_searches_last_synced_at() {
+        $at = get_option(self::TOP_SEARCHES_SYNCED_KEY, '');
+        return is_string($at) ? $at : '';
+    }
+
+    /**
+     * Queue an immediate end-of-request sync (plus cron backup).
+     */
+    public static function queue_top_searches_sync() {
+        if (!self::can_sync_top_searches_to_sheet()) {
+            return;
+        }
+
+        set_transient(self::TOP_SEARCHES_DIRTY_KEY, 1, 15 * MINUTE_IN_SECONDS);
+
+        if (!wp_next_scheduled('mmba_sync_top_searches')) {
+            wp_schedule_single_event(time() + 120, 'mmba_sync_top_searches');
+        }
+    }
+
+    /**
+     * Push pending top searches before PHP exits (does not rely on WP-Cron).
+     */
+    public static function maybe_sync_top_searches_on_shutdown() {
+        if (!self::can_sync_top_searches_to_sheet()) {
+            return;
+        }
+        if (!get_transient(self::TOP_SEARCHES_DIRTY_KEY)) {
+            return;
+        }
+        if (get_transient(self::TOP_SEARCHES_SYNC_LOCK)) {
+            return;
+        }
+
+        set_transient(self::TOP_SEARCHES_SYNC_LOCK, 1, 30);
+        delete_transient(self::TOP_SEARCHES_DIRTY_KEY);
+        self::sync_top_searches();
+    }
+
+    /**
+     * Write overall + weekly top searches to the Top Searches sheet.
+     *
+     * @return true|WP_Error
+     */
+    public static function sync_top_searches() {
+        if (!self::can_sync_top_searches_to_sheet()) {
+            return true;
+        }
+
+        if (!class_exists('MMBA_Storage') || !method_exists('MMBA_Storage', 'get_top_searches')) {
+            return true;
+        }
+
+        $overall = MMBA_Storage::get_top_searches(self::TOP_SEARCHES_LIMIT, 'overall');
+        $weekly = MMBA_Storage::get_top_searches(self::TOP_SEARCHES_LIMIT, 'weekly');
+        if (!is_array($overall)) {
+            $overall = [];
+        }
+        if (!is_array($weekly)) {
+            $weekly = [];
+        }
+
+        $values = self::build_top_searches_sheet_values($overall, $weekly);
+        $range = self::top_searches_range();
+        $result = self::write_values($range, $values);
+
+        if (is_wp_error($result)) {
+            delete_transient(self::TOKEN_KEY);
+            $result = self::write_values($range, $values);
+        }
+
+        if (is_wp_error($result)) {
+            self::save_option(self::TOP_SEARCHES_ERROR_KEY, $result->get_error_message());
+            return $result;
+        }
+
+        self::save_option(self::TOP_SEARCHES_ERROR_KEY, '');
+        self::save_option(self::TOP_SEARCHES_SYNCED_KEY, gmdate('c'));
+
+        return true;
+    }
+
+    /**
+     * @param array<int, array{query?: string, count?: int}> $overall
+     * @param array<int, array{query?: string, count?: int}> $weekly
+     * @return array<int, array{0: string, 1: string}>
+     */
+    private static function build_top_searches_sheet_values(array $overall, array $weekly) {
+        $values = [
+            ['Overall Top Searches', 'Weekly Top Searches'],
+        ];
+
+        for ($i = 0; $i < self::TOP_SEARCHES_LIMIT; $i++) {
+            $values[] = [
+                isset($overall[$i]['query']) ? (string) $overall[$i]['query'] : '',
+                isset($weekly[$i]['query']) ? (string) $weekly[$i]['query'] : '',
+            ];
+        }
+
+        return $values;
+    }
+
+    private static function top_searches_range() {
+        return "'" . self::TOP_SEARCHES_SHEET . "'!A1:B" . (self::TOP_SEARCHES_LIMIT + 1);
+    }
+
+    /**
+     * @param array<int, array<int, string>> $values
+     * @return true|WP_Error
+     */
+    private static function write_values($range, array $values) {
+        $token = self::get_access_token();
+        if (is_wp_error($token)) {
+            return $token;
+        }
+
+        $path = sprintf(
+            'https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s',
+            self::SPREADSHEET_ID,
+            rawurlencode($range)
+        );
+        $url = add_query_arg(['valueInputOption' => 'RAW'], $path);
+
+        $response = wp_remote_request($url, [
+            'method'  => 'PUT',
+            'timeout' => 20,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type'  => 'application/json',
+                'Accept'        => 'application/json',
+            ],
+            'body' => wp_json_encode(['values' => array_values($values)]),
+        ]);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        if ($code < 200 || $code >= 300) {
+            $message = isset($body['error']['message'])
+                ? (string) $body['error']['message']
+                : __('Google Sheets write failed.', 'movie-meta-by-aris');
+            return new WP_Error('mmba_sheets_write', $message);
+        }
+
+        return true;
     }
 
     public static function last_error() {

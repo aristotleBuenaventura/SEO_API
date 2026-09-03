@@ -543,6 +543,72 @@ body[class*="movie-meta-by-aris"] #wpbody-content > .wrap.mmba-app {
   font-weight: 600;
 }
 
+.mmba-search-top-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 1100px) {
+  .mmba-search-top-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.mmba-search-top-panel {
+  min-width: 0;
+  border: 1px solid var(--mmba-line);
+  border-radius: var(--mmba-radius);
+  background: var(--mmba-surface);
+  padding: 0.85rem;
+}
+
+.mmba-search-top-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.65rem;
+}
+
+.mmba-search-top-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--mmba-ink);
+}
+
+.mmba-search-top-wrap {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--mmba-line);
+  border-radius: 8px;
+  background: var(--mmba-panel);
+}
+
+.mmba-search-top-table {
+  margin: 0;
+}
+
+.mmba-search-top-table th,
+.mmba-search-top-table td {
+  font-size: 0.82rem;
+}
+
+.mmba-search-top-table th:first-child,
+.mmba-search-top-table td:first-child {
+  width: 2.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mmba-search-top-table th:last-child,
+.mmba-search-top-table td:last-child {
+  width: 5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .mmba-shortcode-stack {
   display: grid;
   gap: 0.55rem;
