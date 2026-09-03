@@ -92,8 +92,7 @@ function mmad_render_ads_shortcode($atts = []) {
     display: block;
     width: 100%;
     height: auto;
-    max-height: 120px;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
   }
   @media (hover: hover) {
@@ -102,12 +101,29 @@ function mmad_render_ads_shortcode($atts = []) {
       box-shadow: 0 8px 24px rgba(15, 20, 25, 0.18);
     }
   }
-  @media (max-width: 720px) {
+  @media (max-width: 980px) {
     .mmad {
-      padding: 0 max(0.75rem, env(safe-area-inset-right)) 0 max(0.75rem, env(safe-area-inset-left));
+      padding: 0 0.75rem;
       margin: 0.6rem auto 1rem;
     }
-    .mmad-img { max-height: 90px; }
+    .mmad-link { border-radius: 8px; }
+  }
+  @media (max-width: 720px) {
+    .mmad {
+      padding: 0 max(0.5rem, env(safe-area-inset-right)) 0 max(0.5rem, env(safe-area-inset-left));
+      margin: 0.5rem auto 0.75rem;
+    }
+    .mmad-link { border-radius: 6px; }
+  }
+  @media (max-width: 480px) {
+    .mmad {
+      padding: 0 0.35rem;
+      margin: 0.4rem auto 0.6rem;
+    }
+    .mmad-link {
+      border-radius: 5px;
+      border: none;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .mmad-link { transition: none; }
@@ -198,7 +214,7 @@ function mmad_render_ads_shortcode($atts = []) {
     }
 
     root.innerHTML =
-      '<a class="mmad-link" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer sponsored"' +
+      '<a class="mmad-link" href="' + esc(href) + '" rel="noopener noreferrer sponsored"' +
         ' aria-label="' + esc(meta.alt) + '"' +
         (meta.title ? ' title="' + esc(meta.title) + '"' : '') +
       '>' +
