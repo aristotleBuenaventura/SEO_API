@@ -5,13 +5,18 @@
  * Pretty genre URLs (match SEO GSheet):
  *   /Genre/Action   /Genre/Drama   /Genre/Sci-fi   /Genre/lgbtq
  *   /Teen           (special path from sheet)
+ * BN:
+ *   /bn/Genre/Action   /bn/Genre/Drama   /bn/Teen
  *
  * Requires WP page slug `genre` with shortcode [movie_genre].
+ * BN: WP page at /bn/genre/ (parent slug `bn`, child slug `genre`)
+ *     with shortcode [movie_genre lang="bn"].
  * Pair with:
  *   snippets/movie-genre-page-shortcode.php
  *   snippets/genre-rows-shortcode.php
  *
  * Also: 301 /genre/?genre=Action → /Genre/Action
+ *        301 /bn/genre/?genre=Action → /bn/Genre/Action
  *        per-genre meta title/description (EN from SEO sheet)
  */
 
@@ -20,7 +25,7 @@ if (!defined('ABSPATH')) {
 }
 
 /** Bump to flush rewrite rules once after deploy. */
-define('MMBA_GENRE_SEO_REWRITE_VER', '1');
+define('MMBA_GENRE_SEO_REWRITE_VER', '2');
 
 /**
  * Canonical URL slug per genre (sheet path segment).
@@ -178,21 +183,43 @@ function mmba_genre_filter_label($slug_or_label) {
 }
 
 /**
+ * Whether the current request is under /bn/.
+ *
+ * @return bool
+ */
+function mmba_genre_request_is_bn() {
+    $lang = get_query_var('mmba_lang');
+    if (is_string($lang) && strtolower($lang) === 'bn') {
+        return true;
+    }
+    $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+    return (bool) preg_match('#/(?:bn)(/|$)#i', $uri);
+}
+
+/**
  * Pretty public URL for a genre (absolute).
  *
  * @param string $genre Catalog genre label.
+ * @param string $lang  Optional: "bn" for Bengali path prefix.
  * @return string
  */
-function mmba_genre_pretty_url($genre) {
+function mmba_genre_pretty_url($genre, $lang = '') {
+    $lang = strtolower(trim((string) $lang));
+    if ($lang === '' && mmba_genre_request_is_bn()) {
+        $lang = 'bn';
+    }
+    $bn = ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla');
+    $prefix = $bn ? '/bn' : '';
+
     $slug = mmba_genre_url_slug($genre);
     if ($slug === '') {
-        return home_url('/Genre/');
+        return home_url($prefix . '/Genre/');
     }
-    // Sheet uses /Teen (not /Genre/Teen).
+    // Sheet uses /Teen (not /Genre/Teen). BN → /bn/Teen/
     if (strcasecmp($slug, 'Teen') === 0) {
-        return home_url('/Teen/');
+        return home_url($prefix . '/Teen/');
     }
-    return home_url('/Genre/' . rawurlencode($slug) . '/');
+    return home_url($prefix . '/Genre/' . rawurlencode($slug) . '/');
 }
 
 /**
@@ -247,6 +274,7 @@ function mmba_genre_seo_for($genre) {
 
 add_filter('query_vars', static function ($vars) {
     $vars[] = 'mmba_genre';
+    $vars[] = 'mmba_lang';
     return $vars;
 });
 
@@ -274,6 +302,28 @@ add_action('init', static function () {
         'top'
     );
 
+    // Bengali mirrors → WP page pagename bn/genre ([movie_genre lang="bn"]).
+    add_rewrite_rule(
+        '^bn/Genre/([^/]+)/?$',
+        'index.php?pagename=bn/genre&mmba_genre=$matches[1]&mmba_lang=bn',
+        'top'
+    );
+    add_rewrite_rule(
+        '^bn/genre/([^/]+)/?$',
+        'index.php?pagename=bn/genre&mmba_genre=$matches[1]&mmba_lang=bn',
+        'top'
+    );
+    add_rewrite_rule(
+        '^bn/Teen/?$',
+        'index.php?pagename=bn/genre&mmba_genre=Teen&mmba_lang=bn',
+        'top'
+    );
+    add_rewrite_rule(
+        '^bn/teen/?$',
+        'index.php?pagename=bn/genre&mmba_genre=Teen&mmba_lang=bn',
+        'top'
+    );
+
     $stored = get_option('mmba_genre_seo_rewrite_ver');
     if ($stored !== MMBA_GENRE_SEO_REWRITE_VER) {
         flush_rewrite_rules(false);
@@ -294,11 +344,12 @@ add_action('template_redirect', static function () {
     if (isset($_GET['genre']) && (string) $_GET['genre'] !== '') {
         // Only redirect when still on query form (not already rewritten).
         $req_uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
-        $is_pretty = (bool) preg_match('#/(?:Genre|genre)/[^/]+#', $req_uri)
-            || (bool) preg_match('#/(?:Teen|teen)/?(\?|$)#', $req_uri);
+        $is_pretty = (bool) preg_match('#/(?:bn/)?(?:Genre|genre)/[^/]+#', $req_uri)
+            || (bool) preg_match('#/(?:bn/)?(?:Teen|teen)/?(\?|$)#', $req_uri);
         if (!$is_pretty) {
             $genre = sanitize_text_field(wp_unslash((string) $_GET['genre']));
-            $target = mmba_genre_pretty_url($genre);
+            $lang = mmba_genre_request_is_bn() ? 'bn' : '';
+            $target = mmba_genre_pretty_url($genre, $lang);
             wp_safe_redirect($target, 301);
             exit;
         }
@@ -355,7 +406,7 @@ add_filter('rank_math/frontend/canonical', static function ($canonical) {
     if ($genre === '') {
         return $canonical;
     }
-    return mmba_genre_pretty_url($genre);
+    return mmba_genre_pretty_url($genre, mmba_genre_request_is_bn() ? 'bn' : '');
 }, 20);
 
 add_filter('get_canonical_url', static function ($canonical, $post) {
@@ -363,7 +414,7 @@ add_filter('get_canonical_url', static function ($canonical, $post) {
     if ($genre === '') {
         return $canonical;
     }
-    return mmba_genre_pretty_url($genre);
+    return mmba_genre_pretty_url($genre, mmba_genre_request_is_bn() ? 'bn' : '');
 }, 20, 2);
 
 // Core / Yoast-less sites: print meta description when Rank Math is absent.

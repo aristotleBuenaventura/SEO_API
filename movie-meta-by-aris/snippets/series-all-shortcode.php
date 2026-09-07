@@ -39,15 +39,23 @@ function mmsa_render_series_all_shortcode($atts = []) {
 
     if (function_exists('mmba_snip_apply_bn_url_defaults')) {
         $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
-            'home_url'  => '/bn',
+            'home_url'  => '/bn/',
             'watch_url' => '/bn/series-watch/',
         ]);
     } elseif ($lang === 'bn') {
         if (!array_key_exists('home_url', $raw) || trim((string) $raw['home_url']) === '') {
-            $atts['home_url'] = '/bn';
+            $atts['home_url'] = '/bn/';
         }
         if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
             $atts['watch_url'] = '/bn/series-watch/';
+        }
+    }
+
+    // BN back link → BN homepage. Treat bare "/" (EN default) as unset.
+    if ($lang === 'bn') {
+        $home_raw = array_key_exists('home_url', $raw) ? trim((string) $raw['home_url']) : '';
+        if ($home_raw === '' || $home_raw === '/') {
+            $atts['home_url'] = '/bn/';
         }
     }
 
