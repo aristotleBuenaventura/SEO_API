@@ -1,3 +1,4 @@
+<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
@@ -13,6 +14,8 @@
  * Requires: Movie Meta plugin (data source).
  * Pair with snippets/series-rows-shortcode.php → [movie_series_rows]
  * Pair with snippets/series-all-shortcode.php → [movie_series]
+ *
+ * SEO: sheet column L = SEO Title, column M = Meta Description (applied on /series-watch/?id=…).
  */
 
 if (!defined('ABSPATH')) {
@@ -99,6 +102,9 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     $catalog_id = isset($picked['id']) ? (string) $picked['id'] : $id;
     $current = $picked['current'];
 
+    if (function_exists('mmba_snip_watch_seo_apply')) {
+        mmba_snip_watch_seo_apply($catalog_id);
+    }
     if (method_exists('MMBA_Storage', 'increment_view')) {
         MMBA_Storage::increment_view($catalog_id);
     }
@@ -1220,4 +1226,231 @@ if (!function_exists('mmba_snip_season_episode_chip')) {
         }
         return 'সি' . mmba_snip_bn_digits((string) $season_n) . ' প' . mmba_snip_bn_digits((string) $episode_n);
     }
+}
+
+/* -------------------------------------------------------------------------
+ * SEO Title (col L) + Meta Description (col M) — shared with movie-watch snippet
+ * ---------------------------------------------------------------------- */
+
+if (!function_exists('mmba_snip_lookup_seo_meta')) {
+    /**
+     * @return array{title: string, description: string}
+     */
+    function mmba_snip_lookup_seo_meta($movie_id) {
+        $map = mmba_snip_seo_meta_map();
+        $id = (string) $movie_id;
+        if (isset($map[$id]) && is_array($map[$id])) {
+            return [
+                'title'       => isset($map[$id]['title']) ? (string) $map[$id]['title'] : '',
+                'description' => isset($map[$id]['description']) ? (string) $map[$id]['description'] : '',
+            ];
+        }
+        return ['title' => '', 'description' => ''];
+    }
+}
+
+if (!function_exists('mmba_snip_seo_meta_map')) {
+    /**
+     * @return array<string, array{title: string, description: string}>
+     */
+    function mmba_snip_seo_meta_map() {
+        $cached = get_transient('mmba_snip_seo_meta_map');
+        if (is_array($cached)) {
+            return $cached;
+        }
+        $map = mmba_snip_fetch_seo_meta_map();
+        if (!is_array($map)) {
+            $map = [];
+        }
+        set_transient('mmba_snip_seo_meta_map', $map, 10 * MINUTE_IN_SECONDS);
+        return $map;
+    }
+}
+
+if (!function_exists('mmba_snip_fetch_seo_meta_map')) {
+    /**
+     * Sheet columns: L (index 11) = SEO Title, M (index 12) = Meta Description.
+     *
+     * @return array<string, array{title: string, description: string}>
+     */
+    function mmba_snip_fetch_seo_meta_map() {
+        if (!function_exists('mmba_snip_google_access_token')) {
+            return [];
+        }
+        $token = mmba_snip_google_access_token();
+        if (!is_string($token) || $token === '') {
+            return [];
+        }
+
+        $sheet_id = (class_exists('MMBA_Sheets') && method_exists('MMBA_Sheets', 'spreadsheet_id'))
+            ? MMBA_Sheets::spreadsheet_id()
+            : '1g5I-9IPvlWQe72jkDYe4T-UNWWy5XLfEeoDAjHw28B8';
+
+        $range = 'A1:M5000';
+        $url = sprintf(
+            'https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s',
+            rawurlencode($sheet_id),
+            rawurlencode($range)
+        );
+
+        $response = wp_remote_get($url, [
+            'timeout' => 20,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Accept'        => 'application/json',
+            ],
+        ]);
+        if (is_wp_error($response)) {
+            return [];
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            return [];
+        }
+
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        $values = (is_array($body) && isset($body['values']) && is_array($body['values'])) ? $body['values'] : [];
+        if (empty($values)) {
+            return [];
+        }
+
+        $start = 0;
+        if (!empty($values[0]) && is_array($values[0])) {
+            $first = array_map(static function ($c) {
+                return strtolower(trim((string) $c));
+            }, $values[0]);
+            if (in_array('title', $first, true) || in_array('type', $first, true)) {
+                $start = 1;
+            }
+        }
+
+        $map = [];
+        $total = count($values);
+        for ($r = $start; $r < $total; $r++) {
+            $line = is_array($values[$r]) ? $values[$r] : [];
+            $type = strtolower(trim(isset($line[0]) ? (string) $line[0] : ''));
+            $title = trim(isset($line[1]) ? (string) $line[1] : '');
+            $link_raw = trim(isset($line[4]) ? (string) $line[4] : '');
+            $seo_title = trim(isset($line[11]) ? (string) $line[11] : '');
+            $seo_desc = trim(isset($line[12]) ? (string) $line[12] : '');
+            if ($title === '' || ($seo_title === '' && $seo_desc === '')) {
+                continue;
+            }
+
+            $is_series = ($type === 'series' || $type === 'tv' || $type === 'show');
+            if ($is_series) {
+                $seed = strtolower(preg_replace('/\s+/', ' ', $title));
+                $id = 's' . substr(md5($seed), 0, 15);
+            } else {
+                if ($link_raw === '') {
+                    continue;
+                }
+                $link = class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'sanitize_stream_url')
+                    ? MMBA_Storage::sanitize_stream_url($link_raw)
+                    : $link_raw;
+                if ($link === '') {
+                    continue;
+                }
+                $id = 'm' . substr(md5(strtolower(trim($title . '|' . $link))), 0, 15);
+            }
+
+            if (!isset($map[$id])) {
+                $map[$id] = ['title' => '', 'description' => ''];
+            }
+            if ($map[$id]['title'] === '' && $seo_title !== '') {
+                $map[$id]['title'] = $seo_title;
+            }
+            if ($map[$id]['description'] === '' && $seo_desc !== '') {
+                $map[$id]['description'] = $seo_desc;
+            }
+        }
+
+        return $map;
+    }
+}
+
+if (!function_exists('mmba_snip_watch_seo_apply')) {
+    function mmba_snip_watch_seo_apply($movie_id) {
+        static $applied = false;
+        if ($applied) {
+            return;
+        }
+
+        $seo = mmba_snip_lookup_seo_meta($movie_id);
+        $title = isset($seo['title']) ? trim((string) $seo['title']) : '';
+        $desc = isset($seo['description']) ? trim((string) $seo['description']) : '';
+        if ($title === '' && $desc === '') {
+            return;
+        }
+
+        $applied = true;
+        $GLOBALS['mmba_snip_watch_seo'] = [
+            'title'       => $title,
+            'description' => $desc,
+        ];
+
+        if ($title !== '') {
+            add_filter('pre_get_document_title', static function ($current) use ($title) {
+                return $title !== '' ? $title : $current;
+            }, 20);
+
+            add_filter('document_title_parts', static function ($parts) use ($title) {
+                if ($title === '') {
+                    return $parts;
+                }
+                $parts['title'] = $title;
+                unset($parts['site'], $parts['tagline'], $parts['page']);
+                return $parts;
+            }, 20);
+
+            add_filter('rank_math/frontend/title', static function ($current) use ($title) {
+                return $title !== '' ? $title : $current;
+            }, 20);
+
+            add_filter('wpseo_title', static function ($current) use ($title) {
+                return $title !== '' ? $title : $current;
+            }, 20);
+        }
+
+        if ($desc !== '') {
+            add_filter('rank_math/frontend/description', static function ($current) use ($desc) {
+                return $desc !== '' ? $desc : $current;
+            }, 20);
+
+            add_filter('wpseo_metadesc', static function ($current) use ($desc) {
+                return $desc !== '' ? $desc : $current;
+            }, 20);
+
+            add_action('wp_head', static function () use ($desc) {
+                if (defined('RANK_MATH_VERSION') || class_exists('RankMath') || defined('WPSEO_VERSION')) {
+                    return;
+                }
+                if ($desc === '') {
+                    return;
+                }
+                echo '<meta name="description" content="' . esc_attr($desc) . "\" />\n";
+            }, 1);
+        }
+    }
+}
+
+if (!function_exists('mmba_snip_watch_seo_boot')) {
+    function mmba_snip_watch_seo_boot() {
+        if (is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) {
+            return;
+        }
+        $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+        if (!preg_match('#/(?:bn/)?(?:watch|series-watch)(?:/|\?|$)#i', $uri)) {
+            return;
+        }
+        if (!isset($_GET['id']) || trim((string) $_GET['id']) === '') {
+            return;
+        }
+        $id = sanitize_text_field(wp_unslash((string) $_GET['id']));
+        mmba_snip_watch_seo_apply($id);
+    }
+}
+
+if (!has_action('wp', 'mmba_snip_watch_seo_boot')) {
+    add_action('wp', 'mmba_snip_watch_seo_boot', 5);
 }
