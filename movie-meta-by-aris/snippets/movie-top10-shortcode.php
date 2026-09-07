@@ -3,9 +3,11 @@
  *
  * Shortcode: [movie_top10]
  * Optional:  [movie_top10 title="Top 10 Movies" limit="10" watch_url="/watch/"]
+ *            [movie_top10 lang="bn"]  → links to /bn/watch/
  *
  * Requires: Movie Meta plugin 1.9.3+ (movies-only top ranking + watch view tracking).
  * Ranked by unique /watch/?id= views. Poster clicks → /watch/?id=MOVIE_ID
+ * (or /bn/watch/ when lang="bn")
  */
 
 if (!defined('ABSPATH')) {
@@ -15,16 +17,54 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_top10', 'mmt10_render_top10_shortcode');
 
 function mmt10_render_top10_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'title'     => 'Top 10 Movies',
             'limit'     => '10',
             'api'       => '',
             'watch_url' => '/watch/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'movie_top10'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'watch_url' => '/bn/watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/watch/';
+        }
+    }
+
+    $bn_ui = [
+        'Top 10 Movies' => 'টপ ১০ মুভি',
+        'Loading top movies…' => 'টপ মুভি লোড হচ্ছে…',
+        'No movies found.' => 'কোনো মুভি পাওয়া যায়নি।',
+        'Could not load top movies.' => 'টপ মুভি লোড করা যায়নি।',
+        'Untitled' => 'শিরোনামহীন',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
+    };
+
+    if ($lang === 'bn' && (!array_key_exists('title', $raw) || trim((string) $raw['title']) === '')) {
+        $atts['title'] = $t('Top 10 Movies');
+    }
 
     $uid = 'mmt10-' . wp_unique_id();
     $limit = max(1, min(20, absint($atts['limit'])));
@@ -37,6 +77,13 @@ function mmt10_render_top10_shortcode($atts = []) {
         $watch_url = home_url($watch_url);
     }
     $watch_url = esc_url($watch_url);
+
+    $bn_genre_labels = [];
+    if ($lang === 'bn' && function_exists('mmba_snip_genre')) {
+        foreach (['Horror', 'Action', 'Drama', 'Comedy', 'Thriller', 'Romance', 'Crime', 'Animation', 'Adventure', 'Sci-Fi', 'War', 'Western', 'Documentary', 'Mystery', 'Fantasy', 'Family', 'Teen', 'Other'] as $gk) {
+            $bn_genre_labels[$gk] = mmba_snip_genre($gk, 'bn');
+        }
+    }
 
     $bootstrap = null;
     if (class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'get_top_movies')) {
@@ -79,12 +126,19 @@ function mmt10_render_top10_shortcode($atts = []) {
   data-watch-url="<?php echo esc_attr($watch_url); ?>"
   data-limit="<?php echo esc_attr((string) $limit); ?>"
   data-title="<?php echo esc_attr($atts['title']); ?>"
+  data-lang="<?php echo esc_attr($lang); ?>"
+  data-i18n-empty="<?php echo esc_attr($t('No movies found.')); ?>"
+  data-i18n-error="<?php echo esc_attr($t('Could not load top movies.')); ?>"
+  data-i18n-untitled="<?php echo esc_attr($t('Untitled')); ?>"
+  <?php if ($lang === 'bn' && !empty($bn_genre_labels)) : ?>
+  data-genre-labels="<?php echo esc_attr(wp_json_encode($bn_genre_labels)); ?>"
+  <?php endif; ?>
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
   <?php endif; ?>
   aria-live="polite"
 >
-  <div class="mmt10-loading"><?php echo esc_html__('Loading top movies…', 'movie-meta-by-aris'); ?></div>
+  <div class="mmt10-loading"><?php echo esc_html($t('Loading top movies…')); ?></div>
 </div>
 
 <style>
@@ -325,11 +379,31 @@ function mmt10_render_top10_shortcode($atts = []) {
   var WATCH_URL = root.getAttribute('data-watch-url') || '/watch/';
   var LIMIT = parseInt(root.getAttribute('data-limit') || '10', 10) || 10;
   var TITLE = root.getAttribute('data-title') || 'Top 10 Movies';
+  var LANG = root.getAttribute('data-lang') || '';
+  var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No movies found.';
+  var I18N_ERROR = root.getAttribute('data-i18n-error') || 'Could not load top movies.';
+  var I18N_UNTITLED = root.getAttribute('data-i18n-untitled') || 'Untitled';
+  var GENRE_LABELS = {};
+  try {
+    GENRE_LABELS = JSON.parse(root.getAttribute('data-genre-labels') || '{}') || {};
+  } catch (e) { GENRE_LABELS = {}; }
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function genreLabel(genre) {
+    var g = String(genre || '').trim();
+    if (!g) return '';
+    if (LANG === 'bn') {
+      if (GENRE_LABELS[g]) return GENRE_LABELS[g];
+      var keys = Object.keys(GENRE_LABELS);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === g.toLowerCase()) return GENRE_LABELS[keys[i]];
+      }
+    }
+    return g;
   }
   function splitGenres(genre) {
     return String(genre || '').split(',').map(function (g) { return g.trim(); }).filter(Boolean);
@@ -350,7 +424,7 @@ function mmt10_render_top10_shortcode($atts = []) {
   function metaLine(movie) {
     var bits = [];
     var g = primaryGenre(movie);
-    if (g) bits.push(g);
+    if (g) bits.push(genreLabel(g));
     if (movie.year) bits.push(movie.year);
     return bits.join(' · ');
   }
@@ -361,7 +435,7 @@ function mmt10_render_top10_shortcode($atts = []) {
   }
   function cardHtml(movie, rank) {
     var poster = movie.poster_url || '';
-    var title = movie.title || 'Untitled';
+    var title = movie.title || I18N_UNTITLED;
     var href = watchHref(movie);
     var imgMeta = esc(title) + ' DesiMoviesHub Free Watch';
     var posterInner = poster
@@ -407,7 +481,7 @@ function mmt10_render_top10_shortcode($atts = []) {
       return !movie || (!movie.episodes && !movie.season_count && !movie.episode_count);
     }).slice(0, LIMIT);
     if (!movies.length) {
-      root.innerHTML = '<div class="mmt10-empty">No movies found.</div>';
+      root.innerHTML = '<div class="mmt10-empty">' + esc(I18N_EMPTY) + '</div>';
       return;
     }
     root.innerHTML =
@@ -447,10 +521,73 @@ function mmt10_render_top10_shortcode($atts = []) {
     })
     .catch(function (err) {
       if (root.querySelector('.mmt10-track')) return;
-      root.innerHTML = '<div class="mmt10-error">Could not load top movies. (' + esc(err.message) + ')</div>';
+      root.innerHTML = '<div class="mmt10-error">' + esc(I18N_ERROR) + ' (' + esc(err.message) + ')</div>';
     });
 })();
 </script>
     <?php
     return ob_get_clean();
+}
+
+/** Local BN helpers if other snippets are not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
+    }
 }
