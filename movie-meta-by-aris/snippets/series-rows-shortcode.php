@@ -25,7 +25,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
         [
             'title'     => 'Series',
             'limit'     => '10',
-            'new_days'  => '45',
             'api'       => '',
             'watch_url' => '/series-watch/',
             'all_url'   => '/series/',
@@ -43,7 +42,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
     $bn_ui = [
         'Loading series…' => 'সিরিজ লোড হচ্ছে…',
         'View all' => 'সব দেখুন',
-        'NEW' => 'নতুন',
         'Series' => 'সিরিজ',
         'TV shows and series from the catalog.' => 'ক্যাটালগের টিভি শো ও সিরিজ।',
         'No series found.' => 'কোনো সিরিজ পাওয়া যায়নি।',
@@ -121,8 +119,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   data-all-url="<?php echo esc_attr($all_url); ?>"
   data-limit="<?php echo esc_attr((string) $limit); ?>"
   data-title="<?php echo esc_attr($atts['title']); ?>"
-  data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
-  data-i18n-new="<?php echo esc_attr($t('NEW')); ?>"
   data-i18n-view-all="<?php echo esc_attr($t('View all')); ?>"
   data-i18n-desc="<?php echo esc_attr($desc_text); ?>"
   data-i18n-empty="<?php echo esc_attr($t('No series found.')); ?>"
@@ -147,7 +143,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
     --mmsr-muted: #6b7280;
     --mmsr-line: rgba(18, 21, 26, 0.08);
     --mmsr-accent: #2563eb;
-    --mmsr-new: #e11d48;
     --mmsr-badge: rgba(15, 18, 22, 0.78);
     --mmsr-radius: 14px;
     --mmsr-card-w: 180px;
@@ -326,7 +321,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .mmsr-badge-new { bottom: 0.55rem; left: 0.55rem; background: var(--mmsr-new); }
   .mmsr-card-body { padding: 0.7rem 0.15rem 0; }
   .mmsr-card-title {
     margin: 0;
@@ -389,9 +383,7 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   var WATCH_URL = root.getAttribute('data-watch-url') || '/series-watch/';
   var ALL_URL = root.getAttribute('data-all-url') || '/series/';
   var LIMIT = parseInt(root.getAttribute('data-limit') || '10', 10) || 10;
-  var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
   var TITLE = root.getAttribute('data-title') || 'Series';
-  var I18N_NEW = root.getAttribute('data-i18n-new') || 'NEW';
   var I18N_VIEW_ALL = root.getAttribute('data-i18n-view-all') || 'View all';
   var I18N_DESC = root.getAttribute('data-i18n-desc') || 'TV shows and series from the catalog.';
   var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No series found.';
@@ -411,11 +403,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
     return String(n).replace(/[0-9]/g, function (d) {
       return '০১২৩৪৫৬৭৮৯'.charAt(parseInt(d, 10));
     });
-  }
-  function isNew(movie) {
-    var t = Date.parse(movie.created_at || movie.updated_at || '');
-    if (!t) return false;
-    return (Date.now() - t) <= NEW_DAYS * 86400000;
   }
   function tone(title) {
     var sum = 0, s = String(title || '');
@@ -460,7 +447,6 @@ function mmsr_render_series_rows_shortcode($atts = []) {
           posterInner +
           '<span class="mmsr-badge mmsr-badge-hd">HD</span>' +
           (movie.year ? '<span class="mmsr-badge mmsr-badge-meta">' + esc(movie.year) + '</span>' : '') +
-          (isNew(movie) ? '<span class="mmsr-badge mmsr-badge-new">' + esc(I18N_NEW) + '</span>' : '') +
         '</div>' +
         '<div class="mmsr-card-body">' +
           '<h3 class="mmsr-card-title">' + esc(title) + '</h3>' +

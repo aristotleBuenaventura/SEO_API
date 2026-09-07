@@ -29,7 +29,6 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
         [
             'genre'     => '',
             'genres'    => 'Horror,Action,Drama,Comedy,Thriller,Romance,Crime,Animation,Adventure,Sci-Fi,War,Western,Documentary,Mystery,Fantasy,Family',
-            'new_days'  => '45',
             'api'       => '',
             'watch_url' => '/watch/',
             'genre_url' => '/Genre/',
@@ -147,9 +146,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   data-per-row="<?php echo esc_attr((string) $per_row); ?>"
   data-genres="<?php echo esc_attr($atts['genres']); ?>"
   data-only="<?php echo $genre_only ? '1' : '0'; ?>"
-  data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
   data-lang="<?php echo esc_attr($lang); ?>"
-  data-i18n-new="<?php echo esc_attr($t('NEW')); ?>"
   data-i18n-view-all="<?php echo esc_attr($t('View all')); ?>"
   data-i18n-empty="<?php echo esc_attr($t('No movies found.')); ?>"
   data-i18n-empty-genre="<?php echo esc_attr($t('No movies found for this genre.')); ?>"
@@ -175,7 +172,6 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     --mmgr-muted: #6b7280;
     --mmgr-line: rgba(18, 21, 26, 0.08);
     --mmgr-accent: #2563eb;
-    --mmgr-new: #e11d48;
     --mmgr-badge: rgba(15, 18, 22, 0.78);
     --mmgr-radius: 14px;
     --mmgr-card-w: 180px;
@@ -360,7 +356,6 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .mmgr-badge-new { bottom: 0.55rem; left: 0.55rem; background: var(--mmgr-new); }
   .mmgr-card-body { padding: 0.7rem 0.15rem 0; }
   .mmgr-card-title {
     margin: 0;
@@ -434,9 +429,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   var WATCH_URL = root.getAttribute('data-watch-url') || '/watch/';
   var GENRE_URL = root.getAttribute('data-genre-url') || '/Genre/';
   var PER_ROW = parseInt(root.getAttribute('data-per-row') || '10', 10) || 10;
-  var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
   var GENRE_ONLY = root.getAttribute('data-only') === '1';
-  var I18N_NEW = root.getAttribute('data-i18n-new') || 'NEW';
   var I18N_VIEW_ALL = root.getAttribute('data-i18n-view-all') || 'View all';
   var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No movies found.';
   var I18N_EMPTY_GENRE = root.getAttribute('data-i18n-empty-genre') || 'No movies found for this genre.';
@@ -526,11 +519,6 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   function primaryGenre(movie) {
     var parts = splitGenres(movie.genre);
     return parts[0] || 'Other';
-  }
-  function isNew(movie) {
-    var t = Date.parse(movie.created_at || movie.updated_at || '');
-    if (!t) return false;
-    return (Date.now() - t) <= NEW_DAYS * 86400000;
   }
   function tone(title) {
     var sum = 0, s = String(title || '');
@@ -628,7 +616,6 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
           posterInner +
           '<span class="mmgr-badge mmgr-badge-hd">HD</span>' +
           (movie.year ? '<span class="mmgr-badge mmgr-badge-meta">' + esc(movie.year) + '</span>' : '') +
-          (isNew(movie) ? '<span class="mmgr-badge mmgr-badge-new">' + esc(I18N_NEW) + '</span>' : '') +
         '</div>' +
         '<div class="mmgr-card-body">' +
           '<h3 class="mmgr-card-title">' + esc(title) + '</h3>' +
