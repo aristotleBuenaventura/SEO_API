@@ -1,11 +1,14 @@
+<?php
 /**
  * Code Snippets plugin — paste this as a PHP snippet (Run everywhere).
  *
  * Shortcode: [movie_genre]
  * Optional:  [movie_genre home_url="/" watch_url="/watch/"]
+ *            [movie_genre lang="bn"]  → /bn links + Bengali UI
  *
  * Create a WP page at /genre/ (slug: genre) and put [movie_genre] in the content.
  * Pretty URLs (via genre-pretty-urls-seo.php): /Genre/Horror  /Genre/Action  /Teen
+ * BN page: /bn/Genre/ with [movie_genre lang="bn"] (same ?genre= or pretty slug)
  * Legacy query still works (301 → pretty): /genre/?genre=Horror
  *
  * Requires: Movie Meta plugin (data source).
@@ -20,15 +23,55 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_genre', 'mmgg_render_genre_page_shortcode');
 
 function mmgg_render_genre_page_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'genre'     => '',
             'home_url'  => '/',
             'watch_url' => '/watch/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'movie_genre'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'home_url'  => '/bn',
+            'watch_url' => '/bn/watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('home_url', $raw) || trim((string) $raw['home_url']) === '') {
+            $atts['home_url'] = '/bn';
+        }
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/watch/';
+        }
+    }
+
+    $bn_ui = [
+        'No genre selected.' => 'কোনো ধরণ নির্বাচিত হয়নি।',
+        'Back to movies' => 'মুভিতে ফিরে যান',
+        'Movie Meta plugin is required.' => 'Movie Meta প্লাগইন প্রয়োজন।',
+        'Genre navigation' => 'ধরণ নেভিগেশন',
+        'Category' => 'ক্যাটাগরি',
+        'No movies found in this genre.' => 'এই ধরণের কোনো মুভি পাওয়া যায়নি।',
+        'Untitled' => 'শিরোনামহীন',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
+    };
 
     $genre = $atts['genre'] !== '' ? sanitize_text_field($atts['genre']) : '';
     if ($genre === '' && function_exists('mmba_genre_from_request')) {
@@ -47,6 +90,11 @@ function mmgg_render_genre_page_shortcode($atts = []) {
         $genre = mmba_genre_filter_label($genre);
     }
 
+    $genre_display = $genre;
+    if ($lang === 'bn' && $genre !== '' && function_exists('mmba_snip_genre')) {
+        $genre_display = mmba_snip_genre($genre, 'bn');
+    }
+
     $home_url = $atts['home_url'];
     if ($home_url !== '' && strpos($home_url, 'http') !== 0) {
         $home_url = home_url($home_url);
@@ -60,12 +108,12 @@ function mmgg_render_genre_page_shortcode($atts = []) {
     $watch_url = esc_url($watch_url);
 
     if ($genre === '') {
-        return '<div class="mmgg mmgg-empty">' . esc_html__('No genre selected.', 'movie-meta-by-aris') .
-            ' <a class="mmgg-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to movies', 'movie-meta-by-aris') . '</a></div>';
+        return '<div class="mmgg mmgg-empty"' . ($lang === 'bn' ? ' lang="bn"' : '') . '>' . esc_html($t('No genre selected.')) .
+            ' <a class="mmgg-link" href="' . esc_url($home_url) . '">' . esc_html($t('Back to movies')) . '</a></div>';
     }
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmgg mmgg-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmgg mmgg-error"' . ($lang === 'bn' ? ' lang="bn"' : '') . '>' . esc_html($t('Movie Meta plugin is required.')) . '</div>';
     }
 
     $movies = [];
@@ -84,38 +132,44 @@ function mmgg_render_genre_page_shortcode($atts = []) {
     });
 
     $count = count($movies);
-    $heading = $genre . ' Movies';
+    // BN: Bengali genre only (e.g. অ্যাকশন). EN: "Action Movies".
+    $heading = $lang === 'bn' ? $genre_display : ($genre . ' Movies');
 
     ob_start();
     ?>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap">
-<div class="mmgg">
+<div class="mmgg"<?php echo $lang === 'bn' ? ' lang="bn"' : ''; ?>>
   <div class="mmgg-shell">
-    <nav class="mmgg-nav" aria-label="<?php echo esc_attr__('Genre navigation', 'movie-meta-by-aris'); ?>">
+    <nav class="mmgg-nav" aria-label="<?php echo esc_attr($t('Genre navigation')); ?>">
       <a class="mmgg-back" href="<?php echo esc_url($home_url); ?>">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-        <span><?php echo esc_html__('Back to movies', 'movie-meta-by-aris'); ?></span>
+        <span><?php echo esc_html($t('Back to movies')); ?></span>
       </a>
     </nav>
 
     <header class="mmgg-header">
-      <p class="mmgg-kicker"><?php echo esc_html__('Category', 'movie-meta-by-aris'); ?></p>
+      <p class="mmgg-kicker"><?php echo esc_html($t('Category')); ?></p>
       <h1 class="mmgg-title"><?php echo esc_html($heading); ?></h1>
       <p class="mmgg-count">
         <?php
-        echo esc_html(
-            sprintf(
-                /* translators: %d: movie count */
-                _n('%d title', '%d titles', $count, 'movie-meta-by-aris'),
-                $count
-            )
-        );
+        if ($lang === 'bn') {
+            $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $count) : (string) $count;
+            echo esc_html($n . 'টি শিরোনাম');
+        } else {
+            echo esc_html(
+                sprintf(
+                    /* translators: %d: movie count */
+                    _n('%d title', '%d titles', $count, 'movie-meta-by-aris'),
+                    $count
+                )
+            );
+        }
         ?>
       </p>
     </header>
 
     <?php if ($count === 0) : ?>
-      <div class="mmgg-empty-state"><?php echo esc_html__('No movies found in this genre.', 'movie-meta-by-aris'); ?></div>
+      <div class="mmgg-empty-state"><?php echo esc_html($t('No movies found in this genre.')); ?></div>
     <?php else : ?>
       <div class="mmgg-grid">
         <?php foreach ($movies as $movie) :
@@ -127,8 +181,8 @@ function mmgg_render_genre_page_shortcode($atts = []) {
             $href = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($id);
             $initial = $title !== '' ? strtoupper(substr($title, 0, 1)) : 'M';
             $tone = mmgg_poster_tone($title);
-            $display = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
-            $meta_bits = array_filter([$year, $genre]);
+            $display = $title !== '' ? $title : $t('Untitled');
+            $meta_bits = array_filter([$year, $genre_display]);
             $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
                 ? MMBA_Storage::poster_image_meta($display)
                 : ($display . ' DesiMoviesHub Free Watch');
@@ -358,4 +412,76 @@ function mmgg_poster_tone($title) {
         $sum += ord($s[$i]);
     }
     return ($sum % 6) + 1;
+}
+
+/** Local BN helpers if other snippets are not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_bn_digits')) {
+    function mmba_snip_bn_digits($text) {
+        return strtr((string) $text, [
+            '0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪',
+            '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯',
+        ]);
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
+    }
 }

@@ -4,8 +4,10 @@
  *
  * Shortcode: [movie_series]
  * Optional:  [movie_series home_url="/" watch_url="/series-watch/"]
+ *            [movie_series lang="bn"]  → /bn links + Bengali UI
  *
  * Create a WP page at /series/ and put [movie_series] in the content.
+ * BN page: /bn/series/ with [movie_series lang="bn"]
  * Series rows "View all" links here.
  *
  * Requires: Movie Meta plugin (data source).
@@ -20,14 +22,54 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_series', 'mmsa_render_series_all_shortcode');
 
 function mmsa_render_series_all_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'home_url'  => '/',
             'watch_url' => '/series-watch/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'movie_series'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'home_url'  => '/bn',
+            'watch_url' => '/bn/series-watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('home_url', $raw) || trim((string) $raw['home_url']) === '') {
+            $atts['home_url'] = '/bn';
+        }
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/series-watch/';
+        }
+    }
+
+    $bn_ui = [
+        'Movie Meta plugin is required.' => 'Movie Meta প্লাগইন প্রয়োজন।',
+        'Series navigation' => 'সিরিজ নেভিগেশন',
+        'Back to movies' => 'মুভিতে ফিরে যান',
+        'Catalog' => 'ক্যাটালগ',
+        'Series' => 'সিরিজ',
+        'No series found.' => 'কোনো সিরিজ পাওয়া যায়নি।',
+        'Untitled' => 'শিরোনামহীন',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
+    };
 
     $home_url = $atts['home_url'];
     if ($home_url !== '' && strpos($home_url, 'http') !== 0) {
@@ -42,7 +84,7 @@ function mmsa_render_series_all_shortcode($atts = []) {
     $watch_url = esc_url($watch_url);
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmsa mmsa-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmsa mmsa-error"' . ($lang === 'bn' ? ' lang="bn"' : '') . '>' . esc_html($t('Movie Meta plugin is required.')) . '</div>';
     }
 
     $series = method_exists('MMBA_Storage', 'get_series')
@@ -68,32 +110,37 @@ function mmsa_render_series_all_shortcode($atts = []) {
     ob_start();
     ?>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap">
-<div class="mmsa">
+<div class="mmsa"<?php echo $lang === 'bn' ? ' lang="bn"' : ''; ?>>
   <div class="mmsa-shell">
-    <nav class="mmsa-nav" aria-label="<?php echo esc_attr__('Series navigation', 'movie-meta-by-aris'); ?>">
+    <nav class="mmsa-nav" aria-label="<?php echo esc_attr($t('Series navigation')); ?>">
       <a class="mmsa-back" href="<?php echo esc_url($home_url); ?>">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-        <span><?php echo esc_html__('Back to movies', 'movie-meta-by-aris'); ?></span>
+        <span><?php echo esc_html($t('Back to movies')); ?></span>
       </a>
     </nav>
 
     <header class="mmsa-header">
-      <p class="mmsa-kicker"><?php echo esc_html__('Catalog', 'movie-meta-by-aris'); ?></p>
-      <h1 class="mmsa-title"><?php echo esc_html__('Series', 'movie-meta-by-aris'); ?></h1>
+      <p class="mmsa-kicker"><?php echo esc_html($t('Catalog')); ?></p>
+      <h1 class="mmsa-title"><?php echo esc_html($t('Series')); ?></h1>
       <p class="mmsa-count">
         <?php
-        echo esc_html(
-            sprintf(
-                _n('%d series', '%d series', $count, 'movie-meta-by-aris'),
-                $count
-            )
-        );
+        if ($lang === 'bn') {
+            $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $count) : (string) $count;
+            echo esc_html($n . 'টি সিরিজ');
+        } else {
+            echo esc_html(
+                sprintf(
+                    _n('%d series', '%d series', $count, 'movie-meta-by-aris'),
+                    $count
+                )
+            );
+        }
         ?>
       </p>
     </header>
 
     <?php if ($count === 0) : ?>
-      <div class="mmsa-empty-state"><?php echo esc_html__('No series found.', 'movie-meta-by-aris'); ?></div>
+      <div class="mmsa-empty-state"><?php echo esc_html($t('No series found.')); ?></div>
     <?php else : ?>
       <div class="mmsa-grid">
         <?php foreach ($series as $movie) :
@@ -104,12 +151,28 @@ function mmsa_render_series_all_shortcode($atts = []) {
             $href = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($id);
             $initial = $title !== '' ? strtoupper(substr($title, 0, 1)) : 'S';
             $tone = mmsa_poster_tone($title);
-            $display = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
+            $display = $title !== '' ? $title : $t('Untitled');
+
+            $seasons = isset($movie['season_count']) ? (int) $movie['season_count'] : 0;
             $eps = isset($movie['episode_count']) ? (int) $movie['episode_count'] : 0;
-            $meta_bits = array_filter([
-                $year,
-                $eps > 0 ? sprintf(_n('%d episode', '%d episodes', $eps, 'movie-meta-by-aris'), $eps) : '',
-            ]);
+            $episode_bit = '';
+            if ($seasons > 0) {
+                if ($lang === 'bn') {
+                    $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $seasons) : (string) $seasons;
+                    $episode_bit = $n . ' সিজন';
+                } else {
+                    $episode_bit = sprintf(_n('%d season', '%d seasons', $seasons, 'movie-meta-by-aris'), $seasons);
+                }
+            } elseif ($eps > 0) {
+                if ($lang === 'bn') {
+                    $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $eps) : (string) $eps;
+                    $episode_bit = $n . ' পর্ব';
+                } else {
+                    $episode_bit = sprintf(_n('%d episode', '%d episodes', $eps, 'movie-meta-by-aris'), $eps);
+                }
+            }
+
+            $meta_bits = array_filter([$year, $episode_bit]);
             ?>
           <a class="mmsa-card" href="<?php echo esc_url($href); ?>">
             <div class="mmsa-poster mmsa-tone-<?php echo (int) $tone; ?>">
@@ -325,4 +388,39 @@ function mmsa_poster_tone($title) {
         $sum += ord($s[$i]);
     }
     return ($sum % 6) + 1;
+}
+
+/** Local BN helpers if other snippets are not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_bn_digits')) {
+    function mmba_snip_bn_digits($text) {
+        return strtr((string) $text, [
+            '0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪',
+            '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯',
+        ]);
+    }
 }
