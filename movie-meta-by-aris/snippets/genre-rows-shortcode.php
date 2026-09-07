@@ -49,6 +49,40 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
         return mmba_snip_t($text, $lang);
     };
 
+    $bn_genre_labels = [];
+    $bn_descriptions = [];
+    if ($lang === 'bn') {
+        $genre_keys = [
+            'Horror', 'Action', 'Drama', 'Comedy', 'Thriller', 'Romance', 'Crime',
+            'Animation', 'Adventure', 'Sci-Fi', 'War', 'Western', 'Documentary',
+            'Mystery', 'Fantasy', 'Family', 'Teen', 'Other',
+        ];
+        foreach ($genre_keys as $gk) {
+            $bn_genre_labels[$gk] = function_exists('mmba_snip_genre')
+                ? mmba_snip_genre($gk, 'bn')
+                : $gk;
+        }
+        $bn_descriptions = [
+            'Horror' => 'ভয়ংকর গল্প, ভূত আর রাতের থ্রিল।',
+            'Action' => 'লড়াই, তাড়া আর উত্তেজনাপূর্ণ মিশন।',
+            'Drama' => 'চরিত্রনির্ভর গল্প আর আবেগঘন কাহিনি।',
+            'Comedy' => 'হাসি, রমকমেডি আর হালকা বিনোদন।',
+            'Thriller' => 'টানটান উত্তেজনা, টুইস্ট আর রোমাঞ্চ।',
+            'Romance' => 'ভালোবাসার গল্প আর হৃদয়ছোঁয়া সম্পর্ক।',
+            'Crime' => 'চুরি, গ্যাং আর আন্ডারওয়ার্ল্ড ড্রামা।',
+            'Animation' => 'সব বয়সের জন্য অ্যানিমেটেড সিনেমা।',
+            'Adventure' => 'যাত্রা, অভিযান আর আবিষ্কার।',
+            'Sci-Fi' => 'ভবিষ্যৎ, প্রযুক্তি আর কল্পবিজ্ঞান।',
+            'War' => 'যুদ্ধক্ষেত্রের গল্প আর যুদ্ধকালীন ড্রামা।',
+            'Western' => 'সীমান্তের গল্প আর পুরনো পশ্চিমের দ্বন্দ্ব।',
+            'Documentary' => 'বাস্তব জগতের আসল গল্প।',
+            'Mystery' => 'রহস্য, সূত্র আর অমীমাংসিত প্রশ্ন।',
+            'Fantasy' => 'জাদু, পুরাণ আর কল্পনার জগৎ।',
+            'Family' => 'একসাথে দেখার মতো মুভি।',
+            'Teen' => 'কিশোরদের গল্প আর যৌবনের অভিজ্ঞতা।',
+        ];
+    }
+
     $filter_list = $genre_filter !== '' ? $genre_filter : $genres_filter;
     $genre_only = $filter_list !== '';
     if ($genre_only) {
@@ -114,12 +148,18 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   data-genres="<?php echo esc_attr($atts['genres']); ?>"
   data-only="<?php echo $genre_only ? '1' : '0'; ?>"
   data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
+  data-lang="<?php echo esc_attr($lang); ?>"
   data-i18n-new="<?php echo esc_attr($t('NEW')); ?>"
   data-i18n-view-all="<?php echo esc_attr($t('View all')); ?>"
-  data-i18n-movies-suffix="<?php echo esc_attr($lang === 'bn' ? ' মুভি' : ' Movies'); ?>"
   data-i18n-empty="<?php echo esc_attr($t('No movies found.')); ?>"
   data-i18n-empty-genre="<?php echo esc_attr($t('No movies found for this genre.')); ?>"
   data-i18n-error="<?php echo esc_attr($t('Could not load movies.')); ?>"
+  data-i18n-browse-prefix="<?php echo esc_attr($lang === 'bn' ? 'ক্যাটালগ থেকে ' : 'Browse '); ?>"
+  data-i18n-browse-suffix="<?php echo esc_attr($lang === 'bn' ? ' শিরোনাম দেখুন।' : ' titles from the catalog.'); ?>"
+  <?php if ($lang === 'bn' && !empty($bn_genre_labels)) : ?>
+  data-genre-labels="<?php echo esc_attr(wp_json_encode($bn_genre_labels)); ?>"
+  data-descriptions="<?php echo esc_attr(wp_json_encode($bn_descriptions)); ?>"
+  <?php endif; ?>
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
   <?php endif; ?>
@@ -398,10 +438,20 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   var GENRE_ONLY = root.getAttribute('data-only') === '1';
   var I18N_NEW = root.getAttribute('data-i18n-new') || 'NEW';
   var I18N_VIEW_ALL = root.getAttribute('data-i18n-view-all') || 'View all';
-  var I18N_MOVIES_SUFFIX = root.getAttribute('data-i18n-movies-suffix') || ' Movies';
   var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No movies found.';
   var I18N_EMPTY_GENRE = root.getAttribute('data-i18n-empty-genre') || 'No movies found for this genre.';
   var I18N_ERROR = root.getAttribute('data-i18n-error') || 'Could not load movies.';
+  var I18N_BROWSE_PREFIX = root.getAttribute('data-i18n-browse-prefix') || 'Browse ';
+  var I18N_BROWSE_SUFFIX = root.getAttribute('data-i18n-browse-suffix') || ' titles from the catalog.';
+  var LANG = root.getAttribute('data-lang') || '';
+  var GENRE_LABELS = {};
+  var DESC_OVERRIDE = {};
+  try {
+    GENRE_LABELS = JSON.parse(root.getAttribute('data-genre-labels') || '{}') || {};
+  } catch (e) { GENRE_LABELS = {}; }
+  try {
+    DESC_OVERRIDE = JSON.parse(root.getAttribute('data-descriptions') || '{}') || {};
+  } catch (e) { DESC_OVERRIDE = {}; }
   var GENRE_SLUG = {
     'sci-fi': 'Sci-fi',
     'scifi': 'Sci-fi',
@@ -447,11 +497,28 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     Fantasy: 'Magic, myths, and imagined worlds.',
     Family: 'Movies to watch together.'
   };
+  if (LANG === 'bn') {
+    Object.keys(DESC_OVERRIDE).forEach(function (k) {
+      DESCRIPTIONS[k] = DESC_OVERRIDE[k];
+    });
+  }
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function genreLabel(genre) {
+    var g = String(genre || '').trim();
+    if (!g) return '';
+    if (LANG === 'bn') {
+      if (GENRE_LABELS[g]) return GENRE_LABELS[g];
+      var keys = Object.keys(GENRE_LABELS);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === g.toLowerCase()) return GENRE_LABELS[keys[i]];
+      }
+    }
+    return g;
   }
   function splitGenres(genre) {
     return String(genre || '').split(',').map(function (g) { return g.trim(); }).filter(Boolean);
@@ -478,7 +545,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     var bits = [];
     if (movie.year) bits.push(movie.year);
     var g = primaryGenre(movie);
-    if (g && g !== 'Other') bits.push(g);
+    if (g && g !== 'Other') bits.push(genreLabel(g));
     return bits.join(' · ');
   }
   function groupByGenre(movies) {
@@ -571,15 +638,17 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     );
   }
   function rowHtml(genre, movies) {
-    var desc = DESCRIPTIONS[genre] || ('Browse ' + genre.toLowerCase() + ' titles from the catalog.');
+    var desc = DESCRIPTIONS[genre] || DESC_OVERRIDE[genre] || (I18N_BROWSE_PREFIX + genreLabel(genre).toLowerCase() + I18N_BROWSE_SUFFIX);
     var visible = movies.slice(0, PER_ROW);
     var allHref = genreHref(genre);
     var showViewAll = movies.length > 0;
+    // BN: Bengali genre only (e.g. অ্যাকশন). EN: "Action Movies".
+    var rowTitle = LANG === 'bn' ? genreLabel(genre) : (genre + ' Movies');
     return (
       '<section class="mmgr-row" data-genre="' + esc(genre) + '">' +
         '<div class="mmgr-row-head">' +
           '<div class="mmgr-row-titles">' +
-            '<h2 class="mmgr-row-title">' + esc(genre) + esc(I18N_MOVIES_SUFFIX) + '</h2>' +
+            '<h2 class="mmgr-row-title">' + esc(rowTitle) + '</h2>' +
             '<p class="mmgr-row-desc">' + esc(desc) + '</p>' +
           '</div>' +
           '<div class="mmgr-row-controls">' +
@@ -724,5 +793,42 @@ if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
             }
         }
         return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
     }
 }

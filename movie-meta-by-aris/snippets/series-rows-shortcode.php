@@ -40,13 +40,31 @@ function mmsr_render_series_rows_shortcode($atts = []) {
         'watch_url' => '/bn/series-watch/',
         'all_url'   => '/bn/series/',
     ]);
-    $t = static function ($text) use ($lang) {
-        return mmba_snip_t($text, $lang);
+    $bn_ui = [
+        'Loading series…' => 'সিরিজ লোড হচ্ছে…',
+        'View all' => 'সব দেখুন',
+        'NEW' => 'নতুন',
+        'Series' => 'সিরিজ',
+        'TV shows and series from the catalog.' => 'ক্যাটালগের টিভি শো ও সিরিজ।',
+        'No series found.' => 'কোনো সিরিজ পাওয়া যায়নি।',
+        'Could not load series.' => 'সিরিজ লোড করা যায়নি।',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
     };
 
     if ($lang === 'bn' && (!array_key_exists('title', $raw) || trim((string) $raw['title']) === '')) {
         $atts['title'] = $t('Series');
     }
+
+    $desc_text = $t('TV shows and series from the catalog.');
 
     $uid = 'mmsr-' . wp_unique_id();
     $limit = max(1, min(40, absint($atts['limit'])));
@@ -106,9 +124,14 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
   data-i18n-new="<?php echo esc_attr($t('NEW')); ?>"
   data-i18n-view-all="<?php echo esc_attr($t('View all')); ?>"
-  data-i18n-desc="<?php echo esc_attr($t('TV shows and series from the catalog.')); ?>"
+  data-i18n-desc="<?php echo esc_attr($desc_text); ?>"
   data-i18n-empty="<?php echo esc_attr($t('No series found.')); ?>"
   data-i18n-error="<?php echo esc_attr($t('Could not load series.')); ?>"
+  data-lang="<?php echo esc_attr($lang); ?>"
+  data-i18n-season-one="<?php echo esc_attr($lang === 'bn' ? '১ সিজন' : '1 season'); ?>"
+  data-i18n-season-many="<?php echo esc_attr($lang === 'bn' ? '{n} সিজন' : '{n} seasons'); ?>"
+  data-i18n-episode-one="<?php echo esc_attr($lang === 'bn' ? '১ পর্ব' : '1 episode'); ?>"
+  data-i18n-episode-many="<?php echo esc_attr($lang === 'bn' ? '{n} পর্ব' : '{n} episodes'); ?>"
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
   <?php endif; ?>
@@ -373,11 +396,21 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   var I18N_DESC = root.getAttribute('data-i18n-desc') || 'TV shows and series from the catalog.';
   var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No series found.';
   var I18N_ERROR = root.getAttribute('data-i18n-error') || 'Could not load series.';
+  var LANG = root.getAttribute('data-lang') || '';
+  var I18N_SEASON_ONE = root.getAttribute('data-i18n-season-one') || '1 season';
+  var I18N_SEASON_MANY = root.getAttribute('data-i18n-season-many') || '{n} seasons';
+  var I18N_EPISODE_ONE = root.getAttribute('data-i18n-episode-one') || '1 episode';
+  var I18N_EPISODE_MANY = root.getAttribute('data-i18n-episode-many') || '{n} episodes';
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function bnDigits(n) {
+    return String(n).replace(/[0-9]/g, function (d) {
+      return '০১২৩৪৫৬৭৮৯'.charAt(parseInt(d, 10));
+    });
   }
   function isNew(movie) {
     var t = Date.parse(movie.created_at || movie.updated_at || '');
@@ -395,11 +428,16 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   }
   function metaLine(movie) {
     var bits = [];
-    if (movie.year) bits.push(movie.year);
+    if (movie.year) bits.push(LANG === 'bn' ? bnDigits(movie.year) : movie.year);
     var seasons = parseInt(movie.season_count || 0, 10);
     var eps = parseInt(movie.episode_count || 0, 10);
-    if (seasons > 0) bits.push(seasons === 1 ? '1 season' : seasons + ' seasons');
-    else if (eps > 0) bits.push(eps === 1 ? '1 episode' : eps + ' episodes');
+    if (seasons > 0) {
+      if (seasons === 1) bits.push(I18N_SEASON_ONE);
+      else bits.push(I18N_SEASON_MANY.replace('{n}', LANG === 'bn' ? bnDigits(seasons) : String(seasons)));
+    } else if (eps > 0) {
+      if (eps === 1) bits.push(I18N_EPISODE_ONE);
+      else bits.push(I18N_EPISODE_MANY.replace('{n}', LANG === 'bn' ? bnDigits(eps) : String(eps)));
+    }
     return bits.join(' · ');
   }
   function watchHref(movie) {

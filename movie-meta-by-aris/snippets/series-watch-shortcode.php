@@ -1109,6 +1109,7 @@ if (!function_exists('mmba_snip_t')) {
             'Series not found.' => 'সিরিজ পাওয়া যায়নি।',
             'This title has no episodes.' => 'এই শিরোনামে কোনো পর্ব নেই।',
             'Movie Meta plugin is required.' => 'Movie Meta প্লাগইন প্রয়োজন।',
+            'TV shows and series from the catalog.' => 'ক্যাটালগের টিভি শো ও সিরিজ।',
         ];
         $key = (string) $text;
         return isset($map[$key]) ? $map[$key] : $key;
