@@ -3,12 +3,16 @@
  *
  * Shortcode: [movie_watch]
  * Optional:  [movie_watch home_url="/" related="12"]
+ *            [movie_watch lang="bn"]  → BN UI + details from sheet column K
  *
  * Create a WP page at /watch/ and put [movie_watch] in the content.
- * Genre rows link here as: /watch/?id=MOVIE_ID
+ * BN page: /bn/watch/ with [movie_watch lang="bn"]
+ * Genre rows link here as: /watch/?id=MOVIE_ID  (or /bn/watch/ when lang="bn")
  *
  * Requires: Movie Meta by Aris plugin (data source).
  * Pair with snippets/genre-rows-shortcode.php → [movie_genre_rows]
+ *
+ * Note: BN helpers live in this snippet (not the plugin) so the plugin stays untouched.
  */
 
 if (!defined('ABSPATH')) {
@@ -18,16 +22,27 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_watch', 'mmw_render_watch_shortcode');
 
 function mmw_render_watch_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'id'        => '',
             'related'   => '12',
             'home_url'  => '/',
             'watch_url' => '/watch/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'movie_watch'
     );
+
+    $lang = mmba_snip_normalize_lang($atts['lang']);
+    $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+        'home_url'  => '/bn',
+        'watch_url' => '/bn/watch/',
+    ]);
+    $t = static function ($text) use ($lang) {
+        return mmba_snip_t($text, $lang);
+    };
 
     $id = $atts['id'] !== '' ? sanitize_text_field($atts['id']) : '';
     if ($id === '' && isset($_GET['id'])) {
@@ -49,17 +64,17 @@ function mmw_render_watch_shortcode($atts = []) {
     $related_limit = max(0, absint($atts['related']));
 
     if ($id === '') {
-        return '<div class="mmw mmw-empty">' . esc_html__('No movie selected. Open a title from the catalog.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmw mmw-empty">' . esc_html($t('No movie selected. Open a title from the catalog.')) . '</div>';
     }
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmw mmw-error">' . esc_html__('Movie Meta by Aris plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmw mmw-error">' . esc_html($t('Movie Meta by Aris plugin is required.')) . '</div>';
     }
 
     $movie = MMBA_Storage::get_movie($id);
     if (!$movie) {
-        return '<div class="mmw mmw-empty">' . esc_html__('Movie not found.', 'movie-meta-by-aris') .
-            ' <a class="mmw-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to catalog', 'movie-meta-by-aris') . '</a></div>';
+        return '<div class="mmw mmw-empty">' . esc_html($t('Movie not found.')) .
+            ' <a class="mmw-link" href="' . esc_url($home_url) . '">' . esc_html($t('Back to catalog')) . '</a></div>';
     }
 
     $catalog_id = isset($movie['id']) ? (string) $movie['id'] : $id;
@@ -68,7 +83,7 @@ function mmw_render_watch_shortcode($atts = []) {
     }
 
     $title   = isset($movie['title']) ? (string) $movie['title'] : '';
-    $details = isset($movie['details']) ? (string) $movie['details'] : '';
+    $details = mmba_snip_details_for_lang($movie, $lang);
     $cast    = isset($movie['cast']) ? (string) $movie['cast'] : '';
     $year    = isset($movie['year']) ? (string) $movie['year'] : '';
     $genre   = isset($movie['genre']) ? (string) $movie['genre'] : '';
@@ -84,23 +99,24 @@ function mmw_render_watch_shortcode($atts = []) {
 
     $uid = 'mmw-' . wp_unique_id();
     $needs_hls = ($link_type === 'hls' && $play_url !== '');
-    $display_title = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
+    $display_title = $title !== '' ? $title : $t('Untitled');
+    $html_lang = $lang === 'bn' ? 'bn' : '';
 
     ob_start();
     ?>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap">
-<div id="<?php echo esc_attr($uid); ?>" class="mmw" data-link-type="<?php echo esc_attr($link_type); ?>">
+<div id="<?php echo esc_attr($uid); ?>" class="mmw" data-link-type="<?php echo esc_attr($link_type); ?>"<?php echo $html_lang !== '' ? ' lang="' . esc_attr($html_lang) . '"' : ''; ?>>
   <div class="mmw-shell">
-    <nav class="mmw-nav" aria-label="<?php echo esc_attr__('Watch navigation', 'movie-meta-by-aris'); ?>">
+    <nav class="mmw-nav" aria-label="<?php echo esc_attr($t('Watch navigation')); ?>">
       <a class="mmw-back" href="<?php echo esc_url($home_url); ?>">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-        <span><?php echo esc_html__('Back to movies', 'movie-meta-by-aris'); ?></span>
+        <span><?php echo esc_html($t('Back to movies')); ?></span>
       </a>
     </nav>
 
     <header class="mmw-hero">
       <div class="mmw-hero-copy">
-        <p class="mmw-kicker"><?php echo esc_html__('Now playing', 'movie-meta-by-aris'); ?></p>
+        <p class="mmw-kicker"><?php echo esc_html($t('Now playing')); ?></p>
         <h1 class="mmw-title"><?php echo esc_html($display_title); ?></h1>
         <div class="mmw-chips" role="list">
           <span class="mmw-chip mmw-chip-hd" role="listitem">HD</span>
@@ -117,7 +133,7 @@ function mmw_render_watch_shortcode($atts = []) {
     <div class="mmw-player-stage">
       <div class="mmw-player-wrap">
         <?php if ($play_url === '') : ?>
-          <div class="mmw-player-empty"><?php echo esc_html__('No stream available for this title.', 'movie-meta-by-aris'); ?></div>
+          <div class="mmw-player-empty"><?php echo esc_html($t('No stream available for this title.')); ?></div>
     <?php elseif ($link_type === 'embed') : ?>
       <iframe
         class="mmw-player"
@@ -142,10 +158,10 @@ function mmw_render_watch_shortcode($atts = []) {
     </div>
 
     <?php if ($details !== '' || $cast !== '' || $year !== '' || !empty($genres)) : ?>
-    <section class="mmw-info" aria-label="<?php echo esc_attr__('Movie information', 'movie-meta-by-aris'); ?>">
+    <section class="mmw-info" aria-label="<?php echo esc_attr($t('Movie information')); ?>">
       <?php if ($details !== '') : ?>
         <div class="mmw-info-main">
-          <h2 class="mmw-label"><?php echo esc_html__('Movie Details', 'movie-meta-by-aris'); ?></h2>
+          <h2 class="mmw-label"><?php echo esc_html($t('Movie Details')); ?></h2>
           <p class="mmw-synopsis"><?php echo esc_html($details); ?></p>
         </div>
       <?php endif; ?>
@@ -153,7 +169,7 @@ function mmw_render_watch_shortcode($atts = []) {
       <aside class="mmw-info-side">
         <?php if (!empty($cast_list)) : ?>
           <div class="mmw-side-block">
-            <h2 class="mmw-label"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmw-label"><?php echo esc_html($t('Cast')); ?></h2>
             <ul class="mmw-cast">
               <?php foreach ($cast_list as $person) : ?>
                 <li><?php echo esc_html($person); ?></li>
@@ -162,21 +178,21 @@ function mmw_render_watch_shortcode($atts = []) {
           </div>
         <?php elseif ($cast !== '') : ?>
           <div class="mmw-side-block">
-            <h2 class="mmw-label"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmw-label"><?php echo esc_html($t('Cast')); ?></h2>
             <p class="mmw-side-text"><?php echo esc_html($cast); ?></p>
           </div>
         <?php endif; ?>
 
         <?php if ($year !== '') : ?>
           <div class="mmw-side-block">
-            <h2 class="mmw-label"><?php echo esc_html__('Year', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmw-label"><?php echo esc_html($t('Year')); ?></h2>
             <p class="mmw-side-text mmw-side-strong"><?php echo esc_html($year); ?></p>
           </div>
         <?php endif; ?>
 
         <?php if (!empty($genres)) : ?>
           <div class="mmw-side-block">
-            <h2 class="mmw-label"><?php echo esc_html__('Genre', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmw-label"><?php echo esc_html($t('Genre')); ?></h2>
             <div class="mmw-chips mmw-chips-tight">
               <?php foreach ($genres as $g) : ?>
                 <span class="mmw-chip mmw-chip-soft"><?php echo esc_html($g); ?></span>
@@ -189,10 +205,10 @@ function mmw_render_watch_shortcode($atts = []) {
     <?php endif; ?>
 
     <?php if (!empty($related)) : ?>
-    <section class="mmw-related" aria-label="<?php echo esc_attr__('More like this', 'movie-meta-by-aris'); ?>">
+    <section class="mmw-related" aria-label="<?php echo esc_attr($t('More like this')); ?>">
       <div class="mmw-related-head">
-        <h2 class="mmw-related-title"><?php echo esc_html__('More Like This', 'movie-meta-by-aris'); ?></h2>
-        <p class="mmw-related-sub"><?php echo esc_html__('Titles that share a genre with this movie.', 'movie-meta-by-aris'); ?></p>
+        <h2 class="mmw-related-title"><?php echo esc_html($t('More Like This')); ?></h2>
+        <p class="mmw-related-sub"><?php echo esc_html($t('Titles that share a genre with this movie.')); ?></p>
       </div>
       <div class="mmw-related-track" tabindex="0">
         <?php foreach ($related as $item) :
@@ -207,7 +223,7 @@ function mmw_render_watch_shortcode($atts = []) {
             $initial = $rtitle !== '' ? strtoupper(substr($rtitle, 0, 1)) : 'M';
             $tone = mmw_poster_tone($rtitle);
             $meta_bits = array_filter([$ryear, $rprimary]);
-            $rdisplay = $rtitle !== '' ? $rtitle : __('Untitled', 'movie-meta-by-aris');
+            $rdisplay = $rtitle !== '' ? $rtitle : $t('Untitled');
             $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
                 ? MMBA_Storage::poster_image_meta($rdisplay)
                 : ($rdisplay . ' DesiMoviesHub Free Watch');
@@ -231,7 +247,7 @@ function mmw_render_watch_shortcode($atts = []) {
               <?php endif; ?>
             </div>
             <div class="mmw-card-body">
-              <h3 class="mmw-card-title"><?php echo esc_html($rtitle !== '' ? $rtitle : __('Untitled', 'movie-meta-by-aris')); ?></h3>
+              <h3 class="mmw-card-title"><?php echo esc_html($rtitle !== '' ? $rtitle : $t('Untitled')); ?></h3>
               <?php if (!empty($meta_bits)) : ?>
                 <p class="mmw-card-meta"><?php echo esc_html(implode(' · ', $meta_bits)); ?></p>
               <?php endif; ?>
@@ -816,4 +832,307 @@ function mmw_poster_tone($title) {
         $sum += ord($s[$i]);
     }
     return ($sum % 6) + 1;
+}
+
+/**
+ * Shared BN helpers for Code Snippets (plugin-free).
+ * Safe to redefine across snippets via function_exists.
+ */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_t')) {
+    function mmba_snip_t($text, $lang = '') {
+        $lang = mmba_snip_normalize_lang($lang);
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $map = [
+            'Loading movies…' => 'মুভি লোড হচ্ছে…',
+            'Loading series…' => 'সিরিজ লোড হচ্ছে…',
+            'View all' => 'সব দেখুন',
+            'NEW' => 'নতুন',
+            'Series' => 'সিরিজ',
+            'Back to movies' => 'মুভিতে ফিরে যান',
+            'Back to catalog' => 'ক্যাটালগে ফিরে যান',
+            'Now playing' => 'এখন চলছে',
+            'Untitled' => 'শিরোনামহীন',
+            'No stream available for this title.' => 'এই শিরোনামের জন্য কোনো স্ট্রিম নেই।',
+            'Movie Details' => 'মুভির বিবরণ',
+            'Cast' => 'অভিনেতা',
+            'Year' => 'বছর',
+            'Genre' => 'ধরণ',
+            'More Like This' => 'এর মতো আরও',
+            'More like this' => 'এর মতো আরও',
+            'Titles that share a genre with this movie.' => 'একই ধরণের অন্যান্য মুভি।',
+            'Watch navigation' => 'ওয়াচ নেভিগেশন',
+            'Movie information' => 'মুভির তথ্য',
+            'No movie selected. Open a title from the catalog.' => 'কোনো মুভি নির্বাচিত হয়নি। ক্যাটালগ থেকে একটি শিরোনাম খুলুন।',
+            'Movie not found.' => 'মুভি পাওয়া যায়নি।',
+            'Movie Meta by Aris plugin is required.' => 'Movie Meta by Aris প্লাগইন প্রয়োজন।',
+            'Movie Meta plugin is required.' => 'Movie Meta প্লাগইন প্রয়োজন।',
+            'Back to series' => 'সিরিজে ফিরে যান',
+            'Series Details' => 'সিরিজের বিবরণ',
+            'Series information' => 'সিরিজের তথ্য',
+            'Seasons and episodes' => 'সিজন ও পর্ব',
+            'No series selected. Open a title from the series row.' => 'কোনো সিরিজ নির্বাচিত হয়নি। সিরিজ সারি থেকে একটি শিরোনাম খুলুন।',
+            'Series not found.' => 'সিরিজ পাওয়া যায়নি।',
+            'This title has no episodes.' => 'এই শিরোনামে কোনো পর্ব নেই।',
+            'Other series that share a genre with this show.' => 'একই ধরণের অন্যান্য সিরিজ।',
+            'TV shows and series from the catalog.' => 'ক্যাটালগের টিভি শো ও সিরিজ।',
+            'No movies found.' => 'কোনো মুভি পাওয়া যায়নি।',
+            'No movies found for this genre.' => 'এই ধরণের কোনো মুভি পাওয়া যায়নি।',
+            'No series found.' => 'কোনো সিরিজ পাওয়া যায়নি।',
+            'Could not load movies.' => 'মুভি লোড করা যায়নি।',
+            'Could not load series.' => 'সিরিজ লোড করা যায়নি।',
+        ];
+        $key = (string) $text;
+        return isset($map[$key]) ? $map[$key] : $key;
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    /**
+     * @param array<string, mixed>  $raw
+     * @param array<string, mixed>  $atts
+     * @param array<string, string> $bn_urls
+     * @return array<string, mixed>
+     */
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_details_for_lang')) {
+    /**
+     * EN uses plugin details; BN prefers sheet column K (fetched in this snippet).
+     *
+     * @param array<string, mixed> $movie
+     */
+    function mmba_snip_details_for_lang(array $movie, $lang = '') {
+        $lang = mmba_snip_normalize_lang($lang);
+        $en = isset($movie['details']) ? (string) $movie['details'] : '';
+        if ($lang !== 'bn') {
+            return $en;
+        }
+        if (!empty($movie['details_bn'])) {
+            return (string) $movie['details_bn'];
+        }
+        $id = isset($movie['id']) ? (string) $movie['id'] : '';
+        $bn = $id !== '' ? mmba_snip_lookup_details_bn($id) : '';
+        return $bn !== '' ? $bn : $en;
+    }
+}
+
+if (!function_exists('mmba_snip_lookup_details_bn')) {
+    function mmba_snip_lookup_details_bn($movie_id) {
+        $map = mmba_snip_bn_details_map();
+        $id = (string) $movie_id;
+        return isset($map[$id]) ? (string) $map[$id] : '';
+    }
+}
+
+if (!function_exists('mmba_snip_bn_details_map')) {
+    /**
+     * Build id → Bengali details map from sheet column K (index 10).
+     * Uses the plugin service-account credentials / token cache — does not modify the plugin.
+     *
+     * @return array<string, string>
+     */
+    function mmba_snip_bn_details_map() {
+        $cached = get_transient('mmba_snip_bn_details_map');
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $map = mmba_snip_fetch_bn_details_map();
+        if (!is_array($map)) {
+            $map = [];
+        }
+        set_transient('mmba_snip_bn_details_map', $map, 10 * MINUTE_IN_SECONDS);
+        return $map;
+    }
+}
+
+if (!function_exists('mmba_snip_fetch_bn_details_map')) {
+    /**
+     * @return array<string, string>
+     */
+    function mmba_snip_fetch_bn_details_map() {
+        $token = mmba_snip_google_access_token();
+        if (!is_string($token) || $token === '') {
+            return [];
+        }
+
+        $sheet_id = (class_exists('MMBA_Sheets') && method_exists('MMBA_Sheets', 'spreadsheet_id'))
+            ? MMBA_Sheets::spreadsheet_id()
+            : '1g5I-9IPvlWQe72jkDYe4T-UNWWy5XLfEeoDAjHw28B8';
+
+        // A–K so we can match title+link and read Bengali details from column K.
+        $range = 'A1:K5000';
+        $url = sprintf(
+            'https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s',
+            rawurlencode($sheet_id),
+            rawurlencode($range)
+        );
+
+        $response = wp_remote_get($url, [
+            'timeout' => 20,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Accept'        => 'application/json',
+            ],
+        ]);
+        if (is_wp_error($response)) {
+            return [];
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            return [];
+        }
+
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        $values = (is_array($body) && isset($body['values']) && is_array($body['values'])) ? $body['values'] : [];
+        if (empty($values)) {
+            return [];
+        }
+
+        $start = 0;
+        if (!empty($values[0]) && is_array($values[0])) {
+            $first = array_map(static function ($c) {
+                return strtolower(trim((string) $c));
+            }, $values[0]);
+            // Detect header row (type/title present).
+            if (in_array('title', $first, true) || in_array('type', $first, true)) {
+                $start = 1;
+            }
+        }
+
+        $map = [];
+        $total = count($values);
+        for ($r = $start; $r < $total; $r++) {
+            $line = is_array($values[$r]) ? $values[$r] : [];
+            $type = strtolower(trim(isset($line[0]) ? (string) $line[0] : ''));
+            $title = trim(isset($line[1]) ? (string) $line[1] : '');
+            $link_raw = trim(isset($line[4]) ? (string) $line[4] : '');
+            $details_bn = trim(isset($line[10]) ? (string) $line[10] : '');
+            if ($title === '' || $details_bn === '') {
+                continue;
+            }
+
+            $is_series = ($type === 'series' || $type === 'tv' || $type === 'show');
+            if ($is_series) {
+                $seed = strtolower(preg_replace('/\s+/', ' ', $title));
+                $id = 's' . substr(md5($seed), 0, 15);
+            } else {
+                if ($link_raw === '') {
+                    continue;
+                }
+                $link = class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'sanitize_stream_url')
+                    ? MMBA_Storage::sanitize_stream_url($link_raw)
+                    : $link_raw;
+                if ($link === '') {
+                    continue;
+                }
+                $id = 'm' . substr(md5(strtolower(trim($title . '|' . $link))), 0, 15);
+            }
+
+            // Prefer first non-empty BN details for a given id (series episodes share id).
+            if (!isset($map[$id]) || $map[$id] === '') {
+                $map[$id] = $details_bn;
+            }
+        }
+
+        return $map;
+    }
+}
+
+if (!function_exists('mmba_snip_google_access_token')) {
+    /**
+     * Reuse plugin token cache when available; otherwise mint via service-account file.
+     *
+     * @return string
+     */
+    function mmba_snip_google_access_token() {
+        $cached = get_transient('mmba_gs_token');
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        if (!class_exists('MMBA_Sheets') || !method_exists('MMBA_Sheets', 'credentials_path')) {
+            return '';
+        }
+
+        $path = MMBA_Sheets::credentials_path();
+        if (!is_readable($path)) {
+            return '';
+        }
+
+        $data = null;
+        if (substr($path, -4) === '.php') {
+            $data = include $path;
+        } else {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+            $raw = file_get_contents($path);
+            $data = json_decode((string) $raw, true);
+        }
+        if (!is_array($data) || empty($data['client_email']) || empty($data['private_key'])) {
+            return '';
+        }
+
+        $now = time();
+        $b64 = static function ($payload) {
+            return rtrim(strtr(base64_encode((string) $payload), '+/', '-_'), '=');
+        };
+        $header = $b64(wp_json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $claims = $b64(wp_json_encode([
+            'iss'   => $data['client_email'],
+            'scope' => 'https://www.googleapis.com/auth/spreadsheets',
+            'aud'   => 'https://oauth2.googleapis.com/token',
+            'iat'   => $now,
+            'exp'   => $now + 3600,
+        ]));
+        $unsigned = $header . '.' . $claims;
+        $signature = '';
+        $ok = openssl_sign($unsigned, $signature, $data['private_key'], OPENSSL_ALGO_SHA256);
+        if (!$ok || $signature === '') {
+            return '';
+        }
+        $jwt = $unsigned . '.' . $b64($signature);
+
+        $response = wp_remote_post('https://oauth2.googleapis.com/token', [
+            'timeout' => 15,
+            'body'    => [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion'  => $jwt,
+            ],
+        ]);
+        if (is_wp_error($response)) {
+            return '';
+        }
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        $token = is_array($body) && !empty($body['access_token']) ? (string) $body['access_token'] : '';
+        if ($token === '') {
+            return '';
+        }
+        $ttl = isset($body['expires_in']) ? max(60, ((int) $body['expires_in']) - 60) : 3300;
+        set_transient('mmba_gs_token', $token, $ttl);
+        return $token;
+    }
 }

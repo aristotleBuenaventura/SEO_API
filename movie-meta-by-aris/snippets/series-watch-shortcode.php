@@ -3,9 +3,11 @@
  *
  * Shortcode: [series_watch]
  * Optional:  [series_watch home_url="/series/" related="12"]
+ *            [series_watch lang="bn"]  → BN UI + details from sheet column K
  *
  * Create a WP page at /series-watch/ and put [series_watch] in the content.
- * Series rows link here as: /series-watch/?id=SERIES_ID
+ * BN page: /bn/series-watch/ with [series_watch lang="bn"]
+ * Series rows link here as: /series-watch/?id=SERIES_ID  (or /bn/series-watch/ when lang="bn")
  * Opens Season 1 Episode 1 (or the oldest episode), with season/episode pickers below the player.
  *
  * Requires: Movie Meta plugin (data source).
@@ -20,16 +22,38 @@ if (!defined('ABSPATH')) {
 add_shortcode('series_watch', 'mmsw_render_series_watch_shortcode');
 
 function mmsw_render_series_watch_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'id'        => '',
             'related'   => '12',
             'home_url'  => '/series/',
             'watch_url' => '/series-watch/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'series_watch'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'home_url'  => '/bn/series/',
+            'watch_url' => '/bn/series-watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('home_url', $raw) || trim((string) $raw['home_url']) === '') {
+            $atts['home_url'] = '/bn/series/';
+        }
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/series-watch/';
+        }
+    }
+    $t = static function ($text) use ($lang) {
+        return function_exists('mmba_snip_t') ? mmba_snip_t($text, $lang) : $text;
+    };
 
     $id = $atts['id'] !== '' ? sanitize_text_field($atts['id']) : '';
     if ($id === '' && isset($_GET['id'])) {
@@ -51,17 +75,17 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     $related_limit = max(0, absint($atts['related']));
 
     if ($id === '') {
-        return '<div class="mmsw mmsw-empty">' . esc_html__('No series selected. Open a title from the series row.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmsw mmsw-empty">' . esc_html($t('No series selected. Open a title from the series row.')) . '</div>';
     }
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmsw mmsw-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmsw mmsw-error">' . esc_html($t('Movie Meta plugin is required.')) . '</div>';
     }
 
     $movie = MMBA_Storage::get_movie($id);
     if (!$movie || (isset($movie['type']) && $movie['type'] === 'movie' && empty($movie['episodes']))) {
-        return '<div class="mmsw mmsw-empty">' . esc_html__('Series not found.', 'movie-meta-by-aris') .
-            ' <a class="mmsw-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to series', 'movie-meta-by-aris') . '</a></div>';
+        return '<div class="mmsw mmsw-empty">' . esc_html($t('Series not found.')) .
+            ' <a class="mmsw-link" href="' . esc_url($home_url) . '">' . esc_html($t('Back to series')) . '</a></div>';
     }
 
     $season_q = isset($_GET['season']) ? sanitize_text_field(wp_unslash((string) $_GET['season'])) : '';
@@ -69,8 +93,8 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     $picked = mmsw_pick_episode($movie, $season_q, $episode_q);
     $is_series = !empty($picked['episodes']);
     if (!$is_series) {
-        return '<div class="mmsw mmsw-empty">' . esc_html__('This title has no episodes.', 'movie-meta-by-aris') .
-            ' <a class="mmsw-link" href="' . esc_url($home_url) . '">' . esc_html__('Back to series', 'movie-meta-by-aris') . '</a></div>';
+        return '<div class="mmsw mmsw-empty">' . esc_html($t('This title has no episodes.')) .
+            ' <a class="mmsw-link" href="' . esc_url($home_url) . '">' . esc_html($t('Back to series')) . '</a></div>';
     }
     $catalog_id = isset($picked['id']) ? (string) $picked['id'] : $id;
     $current = $picked['current'];
@@ -80,7 +104,13 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     }
 
     $title   = isset($movie['title']) ? (string) $movie['title'] : '';
-    $details = isset($current['details']) && $current['details'] !== '' ? (string) $current['details'] : (isset($movie['details']) ? (string) $movie['details'] : '');
+    $details_en = isset($current['details']) && $current['details'] !== '' ? (string) $current['details'] : (isset($movie['details']) ? (string) $movie['details'] : '');
+    if ($lang === 'bn' && function_exists('mmba_snip_lookup_details_bn')) {
+        $bn = mmba_snip_lookup_details_bn($catalog_id);
+        $details = $bn !== '' ? $bn : $details_en;
+    } else {
+        $details = $details_en;
+    }
     $cast    = isset($current['cast']) && $current['cast'] !== '' ? (string) $current['cast'] : (isset($movie['cast']) ? (string) $movie['cast'] : '');
     $year    = isset($current['year']) && $current['year'] !== '' ? (string) $current['year'] : (isset($movie['year']) ? (string) $movie['year'] : '');
     $genre   = isset($current['genre']) && $current['genre'] !== '' ? (string) $current['genre'] : (isset($movie['genre']) ? (string) $movie['genre'] : '');
@@ -96,7 +126,8 @@ function mmsw_render_series_watch_shortcode($atts = []) {
 
     $uid = 'mmsw-' . wp_unique_id();
     $needs_hls = ($link_type === 'hls' && $play_url !== '');
-    $display_title = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
+    $display_title = $title !== '' ? $title : $t('Untitled');
+    $html_lang = $lang === 'bn' ? 'bn' : '';
     $current_season_n = isset($current['season_n']) ? (int) $current['season_n'] : 0;
     $current_episode_n = isset($current['episode_n']) ? (int) $current['episode_n'] : 0;
     $seasons = [];
@@ -128,23 +159,23 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     ob_start();
     ?>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap">
-<div id="<?php echo esc_attr($uid); ?>" class="mmsw" data-link-type="<?php echo esc_attr($link_type); ?>">
+<div id="<?php echo esc_attr($uid); ?>" class="mmsw" data-link-type="<?php echo esc_attr($link_type); ?>"<?php echo $html_lang !== '' ? ' lang="' . esc_attr($html_lang) . '"' : ''; ?>>
   <div class="mmsw-shell">
-    <nav class="mmsw-nav" aria-label="<?php echo esc_attr__('Watch navigation', 'movie-meta-by-aris'); ?>">
+    <nav class="mmsw-nav" aria-label="<?php echo esc_attr($t('Watch navigation')); ?>">
       <a class="mmsw-back" href="<?php echo esc_url($home_url); ?>">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-        <span><?php echo esc_html__('Back to series', 'movie-meta-by-aris'); ?></span>
+        <span><?php echo esc_html($t('Back to series')); ?></span>
       </a>
     </nav>
 
     <header class="mmsw-hero">
       <div class="mmsw-hero-copy">
-        <p class="mmsw-kicker"><?php echo esc_html__('Now playing', 'movie-meta-by-aris'); ?></p>
+        <p class="mmsw-kicker"><?php echo esc_html($t('Now playing')); ?></p>
         <h1 class="mmsw-title"><?php echo esc_html($display_title); ?></h1>
         <div class="mmsw-chips" role="list">
           <span class="mmsw-chip mmsw-chip-hd" role="listitem">HD</span>
           <?php if ($is_series) : ?>
-            <span class="mmsw-chip" role="listitem"><?php echo esc_html__('Series', 'movie-meta-by-aris'); ?></span>
+            <span class="mmsw-chip" role="listitem"><?php echo esc_html($t('Series')); ?></span>
             <?php if ($current_season_n || $current_episode_n) : ?>
               <span class="mmsw-chip mmsw-chip-soft" role="listitem"><?php echo esc_html(sprintf('S%d E%d', $current_season_n, $current_episode_n)); ?></span>
             <?php endif; ?>
@@ -162,7 +193,7 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     <div class="mmsw-player-stage">
       <div class="mmsw-player-wrap">
         <?php if ($play_url === '') : ?>
-          <div class="mmsw-player-empty"><?php echo esc_html__('No stream available for this title.', 'movie-meta-by-aris'); ?></div>
+          <div class="mmsw-player-empty"><?php echo esc_html($t('No stream available for this title.')); ?></div>
     <?php elseif ($link_type === 'embed') : ?>
       <iframe
         class="mmsw-player"
@@ -187,7 +218,7 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     </div>
 
     <?php if ($is_series && !empty($seasons)) : ?>
-    <section class="mmsw-episodes" aria-label="<?php echo esc_attr__('Seasons and episodes', 'movie-meta-by-aris'); ?>">
+    <section class="mmsw-episodes" aria-label="<?php echo esc_attr($t('Seasons and episodes')); ?>">
       <div class="mmsw-season-tabs" role="tablist">
         <?php foreach ($seasons as $sn => $block) :
             $shref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($catalog_id) . '&season=' . rawurlencode((string) $sn);
@@ -212,10 +243,10 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     <?php endif; ?>
 
     <?php if ($details !== '' || $cast !== '' || $year !== '' || !empty($genres)) : ?>
-    <section class="mmsw-info" aria-label="<?php echo esc_attr__('Series information', 'movie-meta-by-aris'); ?>">
+    <section class="mmsw-info" aria-label="<?php echo esc_attr($t('Series information')); ?>">
       <?php if ($details !== '') : ?>
         <div class="mmsw-info-main">
-          <h2 class="mmsw-label"><?php echo esc_html__('Series Details', 'movie-meta-by-aris'); ?></h2>
+          <h2 class="mmsw-label"><?php echo esc_html($t('Series Details')); ?></h2>
           <p class="mmsw-synopsis"><?php echo esc_html($details); ?></p>
         </div>
       <?php endif; ?>
@@ -223,7 +254,7 @@ function mmsw_render_series_watch_shortcode($atts = []) {
       <aside class="mmsw-info-side">
         <?php if (!empty($cast_list)) : ?>
           <div class="mmsw-side-block">
-            <h2 class="mmsw-label"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmsw-label"><?php echo esc_html($t('Cast')); ?></h2>
             <ul class="mmsw-cast">
               <?php foreach ($cast_list as $person) : ?>
                 <li><?php echo esc_html($person); ?></li>
@@ -232,21 +263,21 @@ function mmsw_render_series_watch_shortcode($atts = []) {
           </div>
         <?php elseif ($cast !== '') : ?>
           <div class="mmsw-side-block">
-            <h2 class="mmsw-label"><?php echo esc_html__('Cast', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmsw-label"><?php echo esc_html($t('Cast')); ?></h2>
             <p class="mmsw-side-text"><?php echo esc_html($cast); ?></p>
           </div>
         <?php endif; ?>
 
         <?php if ($year !== '') : ?>
           <div class="mmsw-side-block">
-            <h2 class="mmsw-label"><?php echo esc_html__('Year', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmsw-label"><?php echo esc_html($t('Year')); ?></h2>
             <p class="mmsw-side-text mmsw-side-strong"><?php echo esc_html($year); ?></p>
           </div>
         <?php endif; ?>
 
         <?php if (!empty($genres)) : ?>
           <div class="mmsw-side-block">
-            <h2 class="mmsw-label"><?php echo esc_html__('Genre', 'movie-meta-by-aris'); ?></h2>
+            <h2 class="mmsw-label"><?php echo esc_html($t('Genre')); ?></h2>
             <div class="mmsw-chips mmsw-chips-tight">
               <?php foreach ($genres as $g) : ?>
                 <span class="mmsw-chip mmsw-chip-soft"><?php echo esc_html($g); ?></span>
@@ -259,10 +290,10 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     <?php endif; ?>
 
     <?php if (!empty($related)) : ?>
-    <section class="mmsw-related" aria-label="<?php echo esc_attr__('More like this', 'movie-meta-by-aris'); ?>">
+    <section class="mmsw-related" aria-label="<?php echo esc_attr($t('More like this')); ?>">
       <div class="mmsw-related-head">
-        <h2 class="mmsw-related-title"><?php echo esc_html__('More Like This', 'movie-meta-by-aris'); ?></h2>
-        <p class="mmsw-related-sub"><?php echo esc_html__('Other series that share a genre with this show.', 'movie-meta-by-aris'); ?></p>
+        <h2 class="mmsw-related-title"><?php echo esc_html($t('More Like This')); ?></h2>
+        <p class="mmsw-related-sub"><?php echo esc_html($t('Other series that share a genre with this show.')); ?></p>
       </div>
       <div class="mmsw-related-track" tabindex="0">
         <?php foreach ($related as $item) :
@@ -278,7 +309,7 @@ function mmsw_render_series_watch_shortcode($atts = []) {
             $initial = $rtitle !== '' ? strtoupper(substr($rtitle, 0, 1)) : 'S';
             $tone = mmsw_poster_tone($rtitle);
             $meta_bits = array_filter([$ryear, $rprimary]);
-            $rdisplay = $rtitle !== '' ? $rtitle : __('Untitled', 'movie-meta-by-aris');
+            $rdisplay = $rtitle !== '' ? $rtitle : $t('Untitled');
             $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
                 ? MMBA_Storage::poster_image_meta($rdisplay)
                 : ($rdisplay . ' DesiMoviesHub Free Watch');
@@ -302,7 +333,7 @@ function mmsw_render_series_watch_shortcode($atts = []) {
               <?php endif; ?>
             </div>
             <div class="mmsw-card-body">
-              <h3 class="mmsw-card-title"><?php echo esc_html($rtitle !== '' ? $rtitle : __('Untitled', 'movie-meta-by-aris')); ?></h3>
+              <h3 class="mmsw-card-title"><?php echo esc_html($rtitle !== '' ? $rtitle : $t('Untitled')); ?></h3>
               <?php if (!empty($meta_bits)) : ?>
                 <p class="mmsw-card-meta"><?php echo esc_html(implode(' · ', $meta_bits)); ?></p>
               <?php endif; ?>
@@ -1018,4 +1049,65 @@ function mmsw_poster_tone($title) {
         $sum += ord($s[$i]);
     }
     return ($sum % 6) + 1;
+}
+
+/** Local BN helpers if movie-watch snippet is not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_t')) {
+    function mmba_snip_t($text, $lang = '') {
+        $lang = mmba_snip_normalize_lang($lang);
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $map = [
+            'Loading series…' => 'সিরিজ লোড হচ্ছে…',
+            'View all' => 'সব দেখুন',
+            'NEW' => 'নতুন',
+            'Series' => 'সিরিজ',
+            'Back to series' => 'সিরিজে ফিরে যান',
+            'Now playing' => 'এখন চলছে',
+            'Untitled' => 'শিরোনামহীন',
+            'No stream available for this title.' => 'এই শিরোনামের জন্য কোনো স্ট্রিম নেই।',
+            'Series Details' => 'সিরিজের বিবরণ',
+            'Cast' => 'অভিনেতা',
+            'Year' => 'বছর',
+            'Genre' => 'ধরণ',
+            'More Like This' => 'এর মতো আরও',
+            'More like this' => 'এর মতো আরও',
+            'Other series that share a genre with this show.' => 'একই ধরণের অন্যান্য সিরিজ।',
+            'Watch navigation' => 'ওয়াচ নেভিগেশন',
+            'Series information' => 'সিরিজের তথ্য',
+            'Seasons and episodes' => 'সিজন ও পর্ব',
+            'No series selected. Open a title from the series row.' => 'কোনো সিরিজ নির্বাচিত হয়নি। সিরিজ সারি থেকে একটি শিরোনাম খুলুন।',
+            'Series not found.' => 'সিরিজ পাওয়া যায়নি।',
+            'This title has no episodes.' => 'এই শিরোনামে কোনো পর্ব নেই।',
+            'Movie Meta plugin is required.' => 'Movie Meta প্লাগইন প্রয়োজন।',
+        ];
+        $key = (string) $text;
+        return isset($map[$key]) ? $map[$key] : $key;
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
 }

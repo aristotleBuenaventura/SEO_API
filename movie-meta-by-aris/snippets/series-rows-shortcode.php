@@ -3,11 +3,14 @@
  *
  * Shortcode: [movie_series_rows]
  * Optional:  [movie_series_rows title="Series" limit="10" watch_url="/series-watch/" all_url="/series/"]
+ *            [movie_series_rows lang="bn"]  → links to /bn/series-watch/
  *
  * Requires: Movie Meta plugin (data source).
- * Poster clicks → /series-watch/?id=SERIES_ID (starts on oldest episode)
+ * Poster clicks → /series-watch/?id=SERIES_ID (or /bn/series-watch/ when lang="bn")
  * "View all" → /series/  (pair with snippets/series-all-shortcode.php)
  * Pair with snippets/series-watch-shortcode.php → [series_watch]
+ *
+ * BN helpers: uses mmba_snip_* from movie-watch snippet when present; otherwise local fallbacks below.
  */
 
 if (!defined('ABSPATH')) {
@@ -17,6 +20,7 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_series_rows', 'mmsr_render_series_rows_shortcode');
 
 function mmsr_render_series_rows_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'title'     => 'Series',
@@ -25,10 +29,24 @@ function mmsr_render_series_rows_shortcode($atts = []) {
             'api'       => '',
             'watch_url' => '/series-watch/',
             'all_url'   => '/series/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'movie_series_rows'
     );
+
+    $lang = mmba_snip_normalize_lang($atts['lang']);
+    $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+        'watch_url' => '/bn/series-watch/',
+        'all_url'   => '/bn/series/',
+    ]);
+    $t = static function ($text) use ($lang) {
+        return mmba_snip_t($text, $lang);
+    };
+
+    if ($lang === 'bn' && (!array_key_exists('title', $raw) || trim((string) $raw['title']) === '')) {
+        $atts['title'] = $t('Series');
+    }
 
     $uid = 'mmsr-' . wp_unique_id();
     $limit = max(1, min(40, absint($atts['limit'])));
@@ -86,12 +104,17 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   data-limit="<?php echo esc_attr((string) $limit); ?>"
   data-title="<?php echo esc_attr($atts['title']); ?>"
   data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
+  data-i18n-new="<?php echo esc_attr($t('NEW')); ?>"
+  data-i18n-view-all="<?php echo esc_attr($t('View all')); ?>"
+  data-i18n-desc="<?php echo esc_attr($t('TV shows and series from the catalog.')); ?>"
+  data-i18n-empty="<?php echo esc_attr($t('No series found.')); ?>"
+  data-i18n-error="<?php echo esc_attr($t('Could not load series.')); ?>"
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
   <?php endif; ?>
   aria-live="polite"
 >
-  <div class="mmsr-loading"><?php echo esc_html__('Loading series…', 'movie-meta-by-aris'); ?></div>
+  <div class="mmsr-loading"><?php echo esc_html($t('Loading series…')); ?></div>
 </div>
 
 <style>
@@ -345,6 +368,11 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   var LIMIT = parseInt(root.getAttribute('data-limit') || '10', 10) || 10;
   var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
   var TITLE = root.getAttribute('data-title') || 'Series';
+  var I18N_NEW = root.getAttribute('data-i18n-new') || 'NEW';
+  var I18N_VIEW_ALL = root.getAttribute('data-i18n-view-all') || 'View all';
+  var I18N_DESC = root.getAttribute('data-i18n-desc') || 'TV shows and series from the catalog.';
+  var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No series found.';
+  var I18N_ERROR = root.getAttribute('data-i18n-error') || 'Could not load series.';
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -394,7 +422,7 @@ function mmsr_render_series_rows_shortcode($atts = []) {
           posterInner +
           '<span class="mmsr-badge mmsr-badge-hd">HD</span>' +
           (movie.year ? '<span class="mmsr-badge mmsr-badge-meta">' + esc(movie.year) + '</span>' : '') +
-          (isNew(movie) ? '<span class="mmsr-badge mmsr-badge-new">NEW</span>' : '') +
+          (isNew(movie) ? '<span class="mmsr-badge mmsr-badge-new">' + esc(I18N_NEW) + '</span>' : '') +
         '</div>' +
         '<div class="mmsr-card-body">' +
           '<h3 class="mmsr-card-title">' + esc(title) + '</h3>' +
@@ -425,7 +453,7 @@ function mmsr_render_series_rows_shortcode($atts = []) {
   function render(movies) {
     var series = (movies || []).filter(function (m) { return (m.type || '') === 'series'; });
     if (!series.length) {
-      root.innerHTML = '<div class="mmsr-empty">No series found.</div>';
+      root.innerHTML = '<div class="mmsr-empty">' + esc(I18N_EMPTY) + '</div>';
       return;
     }
     var visible = series.slice(0, LIMIT);
@@ -434,10 +462,10 @@ function mmsr_render_series_rows_shortcode($atts = []) {
         '<div class="mmsr-row-head">' +
           '<div class="mmsr-row-titles">' +
             '<h2 class="mmsr-row-title">' + esc(TITLE) + '</h2>' +
-            '<p class="mmsr-row-desc">TV shows and series from the catalog.</p>' +
+            '<p class="mmsr-row-desc">' + esc(I18N_DESC) + '</p>' +
           '</div>' +
           '<div class="mmsr-row-controls">' +
-            '<a class="mmsr-viewall" href="' + esc(ALL_URL) + '">View all</a>' +
+            '<a class="mmsr-viewall" href="' + esc(ALL_URL) + '">' + esc(I18N_VIEW_ALL) + '</a>' +
             '<button type="button" class="mmsr-nav mmsr-prev" aria-label="Scroll left">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
             '</button>' +
@@ -471,10 +499,77 @@ function mmsr_render_series_rows_shortcode($atts = []) {
       render(Array.isArray(data.movies) ? data.movies : []);
     })
     .catch(function (err) {
-      root.innerHTML = '<div class="mmsr-error">Could not load series. (' + esc(err.message) + ')</div>';
+      root.innerHTML = '<div class="mmsr-error">' + esc(I18N_ERROR) + ' (' + esc(err.message) + ')</div>';
     });
 })();
 </script>
     <?php
     return ob_get_clean();
+}
+
+/** Local BN helpers if movie-watch snippet is not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_t')) {
+    function mmba_snip_t($text, $lang = '') {
+        $lang = mmba_snip_normalize_lang($lang);
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $map = [
+            'Loading movies…' => 'মুভি লোড হচ্ছে…',
+            'Loading series…' => 'সিরিজ লোড হচ্ছে…',
+            'View all' => 'সব দেখুন',
+            'NEW' => 'নতুন',
+            'Series' => 'সিরিজ',
+            'Back to movies' => 'মুভিতে ফিরে যান',
+            'Back to catalog' => 'ক্যাটালগে ফিরে যান',
+            'Now playing' => 'এখন চলছে',
+            'Untitled' => 'শিরোনামহীন',
+            'No stream available for this title.' => 'এই শিরোনামের জন্য কোনো স্ট্রিম নেই।',
+            'Movie Details' => 'মুভির বিবরণ',
+            'Cast' => 'অভিনেতা',
+            'Year' => 'বছর',
+            'Genre' => 'ধরণ',
+            'More Like This' => 'এর মতো আরও',
+            'More like this' => 'এর মতো আরও',
+            'Titles that share a genre with this movie.' => 'একই ধরণের অন্যান্য মুভি।',
+            'Watch navigation' => 'ওয়াচ নেভিগেশন',
+            'Movie information' => 'মুভির তথ্য',
+            'No movie selected. Open a title from the catalog.' => 'কোনো মুভি নির্বাচিত হয়নি। ক্যাটালগ থেকে একটি শিরোনাম খুলুন।',
+            'Movie not found.' => 'মুভি পাওয়া যায়নি।',
+            'Movie Meta by Aris plugin is required.' => 'Movie Meta by Aris প্লাগইন প্রয়োজন।',
+            'TV shows and series from the catalog.' => 'ক্যাটালগের টিভি শো ও সিরিজ।',
+            'No movies found.' => 'কোনো মুভি পাওয়া যায়নি।',
+            'No movies found for this genre.' => 'এই ধরণের কোনো মুভি পাওয়া যায়নি।',
+            'No series found.' => 'কোনো সিরিজ পাওয়া যায়নি।',
+            'Could not load movies.' => 'মুভি লোড করা যায়নি।',
+            'Could not load series.' => 'সিরিজ লোড করা যায়নি।',
+        ];
+        $key = (string) $text;
+        return isset($map[$key]) ? $map[$key] : $key;
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
 }

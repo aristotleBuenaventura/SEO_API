@@ -5,10 +5,13 @@
  * Optional:  [movie_genre_rows genre="Action"]
  *            [movie_genre_rows genres="Action,Horror"]
  *            [movie_genre_rows watch_url="/watch/" genre_url="/Genre/" per_row="10"]
+ *            [movie_genre_rows lang="bn"]  → links to /bn/watch/
  *
  * Requires: Movie Meta plugin (data source).
- * Poster clicks → /watch/?id=MOVIE_ID
+ * Poster clicks → /watch/?id=MOVIE_ID  (or /bn/watch/ when lang="bn")
  * "View all" → /Genre/Horror  (pair with movie-genre-page + genre-pretty-urls-seo)
+ *
+ * BN helpers: uses mmba_snip_* from movie-watch snippet when present; otherwise local fallbacks below.
  */
 
 if (!defined('ABSPATH')) {
@@ -31,10 +34,20 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
             'watch_url' => '/watch/',
             'genre_url' => '/Genre/',
             'per_row'   => '10',
+            'lang'      => '',
         ],
         $raw,
         'movie_genre_rows'
     );
+
+    $lang = mmba_snip_normalize_lang($atts['lang']);
+    $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+        'watch_url' => '/bn/watch/',
+        'genre_url' => '/bn/Genre/',
+    ]);
+    $t = static function ($text) use ($lang) {
+        return mmba_snip_t($text, $lang);
+    };
 
     $filter_list = $genre_filter !== '' ? $genre_filter : $genres_filter;
     $genre_only = $filter_list !== '';
@@ -53,9 +66,9 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
     }
     $watch_url = esc_url($watch_url);
 
-    // Prefer absolute pretty base from SEO snippet helpers when present.
+    // Prefer absolute pretty base from SEO snippet helpers when present (EN only).
     $genre_url = $atts['genre_url'];
-    if (function_exists('mmba_genre_pretty_url')) {
+    if ($lang !== 'bn' && function_exists('mmba_genre_pretty_url')) {
         // Base path only; JS appends slug. Strip a sample genre path → /Genre/
         $sample = mmba_genre_pretty_url('Action');
         $genre_url = preg_replace('#/Action/?$#i', '/', $sample);
@@ -101,12 +114,18 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   data-genres="<?php echo esc_attr($atts['genres']); ?>"
   data-only="<?php echo $genre_only ? '1' : '0'; ?>"
   data-new-days="<?php echo esc_attr($atts['new_days']); ?>"
+  data-i18n-new="<?php echo esc_attr($t('NEW')); ?>"
+  data-i18n-view-all="<?php echo esc_attr($t('View all')); ?>"
+  data-i18n-movies-suffix="<?php echo esc_attr($lang === 'bn' ? ' মুভি' : ' Movies'); ?>"
+  data-i18n-empty="<?php echo esc_attr($t('No movies found.')); ?>"
+  data-i18n-empty-genre="<?php echo esc_attr($t('No movies found for this genre.')); ?>"
+  data-i18n-error="<?php echo esc_attr($t('Could not load movies.')); ?>"
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
   <?php endif; ?>
   aria-live="polite"
 >
-  <div class="mmgr-loading"><?php echo esc_html__('Loading movies…', 'movie-meta-by-aris'); ?></div>
+  <div class="mmgr-loading"><?php echo esc_html($t('Loading movies…')); ?></div>
 </div>
 
 <style>
@@ -377,6 +396,12 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   var PER_ROW = parseInt(root.getAttribute('data-per-row') || '10', 10) || 10;
   var NEW_DAYS = parseInt(root.getAttribute('data-new-days') || '45', 10) || 45;
   var GENRE_ONLY = root.getAttribute('data-only') === '1';
+  var I18N_NEW = root.getAttribute('data-i18n-new') || 'NEW';
+  var I18N_VIEW_ALL = root.getAttribute('data-i18n-view-all') || 'View all';
+  var I18N_MOVIES_SUFFIX = root.getAttribute('data-i18n-movies-suffix') || ' Movies';
+  var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No movies found.';
+  var I18N_EMPTY_GENRE = root.getAttribute('data-i18n-empty-genre') || 'No movies found for this genre.';
+  var I18N_ERROR = root.getAttribute('data-i18n-error') || 'Could not load movies.';
   var GENRE_SLUG = {
     'sci-fi': 'Sci-fi',
     'scifi': 'Sci-fi',
@@ -507,13 +532,14 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   function genreHref(genre) {
     var slug = genreSlug(genre);
     if (!slug) return GENRE_URL || '/Genre/';
-    // Sheet special-case: Teen lives at /Teen (not /Genre/Teen).
+    // Sheet special-case: Teen lives at /Teen (not /Genre/Teen). BN → /bn/Teen/
     if (slug.toLowerCase() === 'teen') {
       try {
         var u = new URL(GENRE_URL || (location.origin + '/Genre/'), location.origin);
-        return u.origin + '/Teen/';
+        var teenPath = /\/bn(\/|$)/i.test(u.pathname) ? '/bn/Teen/' : '/Teen/';
+        return u.origin + teenPath;
       } catch (e) {
-        return '/Teen/';
+        return /\/bn(\/|$)/i.test(String(GENRE_URL || '')) ? '/bn/Teen/' : '/Teen/';
       }
     }
     var base = GENRE_URL || '/Genre/';
@@ -535,7 +561,7 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
           posterInner +
           '<span class="mmgr-badge mmgr-badge-hd">HD</span>' +
           (movie.year ? '<span class="mmgr-badge mmgr-badge-meta">' + esc(movie.year) + '</span>' : '') +
-          (isNew(movie) ? '<span class="mmgr-badge mmgr-badge-new">NEW</span>' : '') +
+          (isNew(movie) ? '<span class="mmgr-badge mmgr-badge-new">' + esc(I18N_NEW) + '</span>' : '') +
         '</div>' +
         '<div class="mmgr-card-body">' +
           '<h3 class="mmgr-card-title">' + esc(title) + '</h3>' +
@@ -553,12 +579,12 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
       '<section class="mmgr-row" data-genre="' + esc(genre) + '">' +
         '<div class="mmgr-row-head">' +
           '<div class="mmgr-row-titles">' +
-            '<h2 class="mmgr-row-title">' + esc(genre) + ' Movies</h2>' +
+            '<h2 class="mmgr-row-title">' + esc(genre) + esc(I18N_MOVIES_SUFFIX) + '</h2>' +
             '<p class="mmgr-row-desc">' + esc(desc) + '</p>' +
           '</div>' +
           '<div class="mmgr-row-controls">' +
             (showViewAll
-              ? '<a class="mmgr-viewall" href="' + esc(allHref) + '">View all</a>'
+              ? '<a class="mmgr-viewall" href="' + esc(allHref) + '">' + esc(I18N_VIEW_ALL) + '</a>'
               : '') +
             '<button type="button" class="mmgr-nav mmgr-prev" aria-label="Scroll left">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
@@ -595,13 +621,13 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
   }
   function render(movies) {
     if (!movies.length) {
-      root.innerHTML = '<div class="mmgr-empty">No movies found.</div>';
+      root.innerHTML = '<div class="mmgr-empty">' + esc(I18N_EMPTY) + '</div>';
       return;
     }
     var grouped = groupByGenre(movies);
     var keys = orderedGenreKeys(grouped);
     if (!keys.length) {
-      root.innerHTML = '<div class="mmgr-empty">No movies found for this genre.</div>';
+      root.innerHTML = '<div class="mmgr-empty">' + esc(I18N_EMPTY_GENRE) + '</div>';
       return;
     }
     root.innerHTML = keys.map(function (g) { return rowHtml(g, grouped[g]); }).join('');
@@ -626,10 +652,77 @@ function mmgr_render_genre_rows_shortcode($atts = []) {
       render(Array.isArray(data.movies) ? data.movies : []);
     })
     .catch(function (err) {
-      root.innerHTML = '<div class="mmgr-error">Could not load movies. (' + esc(err.message) + ')</div>';
+      root.innerHTML = '<div class="mmgr-error">' + esc(I18N_ERROR) + ' (' + esc(err.message) + ')</div>';
     });
 })();
 </script>
     <?php
     return ob_get_clean();
+}
+
+/** Local BN helpers if movie-watch snippet is not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_t')) {
+    function mmba_snip_t($text, $lang = '') {
+        $lang = mmba_snip_normalize_lang($lang);
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $map = [
+            'Loading movies…' => 'মুভি লোড হচ্ছে…',
+            'Loading series…' => 'সিরিজ লোড হচ্ছে…',
+            'View all' => 'সব দেখুন',
+            'NEW' => 'নতুন',
+            'Series' => 'সিরিজ',
+            'Back to movies' => 'মুভিতে ফিরে যান',
+            'Back to catalog' => 'ক্যাটালগে ফিরে যান',
+            'Now playing' => 'এখন চলছে',
+            'Untitled' => 'শিরোনামহীন',
+            'No stream available for this title.' => 'এই শিরোনামের জন্য কোনো স্ট্রিম নেই।',
+            'Movie Details' => 'মুভির বিবরণ',
+            'Cast' => 'অভিনেতা',
+            'Year' => 'বছর',
+            'Genre' => 'ধরণ',
+            'More Like This' => 'এর মতো আরও',
+            'More like this' => 'এর মতো আরও',
+            'Titles that share a genre with this movie.' => 'একই ধরণের অন্যান্য মুভি।',
+            'Watch navigation' => 'ওয়াচ নেভিগেশন',
+            'Movie information' => 'মুভির তথ্য',
+            'No movie selected. Open a title from the catalog.' => 'কোনো মুভি নির্বাচিত হয়নি। ক্যাটালগ থেকে একটি শিরোনাম খুলুন।',
+            'Movie not found.' => 'মুভি পাওয়া যায়নি।',
+            'Movie Meta by Aris plugin is required.' => 'Movie Meta by Aris প্লাগইন প্রয়োজন।',
+            'TV shows and series from the catalog.' => 'ক্যাটালগের টিভি শো ও সিরিজ।',
+            'No movies found.' => 'কোনো মুভি পাওয়া যায়নি।',
+            'No movies found for this genre.' => 'এই ধরণের কোনো মুভি পাওয়া যায়নি।',
+            'No series found.' => 'কোনো সিরিজ পাওয়া যায়নি।',
+            'Could not load movies.' => 'মুভি লোড করা যায়নি।',
+            'Could not load series.' => 'সিরিজ লোড করা যায়নি।',
+        ];
+        $key = (string) $text;
+        return isset($map[$key]) ? $map[$key] : $key;
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
 }
