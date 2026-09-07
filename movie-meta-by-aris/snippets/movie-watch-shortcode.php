@@ -40,8 +40,34 @@ function mmw_render_watch_shortcode($atts = []) {
         'home_url'  => '/bn',
         'watch_url' => '/bn/watch/',
     ]);
-    $t = static function ($text) use ($lang) {
-        return mmba_snip_t($text, $lang);
+    $bn_ui = [
+        'Back to movies' => 'মুভিতে ফিরে যান',
+        'Back to catalog' => 'ক্যাটালগে ফিরে যান',
+        'Now playing' => 'এখন চলছে',
+        'Untitled' => 'শিরোনামহীন',
+        'No stream available for this title.' => 'এই শিরোনামের জন্য কোনো স্ট্রিম নেই।',
+        'Movie Details' => 'মুভির বিবরণ',
+        'Cast' => 'অভিনেতা',
+        'Year' => 'বছর',
+        'Genre' => 'ধরণ',
+        'More Like This' => 'এর মতো আরও',
+        'More like this' => 'এর মতো আরও',
+        'Titles that share a genre with this movie.' => 'একই ধরণের অন্যান্য মুভি।',
+        'Watch navigation' => 'ওয়াচ নেভিগেশন',
+        'Movie information' => 'মুভির তথ্য',
+        'No movie selected. Open a title from the catalog.' => 'কোনো মুভি নির্বাচিত হয়নি। ক্যাটালগ থেকে একটি শিরোনাম খুলুন।',
+        'Movie not found.' => 'মুভি পাওয়া যায়নি।',
+        'Movie Meta by Aris plugin is required.' => 'Movie Meta by Aris প্লাগইন প্রয়োজন।',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
     };
 
     $id = $atts['id'] !== '' ? sanitize_text_field($atts['id']) : '';
@@ -94,6 +120,9 @@ function mmw_render_watch_shortcode($atts = []) {
     $poster    = MMBA_Storage::movie_poster_url($movie);
 
     $genres = mmw_split_list($genre);
+    $genres_display = array_map(static function ($g) use ($lang) {
+        return function_exists('mmba_snip_genre') ? mmba_snip_genre($g, $lang) : $g;
+    }, $genres);
     $cast_list = mmw_split_list($cast);
     $related = mmw_related_movies($movie, $related_limit);
 
@@ -123,7 +152,7 @@ function mmw_render_watch_shortcode($atts = []) {
           <?php if ($year !== '') : ?>
             <span class="mmw-chip" role="listitem"><?php echo esc_html($year); ?></span>
           <?php endif; ?>
-          <?php foreach ($genres as $g) : ?>
+          <?php foreach ($genres_display as $g) : ?>
             <span class="mmw-chip mmw-chip-soft" role="listitem"><?php echo esc_html($g); ?></span>
           <?php endforeach; ?>
         </div>
@@ -194,7 +223,7 @@ function mmw_render_watch_shortcode($atts = []) {
           <div class="mmw-side-block">
             <h2 class="mmw-label"><?php echo esc_html($t('Genre')); ?></h2>
             <div class="mmw-chips mmw-chips-tight">
-              <?php foreach ($genres as $g) : ?>
+              <?php foreach ($genres_display as $g) : ?>
                 <span class="mmw-chip mmw-chip-soft"><?php echo esc_html($g); ?></span>
               <?php endforeach; ?>
             </div>
@@ -218,6 +247,9 @@ function mmw_render_watch_shortcode($atts = []) {
             $rgenre = isset($item['genre']) ? (string) $item['genre'] : '';
             $rgenres = mmw_split_list($rgenre);
             $rprimary = !empty($rgenres) ? $rgenres[0] : '';
+            if ($rprimary !== '' && function_exists('mmba_snip_genre')) {
+                $rprimary = mmba_snip_genre($rprimary, $lang);
+            }
             $rposter = MMBA_Storage::movie_poster_url($item);
             $rhref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($rid);
             $initial = $rtitle !== '' ? strtoupper(substr($rtitle, 0, 1)) : 'M';
@@ -916,6 +948,46 @@ if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
             }
         }
         return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    /**
+     * Translate a genre label for BN pages. Unknown genres stay as-is.
+     */
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
     }
 }
 

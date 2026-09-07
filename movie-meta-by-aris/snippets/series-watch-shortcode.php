@@ -121,6 +121,9 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     $poster    = MMBA_Storage::movie_poster_url($current);
 
     $genres = mmsw_split_list($genre);
+    $genres_display = array_map(static function ($g) use ($lang) {
+        return function_exists('mmba_snip_genre') ? mmba_snip_genre($g, $lang) : $g;
+    }, $genres);
     $cast_list = mmsw_split_list($cast);
     $related = mmsw_related_series($movie, $related_limit);
 
@@ -134,7 +137,10 @@ function mmsw_render_series_watch_shortcode($atts = []) {
     if ($is_series) {
         foreach ($picked['episodes'] as $ep) {
             $sn = isset($ep['season_n']) ? (int) $ep['season_n'] : 0;
-            $slabel = isset($ep['season']) && $ep['season'] !== '' ? (string) $ep['season'] : ('Season ' . $sn);
+            $slabel_raw = isset($ep['season']) && $ep['season'] !== '' ? (string) $ep['season'] : ('Season ' . $sn);
+            $slabel = function_exists('mmba_snip_season_label')
+                ? mmba_snip_season_label($slabel_raw, $sn, $lang)
+                : $slabel_raw;
             if (!isset($seasons[$sn])) {
                 $seasons[$sn] = ['label' => $slabel, 'episodes' => []];
             }
@@ -177,13 +183,19 @@ function mmsw_render_series_watch_shortcode($atts = []) {
           <?php if ($is_series) : ?>
             <span class="mmsw-chip" role="listitem"><?php echo esc_html($t('Series')); ?></span>
             <?php if ($current_season_n || $current_episode_n) : ?>
-              <span class="mmsw-chip mmsw-chip-soft" role="listitem"><?php echo esc_html(sprintf('S%d E%d', $current_season_n, $current_episode_n)); ?></span>
+              <span class="mmsw-chip mmsw-chip-soft" role="listitem"><?php
+                echo esc_html(
+                    function_exists('mmba_snip_season_episode_chip')
+                        ? mmba_snip_season_episode_chip($current_season_n, $current_episode_n, $lang)
+                        : sprintf('S%d E%d', $current_season_n, $current_episode_n)
+                );
+              ?></span>
             <?php endif; ?>
           <?php endif; ?>
           <?php if ($year !== '') : ?>
             <span class="mmsw-chip" role="listitem"><?php echo esc_html($year); ?></span>
           <?php endif; ?>
-          <?php foreach ($genres as $g) : ?>
+          <?php foreach ($genres_display as $g) : ?>
             <span class="mmsw-chip mmsw-chip-soft" role="listitem"><?php echo esc_html($g); ?></span>
           <?php endforeach; ?>
         </div>
@@ -233,7 +245,10 @@ function mmsw_render_series_watch_shortcode($atts = []) {
             $en = isset($ep['episode_n']) ? (int) $ep['episode_n'] : 0;
             $ehref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($catalog_id) . '&season=' . rawurlencode((string) $current_season_n) . '&episode=' . rawurlencode((string) $en);
             $eactive = ($en === $current_episode_n);
-            $elabel = isset($ep['episode']) && $ep['episode'] !== '' ? (string) $ep['episode'] : ('Episode ' . $en);
+            $elabel_raw = isset($ep['episode']) && $ep['episode'] !== '' ? (string) $ep['episode'] : ('Episode ' . $en);
+            $elabel = function_exists('mmba_snip_episode_label')
+                ? mmba_snip_episode_label($elabel_raw, $en, $lang)
+                : $elabel_raw;
             ?>
           <a class="mmsw-ep<?php echo $eactive ? ' is-active' : ''; ?>" href="<?php echo esc_url($ehref); ?>"><?php echo esc_html($elabel); ?></a>
         <?php endforeach; ?>
@@ -279,7 +294,7 @@ function mmsw_render_series_watch_shortcode($atts = []) {
           <div class="mmsw-side-block">
             <h2 class="mmsw-label"><?php echo esc_html($t('Genre')); ?></h2>
             <div class="mmsw-chips mmsw-chips-tight">
-              <?php foreach ($genres as $g) : ?>
+              <?php foreach ($genres_display as $g) : ?>
                 <span class="mmsw-chip mmsw-chip-soft"><?php echo esc_html($g); ?></span>
               <?php endforeach; ?>
             </div>
@@ -303,6 +318,9 @@ function mmsw_render_series_watch_shortcode($atts = []) {
             $rgenre = isset($item['genre']) ? (string) $item['genre'] : '';
             $rgenres = mmsw_split_list($rgenre);
             $rprimary = !empty($rgenres) ? $rgenres[0] : '';
+            if ($rprimary !== '' && function_exists('mmba_snip_genre')) {
+                $rprimary = mmba_snip_genre($rprimary, $lang);
+            }
             $rlink = isset($item['movie_link']) ? (string) $item['movie_link'] : '';
             $rposter = MMBA_Storage::movie_poster_url($item);
             $rhref = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($rid);
@@ -1109,5 +1127,96 @@ if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
             }
         }
         return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
+    }
+}
+
+if (!function_exists('mmba_snip_bn_digits')) {
+    /** Convert Western digits in a string to Bengali digits. */
+    function mmba_snip_bn_digits($text) {
+        return strtr((string) $text, [
+            '0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪',
+            '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯',
+        ]);
+    }
+}
+
+if (!function_exists('mmba_snip_season_label')) {
+    function mmba_snip_season_label($label, $n = 0, $lang = '') {
+        $label = trim((string) $label);
+        $n = (int) $n;
+        if (mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $label !== '' ? $label : ('Season ' . $n);
+        }
+        if ($label === '' || preg_match('/^season\s*\d+$/i', $label) || preg_match('/^s\s*\d+$/i', $label)) {
+            $num = $n > 0 ? $n : (preg_match('/(\d+)/', $label, $m) ? (int) $m[1] : 0);
+            return 'সিজন ' . mmba_snip_bn_digits((string) $num);
+        }
+        // Keep custom sheet labels but localize "Season" word + digits.
+        $out = preg_replace('/\bseason\b/i', 'সিজন', $label);
+        return mmba_snip_bn_digits($out !== null ? $out : $label);
+    }
+}
+
+if (!function_exists('mmba_snip_episode_label')) {
+    function mmba_snip_episode_label($label, $n = 0, $lang = '') {
+        $label = trim((string) $label);
+        $n = (int) $n;
+        if (mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $label !== '' ? $label : ('Episode ' . $n);
+        }
+        if ($label === '' || preg_match('/^episode\s*\d+$/i', $label) || preg_match('/^e\s*\d+$/i', $label)) {
+            $num = $n > 0 ? $n : (preg_match('/(\d+)/', $label, $m) ? (int) $m[1] : 0);
+            return 'পর্ব ' . mmba_snip_bn_digits((string) $num);
+        }
+        $out = preg_replace('/\bepisode\b/i', 'পর্ব', $label);
+        return mmba_snip_bn_digits($out !== null ? $out : $label);
+    }
+}
+
+if (!function_exists('mmba_snip_season_episode_chip')) {
+    function mmba_snip_season_episode_chip($season_n, $episode_n, $lang = '') {
+        $season_n = (int) $season_n;
+        $episode_n = (int) $episode_n;
+        if (mmba_snip_normalize_lang($lang) !== 'bn') {
+            return sprintf('S%d E%d', $season_n, $episode_n);
+        }
+        return 'সি' . mmba_snip_bn_digits((string) $season_n) . ' প' . mmba_snip_bn_digits((string) $episode_n);
     }
 }
