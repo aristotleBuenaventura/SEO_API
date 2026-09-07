@@ -5,6 +5,7 @@
  * Shortcode: [movie_search_bar]
  * Optional:
  *   [movie_search_bar search_url="/search/" q_param="q" placeholder="Search movies and series"]
+ *   [movie_search_bar lang="bn"]  → search → /bn/search/, suggestions → /bn/watch/ or /bn/series-watch/
  *
  * Notes:
  * - This shortcode outputs a GET form that navigates to the results URL.
@@ -19,6 +20,7 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_search_bar', 'mmsrch_render_search_bar_shortcode');
 
 function mmsrch_render_search_bar_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'search_url' => '/search/',
@@ -30,10 +32,54 @@ function mmsrch_render_search_bar_shortcode($atts = []) {
             'suggest_limit' => '0', // 0 = preload all titles; otherwise cap the suggestion source list.
             'suggest_min_chars' => '2', // Minimum typed chars before showing suggestions.
             'suggest_count' => '8', // Max suggestions shown at once.
+            'lang' => '',
         ],
-        $atts,
+        $raw,
         'movie_search_bar'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'search_url' => '/bn/search/',
+            'watch_url' => '/bn/watch/',
+            'series_watch_url' => '/bn/series-watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('search_url', $raw) || trim((string) $raw['search_url']) === '') {
+            $atts['search_url'] = '/bn/search/';
+        }
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/watch/';
+        }
+        if (!array_key_exists('series_watch_url', $raw) || trim((string) $raw['series_watch_url']) === '') {
+            $atts['series_watch_url'] = '/bn/series-watch/';
+        }
+    }
+
+    $bn_ui = [
+        'Search movies and series' => 'মুভি ও সিরিজ খুঁজুন',
+        'Search' => 'সার্চ',
+        'Movie' => 'মুভি',
+        'Series' => 'সিরিজ',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
+    };
+
+    if ($lang === 'bn' && (!array_key_exists('placeholder', $raw) || trim((string) $raw['placeholder']) === '')) {
+        $atts['placeholder'] = $t('Search movies and series');
+    }
 
     $search_url = (string) $atts['search_url'];
     if ($search_url !== '' && strpos($search_url, 'http') !== 0) {
@@ -254,14 +300,18 @@ function mmsrch_render_search_bar_shortcode($atts = []) {
       method="get"
       action="<?php echo esc_url($search_url); ?>"
       role="search"
+      <?php echo $lang === 'bn' ? 'lang="bn" ' : ''; ?>
       data-suggestions="<?php echo esc_attr($suggestions_json); ?>"
       data-suggest-min-chars="<?php echo esc_attr((string) $suggest_min_chars); ?>"
       data-suggest-count="<?php echo esc_attr((string) $suggest_count); ?>"
+      data-lang="<?php echo esc_attr($lang); ?>"
+      data-i18n-movie="<?php echo esc_attr($t('Movie')); ?>"
+      data-i18n-series="<?php echo esc_attr($t('Series')); ?>"
     >
       <div class="mmsrchbar-wrap">
         <div class="mmsrchbar-shell">
-          <button type="submit" class="mmsrchbar-icon-btn" aria-label="<?php echo esc_attr__('Search', 'movie-meta-by-aris'); ?>">
-            <span class="mmsrchbar-sr-only"><?php echo esc_html__('Search', 'movie-meta-by-aris'); ?></span>
+          <button type="submit" class="mmsrchbar-icon-btn" aria-label="<?php echo esc_attr($t('Search')); ?>">
+            <span class="mmsrchbar-sr-only"><?php echo esc_html($t('Search')); ?></span>
             <svg class="mmsrchbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <circle cx="11" cy="11" r="7"></circle>
               <path d="M21 21l-4.35-4.35"></path>
@@ -296,6 +346,8 @@ function mmsrch_render_search_bar_shortcode($atts = []) {
 
         var minChars = parseInt(root.getAttribute('data-suggest-min-chars') || '2', 10) || 2;
         var maxItems = parseInt(root.getAttribute('data-suggest-count') || '8', 10) || 8;
+        var I18N_MOVIE = root.getAttribute('data-i18n-movie') || 'Movie';
+        var I18N_SERIES = root.getAttribute('data-i18n-series') || 'Series';
 
         function esc(s) {
           return String(s == null ? '' : s)
@@ -319,7 +371,7 @@ function mmsrch_render_search_bar_shortcode($atts = []) {
 
           var html = items.map(function (it) {
             var title = it.title || '';
-            var type = (String(it.type || '').toLowerCase() === 'series') ? 'Series' : 'Movie';
+            var type = (String(it.type || '').toLowerCase() === 'series') ? I18N_SERIES : I18N_MOVIE;
             return (
               '<a href="' + esc(it.href) + '">' +
                 '<span class="mmsrchbar-suggest-title">' + esc(title) + '</span>' +
@@ -381,5 +433,31 @@ function mmsrch_render_search_bar_shortcode($atts = []) {
     </script>
     <?php
     return ob_get_clean();
+}
+
+/** Local BN helpers if other snippets are not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
 }
 

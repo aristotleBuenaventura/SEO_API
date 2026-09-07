@@ -3,9 +3,11 @@
  *
  * Shortcode: [movie_just_added]
  * Optional:  [movie_just_added title="Just Added" limit="10" watch_url="/watch/"]
+ *            [movie_just_added lang="bn"]  → links to /bn/watch/
  *
  * Requires: Movie Meta plugin (data source).
  * Shows the 10 most recently added movies. Card clicks → /watch/?id=MOVIE_ID
+ * (or /bn/watch/ when lang="bn")
  */
 
 if (!defined('ABSPATH')) {
@@ -15,16 +17,56 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_just_added', 'mmja_render_just_added_shortcode');
 
 function mmja_render_just_added_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'title'     => 'Just Added',
             'limit'     => '10',
             'api'       => '',
             'watch_url' => '/watch/',
+            'lang'      => '',
         ],
-        $atts,
+        $raw,
         'movie_just_added'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'watch_url' => '/bn/watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/watch/';
+        }
+    }
+
+    $bn_ui = [
+        'Just Added' => 'এইমাত্র যোগ',
+        'Loading new movies…' => 'নতুন মুভি লোড হচ্ছে…',
+        'No movies found.' => 'কোনো মুভি পাওয়া যায়নি।',
+        'Could not load new movies.' => 'নতুন মুভি লোড করা যায়নি।',
+        'Untitled' => 'শিরোনামহীন',
+        'New Release' => 'নতুন রিলিজ',
+        'Watch Now' => 'এখনই দেখুন',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
+    };
+
+    if ($lang === 'bn' && (!array_key_exists('title', $raw) || trim((string) $raw['title']) === '')) {
+        $atts['title'] = $t('Just Added');
+    }
 
     $uid = 'mmja-' . wp_unique_id();
     $limit = max(1, min(20, absint($atts['limit'])));
@@ -37,6 +79,21 @@ function mmja_render_just_added_shortcode($atts = []) {
         $watch_url = home_url($watch_url);
     }
     $watch_url = esc_url($watch_url);
+
+    $bn_genre_labels = [];
+    if ($lang === 'bn' && function_exists('mmba_snip_genre')) {
+        foreach (['Horror', 'Action', 'Drama', 'Comedy', 'Thriller', 'Romance', 'Crime', 'Animation', 'Adventure', 'Sci-Fi', 'War', 'Western', 'Documentary', 'Mystery', 'Fantasy', 'Family', 'Teen', 'Other'] as $gk) {
+            $bn_genre_labels[$gk] = mmba_snip_genre($gk, 'bn');
+        }
+    }
+
+    $bn_details_map = [];
+    if ($lang === 'bn' && function_exists('mmba_snip_bn_details_map')) {
+        $bn_details_map = mmba_snip_bn_details_map();
+        if (!is_array($bn_details_map)) {
+            $bn_details_map = [];
+        }
+    }
 
     $bootstrap = null;
     if (class_exists('MMBA_Storage')) {
@@ -58,12 +115,37 @@ function mmja_render_just_added_shortcode($atts = []) {
             $movie['link_type']  = $type;
             $movie['embed_url']  = $type === 'embed' ? MMBA_Storage::get_embed_url($link) : $link;
             $movie['poster_url'] = MMBA_Storage::get_poster_url($link);
+            // BN: prefer sheet column K for card synopsis.
+            if ($lang === 'bn') {
+                $mid = isset($movie['id']) ? (string) $movie['id'] : '';
+                if ($mid !== '' && !empty($bn_details_map[$mid])) {
+                    $movie['details'] = (string) $bn_details_map[$mid];
+                    $movie['details_bn'] = (string) $bn_details_map[$mid];
+                } elseif (function_exists('mmba_snip_details_for_lang')) {
+                    $bn = mmba_snip_details_for_lang($movie, 'bn');
+                    if ($bn !== '') {
+                        $movie['details'] = $bn;
+                        $movie['details_bn'] = $bn;
+                    }
+                }
+            }
             $enriched[] = $movie;
         }
         $bootstrap = [
             'count'  => count($enriched),
             'movies' => $enriched,
         ];
+    }
+
+    // Slim id→BN details map for API-fetched cards.
+    $bn_details_slim = [];
+    if ($lang === 'bn' && !empty($bn_details_map) && !empty($bootstrap['movies'])) {
+        foreach ($bootstrap['movies'] as $m) {
+            $mid = isset($m['id']) ? (string) $m['id'] : '';
+            if ($mid !== '' && !empty($bn_details_map[$mid])) {
+                $bn_details_slim[$mid] = (string) $bn_details_map[$mid];
+            }
+        }
     }
 
     ob_start();
@@ -75,12 +157,24 @@ function mmja_render_just_added_shortcode($atts = []) {
   data-watch-url="<?php echo esc_attr($watch_url); ?>"
   data-limit="<?php echo esc_attr((string) $limit); ?>"
   data-title="<?php echo esc_attr($atts['title']); ?>"
+  data-lang="<?php echo esc_attr($lang); ?>"
+  data-i18n-empty="<?php echo esc_attr($t('No movies found.')); ?>"
+  data-i18n-error="<?php echo esc_attr($t('Could not load new movies.')); ?>"
+  data-i18n-untitled="<?php echo esc_attr($t('Untitled')); ?>"
+  data-i18n-badge="<?php echo esc_attr($t('New Release')); ?>"
+  data-i18n-watch="<?php echo esc_attr($t('Watch Now')); ?>"
+  <?php if ($lang === 'bn' && !empty($bn_genre_labels)) : ?>
+  data-genre-labels="<?php echo esc_attr(wp_json_encode($bn_genre_labels)); ?>"
+  <?php endif; ?>
+  <?php if ($lang === 'bn' && !empty($bn_details_slim)) : ?>
+  data-bn-details="<?php echo esc_attr(wp_json_encode($bn_details_slim)); ?>"
+  <?php endif; ?>
   <?php if ($bootstrap !== null) : ?>
   data-bootstrap="<?php echo esc_attr(wp_json_encode($bootstrap)); ?>"
   <?php endif; ?>
   aria-live="polite"
 >
-  <div class="mmja-loading"><?php echo esc_html__('Loading new movies…', 'movie-meta-by-aris'); ?></div>
+  <div class="mmja-loading"><?php echo esc_html($t('Loading new movies…')); ?></div>
 </div>
 
 <style>
@@ -320,11 +414,37 @@ function mmja_render_just_added_shortcode($atts = []) {
   var WATCH_URL = root.getAttribute('data-watch-url') || '/watch/';
   var LIMIT = parseInt(root.getAttribute('data-limit') || '10', 10) || 10;
   var TITLE = root.getAttribute('data-title') || 'Just Added';
+  var LANG = root.getAttribute('data-lang') || '';
+  var I18N_EMPTY = root.getAttribute('data-i18n-empty') || 'No movies found.';
+  var I18N_ERROR = root.getAttribute('data-i18n-error') || 'Could not load new movies.';
+  var I18N_UNTITLED = root.getAttribute('data-i18n-untitled') || 'Untitled';
+  var I18N_BADGE = root.getAttribute('data-i18n-badge') || 'New Release';
+  var I18N_WATCH = root.getAttribute('data-i18n-watch') || 'Watch Now';
+  var GENRE_LABELS = {};
+  try {
+    GENRE_LABELS = JSON.parse(root.getAttribute('data-genre-labels') || '{}') || {};
+  } catch (e) { GENRE_LABELS = {}; }
+  var BN_DETAILS = {};
+  try {
+    BN_DETAILS = JSON.parse(root.getAttribute('data-bn-details') || '{}') || {};
+  } catch (e) { BN_DETAILS = {}; }
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function genreLabel(genre) {
+    var g = String(genre || '').trim();
+    if (!g) return '';
+    if (LANG === 'bn') {
+      if (GENRE_LABELS[g]) return GENRE_LABELS[g];
+      var keys = Object.keys(GENRE_LABELS);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === g.toLowerCase()) return GENRE_LABELS[keys[i]];
+      }
+    }
+    return g;
   }
   function tone(title) {
     var sum = 0, s = String(title || '');
@@ -337,15 +457,25 @@ function mmja_render_just_added_shortcode($atts = []) {
     return base + join + 'id=' + encodeURIComponent(movie.id || '');
   }
   function blurb(movie) {
-    var details = String(movie.details || '').replace(/\s+/g, ' ').trim();
+    var id = String(movie.id || '');
+    // BN: prefer sheet column K (details_bn / BN map), then English details.
+    var details = '';
+    if (LANG === 'bn') {
+      details = String(BN_DETAILS[id] || movie.details_bn || movie.details || '').replace(/\s+/g, ' ').trim();
+    } else {
+      details = String(movie.details || '').replace(/\s+/g, ' ').trim();
+    }
     if (details) return details;
     var bits = [];
-    if (movie.genre) bits.push(String(movie.genre).split(',')[0].trim());
+    if (movie.genre) {
+      var g = String(movie.genre).split(',')[0].trim();
+      if (g) bits.push(genreLabel(g));
+    }
     if (movie.year) bits.push(movie.year);
     return bits.join(' · ');
   }
   function cardHtml(movie) {
-    var title = movie.title || 'Untitled';
+    var title = movie.title || I18N_UNTITLED;
     var poster = movie.poster_url || '';
     var desc = blurb(movie);
     var href = watchHref(movie);
@@ -357,12 +487,12 @@ function mmja_render_just_added_shortcode($atts = []) {
       '<a class="mmja-card" href="' + esc(href) + '">' +
         '<div class="mmja-bg mmja-tone-' + tone(title) + '">' + posterInner + '</div>' +
         '<div class="mmja-body">' +
-          '<span class="mmja-badge">New Release</span>' +
+          '<span class="mmja-badge">' + esc(I18N_BADGE) + '</span>' +
           '<h3 class="mmja-card-title">' + esc(title) + '</h3>' +
           (desc ? '<p class="mmja-card-desc">' + esc(desc) + '</p>' : '') +
           '<span class="mmja-watch">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>' +
-            'Watch Now' +
+            esc(I18N_WATCH) +
           '</span>' +
         '</div>' +
       '</a>'
@@ -397,7 +527,7 @@ function mmja_render_just_added_shortcode($atts = []) {
   function render(movies) {
     movies = sortRecent(movies);
     if (!movies.length) {
-      root.innerHTML = '<div class="mmja-empty">No movies found.</div>';
+      root.innerHTML = '<div class="mmja-empty">' + esc(I18N_EMPTY) + '</div>';
       return;
     }
     root.innerHTML =
@@ -438,10 +568,254 @@ function mmja_render_just_added_shortcode($atts = []) {
     })
     .catch(function (err) {
       if (root.querySelector('.mmja-track')) return;
-      root.innerHTML = '<div class="mmja-error">Could not load new movies. (' + esc(err.message) + ')</div>';
+      root.innerHTML = '<div class="mmja-error">' + esc(I18N_ERROR) + ' (' + esc(err.message) + ')</div>';
     });
 })();
 </script>
     <?php
     return ob_get_clean();
+}
+
+/** Local BN helpers if other snippets are not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
+    }
+}
+
+if (!function_exists('mmba_snip_details_for_lang')) {
+    function mmba_snip_details_for_lang(array $movie, $lang = '') {
+        $lang = mmba_snip_normalize_lang($lang);
+        $en = isset($movie['details']) ? (string) $movie['details'] : '';
+        if ($lang !== 'bn') {
+            return $en;
+        }
+        if (!empty($movie['details_bn'])) {
+            return (string) $movie['details_bn'];
+        }
+        $id = isset($movie['id']) ? (string) $movie['id'] : '';
+        $bn = $id !== '' ? mmba_snip_lookup_details_bn($id) : '';
+        return $bn !== '' ? $bn : $en;
+    }
+}
+
+if (!function_exists('mmba_snip_lookup_details_bn')) {
+    function mmba_snip_lookup_details_bn($movie_id) {
+        $map = mmba_snip_bn_details_map();
+        $id = (string) $movie_id;
+        return isset($map[$id]) ? (string) $map[$id] : '';
+    }
+}
+
+if (!function_exists('mmba_snip_bn_details_map')) {
+    function mmba_snip_bn_details_map() {
+        $cached = get_transient('mmba_snip_bn_details_map');
+        if (is_array($cached)) {
+            return $cached;
+        }
+        $map = mmba_snip_fetch_bn_details_map();
+        if (!is_array($map)) {
+            $map = [];
+        }
+        set_transient('mmba_snip_bn_details_map', $map, 10 * MINUTE_IN_SECONDS);
+        return $map;
+    }
+}
+
+if (!function_exists('mmba_snip_fetch_bn_details_map')) {
+    function mmba_snip_fetch_bn_details_map() {
+        $token = mmba_snip_google_access_token();
+        if (!is_string($token) || $token === '') {
+            return [];
+        }
+        $sheet_id = (class_exists('MMBA_Sheets') && method_exists('MMBA_Sheets', 'spreadsheet_id'))
+            ? MMBA_Sheets::spreadsheet_id()
+            : '1g5I-9IPvlWQe72jkDYe4T-UNWWy5XLfEeoDAjHw28B8';
+        $range = 'A1:K5000';
+        $url = sprintf(
+            'https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s',
+            rawurlencode($sheet_id),
+            rawurlencode($range)
+        );
+        $response = wp_remote_get($url, [
+            'timeout' => 20,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Accept'        => 'application/json',
+            ],
+        ]);
+        if (is_wp_error($response)) {
+            return [];
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            return [];
+        }
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        $values = (is_array($body) && isset($body['values']) && is_array($body['values'])) ? $body['values'] : [];
+        if (empty($values)) {
+            return [];
+        }
+        $start = 0;
+        if (!empty($values[0]) && is_array($values[0])) {
+            $first = array_map(static function ($c) {
+                return strtolower(trim((string) $c));
+            }, $values[0]);
+            if (in_array('title', $first, true) || in_array('type', $first, true)) {
+                $start = 1;
+            }
+        }
+        $map = [];
+        $total = count($values);
+        for ($r = $start; $r < $total; $r++) {
+            $line = is_array($values[$r]) ? $values[$r] : [];
+            $type = strtolower(trim(isset($line[0]) ? (string) $line[0] : ''));
+            $title = trim(isset($line[1]) ? (string) $line[1] : '');
+            $link_raw = trim(isset($line[4]) ? (string) $line[4] : '');
+            $details_bn = trim(isset($line[10]) ? (string) $line[10] : '');
+            if ($title === '' || $details_bn === '') {
+                continue;
+            }
+            $is_series = ($type === 'series' || $type === 'tv' || $type === 'show');
+            if ($is_series) {
+                $seed = strtolower(preg_replace('/\s+/', ' ', $title));
+                $id = 's' . substr(md5($seed), 0, 15);
+            } else {
+                if ($link_raw === '') {
+                    continue;
+                }
+                $link = class_exists('MMBA_Storage') && method_exists('MMBA_Storage', 'sanitize_stream_url')
+                    ? MMBA_Storage::sanitize_stream_url($link_raw)
+                    : $link_raw;
+                if ($link === '') {
+                    continue;
+                }
+                $id = 'm' . substr(md5(strtolower(trim($title . '|' . $link))), 0, 15);
+            }
+            if (!isset($map[$id]) || $map[$id] === '') {
+                $map[$id] = $details_bn;
+            }
+        }
+        return $map;
+    }
+}
+
+if (!function_exists('mmba_snip_google_access_token')) {
+    function mmba_snip_google_access_token() {
+        $cached = get_transient('mmba_gs_token');
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+        if (!class_exists('MMBA_Sheets') || !method_exists('MMBA_Sheets', 'credentials_path')) {
+            return '';
+        }
+        $path = MMBA_Sheets::credentials_path();
+        if (!is_readable($path)) {
+            return '';
+        }
+        $data = null;
+        if (substr($path, -4) === '.php') {
+            $data = include $path;
+        } else {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+            $raw = file_get_contents($path);
+            $data = json_decode((string) $raw, true);
+        }
+        if (!is_array($data) || empty($data['client_email']) || empty($data['private_key'])) {
+            return '';
+        }
+        $now = time();
+        $b64 = static function ($payload) {
+            return rtrim(strtr(base64_encode((string) $payload), '+/', '-_'), '=');
+        };
+        $header = $b64(wp_json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $claims = $b64(wp_json_encode([
+            'iss'   => $data['client_email'],
+            'scope' => 'https://www.googleapis.com/auth/spreadsheets',
+            'aud'   => 'https://oauth2.googleapis.com/token',
+            'iat'   => $now,
+            'exp'   => $now + 3600,
+        ]));
+        $unsigned = $header . '.' . $claims;
+        $signature = '';
+        $ok = openssl_sign($unsigned, $signature, $data['private_key'], OPENSSL_ALGO_SHA256);
+        if (!$ok || $signature === '') {
+            return '';
+        }
+        $jwt = $unsigned . '.' . $b64($signature);
+        $response = wp_remote_post('https://oauth2.googleapis.com/token', [
+            'timeout' => 15,
+            'body'    => [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion'  => $jwt,
+            ],
+        ]);
+        if (is_wp_error($response)) {
+            return '';
+        }
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+        $token = is_array($body) && !empty($body['access_token']) ? (string) $body['access_token'] : '';
+        if ($token === '') {
+            return '';
+        }
+        $ttl = isset($body['expires_in']) ? max(60, ((int) $body['expires_in']) - 60) : 3300;
+        set_transient('mmba_gs_token', $token, $ttl);
+        return $token;
+    }
 }

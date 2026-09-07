@@ -5,6 +5,7 @@
  * Shortcode: [movie_search_results]
  * Optional:
  *   [movie_search_results home_url="/" watch_url="/watch/" series_watch_url="/series-watch/" q_param="q" limit="24" min_chars="2"]
+ *   [movie_search_results lang="bn"]  → /bn links + Bengali UI
  *
  * How it works:
  * - Reads the search term from GET param `q_param` (default: `q`).
@@ -20,6 +21,7 @@ if (!defined('ABSPATH')) {
 add_shortcode('movie_search_results', 'mmsrch_render_search_results_shortcode');
 
 function mmsrch_render_search_results_shortcode($atts = []) {
+    $raw = is_array($atts) ? $atts : [];
     $atts = shortcode_atts(
         [
             'home_url' => '/',
@@ -28,10 +30,55 @@ function mmsrch_render_search_results_shortcode($atts = []) {
             'q_param' => 'q',
             'limit' => '24',
             'min_chars' => '2',
+            'lang' => '',
         ],
-        $atts,
+        $raw,
         'movie_search_results'
     );
+
+    $lang = function_exists('mmba_snip_normalize_lang')
+        ? mmba_snip_normalize_lang($atts['lang'])
+        : (in_array(strtolower(trim((string) $atts['lang'])), ['bn', 'bengali', 'bangla'], true) ? 'bn' : '');
+
+    if (function_exists('mmba_snip_apply_bn_url_defaults')) {
+        $atts = mmba_snip_apply_bn_url_defaults($raw, $atts, [
+            'home_url' => '/bn',
+            'watch_url' => '/bn/watch/',
+            'series_watch_url' => '/bn/series-watch/',
+        ]);
+    } elseif ($lang === 'bn') {
+        if (!array_key_exists('home_url', $raw) || trim((string) $raw['home_url']) === '') {
+            $atts['home_url'] = '/bn';
+        }
+        if (!array_key_exists('watch_url', $raw) || trim((string) $raw['watch_url']) === '') {
+            $atts['watch_url'] = '/bn/watch/';
+        }
+        if (!array_key_exists('series_watch_url', $raw) || trim((string) $raw['series_watch_url']) === '') {
+            $atts['series_watch_url'] = '/bn/series-watch/';
+        }
+    }
+
+    $bn_ui = [
+        'Movie Meta plugin is required.' => 'Movie Meta প্লাগইন প্রয়োজন।',
+        'Search navigation' => 'সার্চ নেভিগেশন',
+        'Back to movies' => 'মুভিতে ফিরে যান',
+        'Search' => 'সার্চ',
+        'Search results' => 'সার্চ রেজাল্ট',
+        'No search term provided.' => 'কোনো সার্চ টার্ম দেওয়া হয়নি।',
+        'Series' => 'সিরিজ',
+        'Movies' => 'মুভি',
+        'Untitled' => 'শিরোনামহীন',
+    ];
+    $t = static function ($text) use ($lang, $bn_ui) {
+        if ($lang !== 'bn') {
+            return (string) $text;
+        }
+        $key = (string) $text;
+        if (isset($bn_ui[$key])) {
+            return $bn_ui[$key];
+        }
+        return function_exists('mmba_snip_t') ? mmba_snip_t($key, 'bn') : $key;
+    };
 
     $home_url = (string) $atts['home_url'];
     if ($home_url !== '' && strpos($home_url, 'http') !== 0) {
@@ -66,28 +113,31 @@ function mmsrch_render_search_results_shortcode($atts = []) {
     $q = trim((string) $q);
 
     if (!class_exists('MMBA_Storage')) {
-        return '<div class="mmsa mmsa-error">' . esc_html__('Movie Meta plugin is required.', 'movie-meta-by-aris') . '</div>';
+        return '<div class="mmsa mmsa-error">' . esc_html($t('Movie Meta plugin is required.')) . '</div>';
     }
 
     $q_len = function_exists('mb_strlen') ? (int) mb_strlen($q) : (int) strlen($q);
     if ($q === '' || $q_len < $min_chars) {
+        $min_msg = $lang === 'bn'
+            ? sprintf('খুঁজতে অন্তত %s অক্ষর টাইপ করুন।', function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $min_chars) : (string) $min_chars)
+            : sprintf('Type at least %d characters to search.', $min_chars);
         ob_start();
         ?>
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap">
-        <div class="mmsa">
+        <div class="mmsa"<?php echo $lang === 'bn' ? ' lang="bn"' : ''; ?>>
           <div class="mmsa-shell">
-            <nav class="mmsa-nav" aria-label="<?php echo esc_attr__('Search navigation', 'movie-meta-by-aris'); ?>">
+            <nav class="mmsa-nav" aria-label="<?php echo esc_attr($t('Search navigation')); ?>">
               <a class="mmsa-back" href="<?php echo esc_url($home_url); ?>">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-                <span><?php echo esc_html__('Back to movies', 'movie-meta-by-aris'); ?></span>
+                <span><?php echo esc_html($t('Back to movies')); ?></span>
               </a>
             </nav>
             <header class="mmsa-header">
-              <p class="mmsa-kicker"><?php echo esc_html__('Search', 'movie-meta-by-aris'); ?></p>
-              <h1 class="mmsa-title"><?php echo esc_html__('Search results', 'movie-meta-by-aris'); ?></h1>
-              <p class="mmsa-count"><?php echo esc_html(sprintf(__('Type at least %d characters to search.', 'movie-meta-by-aris'), $min_chars)); ?></p>
+              <p class="mmsa-kicker"><?php echo esc_html($t('Search')); ?></p>
+              <h1 class="mmsa-title"><?php echo esc_html($t('Search results')); ?></h1>
+              <p class="mmsa-count"><?php echo esc_html($min_msg); ?></p>
             </header>
-            <div class="mmsa-empty-state"><?php echo esc_html__('No search term provided.', 'movie-meta-by-aris'); ?></div>
+            <div class="mmsa-empty-state"><?php echo esc_html($t('No search term provided.')); ?></div>
           </div>
         </div>
         <style>
@@ -262,37 +312,48 @@ function mmsrch_render_search_results_shortcode($atts = []) {
     ob_start();
     ?>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap">
-    <div class="mmsa">
+    <div class="mmsa"<?php echo $lang === 'bn' ? ' lang="bn"' : ''; ?>>
       <div class="mmsa-shell">
-        <nav class="mmsa-nav" aria-label="<?php echo esc_attr__('Search navigation', 'movie-meta-by-aris'); ?>">
+        <nav class="mmsa-nav" aria-label="<?php echo esc_attr($t('Search navigation')); ?>">
           <a class="mmsa-back" href="<?php echo esc_url($home_url); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-            <span><?php echo esc_html__('Back to movies', 'movie-meta-by-aris'); ?></span>
+            <span><?php echo esc_html($t('Back to movies')); ?></span>
           </a>
         </nav>
 
         <header class="mmsa-header">
-          <p class="mmsa-kicker"><?php echo esc_html__('Search', 'movie-meta-by-aris'); ?></p>
-          <h1 class="mmsa-title"><?php echo esc_html__('Search results', 'movie-meta-by-aris'); ?></h1>
+          <p class="mmsa-kicker"><?php echo esc_html($t('Search')); ?></p>
+          <h1 class="mmsa-title"><?php echo esc_html($t('Search results')); ?></h1>
           <p class="mmsa-count">
             <?php
-            echo esc_html(sprintf(
-                _n('%d result', '%d results', $total, 'movie-meta-by-aris'),
-                $total
-            ));
+            if ($lang === 'bn') {
+                $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $total) : (string) $total;
+                echo esc_html($n . 'টি রেজাল্ট');
+            } else {
+                echo esc_html(sprintf(
+                    _n('%d result', '%d results', $total, 'movie-meta-by-aris'),
+                    $total
+                ));
+            }
             ?>
           </p>
         </header>
 
         <?php if ($total === 0) : ?>
           <div class="mmsa-empty-state">
-            <?php echo esc_html(sprintf(__('No results found for "%s".', 'movie-meta-by-aris'), $q)); ?>
+            <?php
+            if ($lang === 'bn') {
+                echo esc_html(sprintf('"%s" এর জন্য কোনো রেজাল্ট পাওয়া যায়নি।', $q));
+            } else {
+                echo esc_html(sprintf(__('No results found for "%s".', 'movie-meta-by-aris'), $q));
+            }
+            ?>
           </div>
         <?php else : ?>
           <div class="mmsrch-sections">
             <?php if (!empty($series)) : ?>
               <section class="mmsrch-section">
-                <h2 class="mmsrch-section-title"><?php echo esc_html__('Series', 'movie-meta-by-aris'); ?></h2>
+                <h2 class="mmsrch-section-title"><?php echo esc_html($t('Series')); ?></h2>
                 <div class="mmsa-grid">
                   <?php foreach ($series as $movie) :
                     $id = isset($movie['id']) ? (string) $movie['id'] : '';
@@ -302,15 +363,25 @@ function mmsrch_render_search_results_shortcode($atts = []) {
                     $href = $series_watch_url . (strpos($series_watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($id);
                     $initial = $title !== '' ? strtoupper(substr($title, 0, 1)) : 'S';
                     $tone = mmsrch_poster_tone($title);
-                    $display = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
+                    $display = $title !== '' ? $title : $t('Untitled');
 
                     $seasons = isset($movie['season_count']) ? (int) $movie['season_count'] : 0;
                     $eps = isset($movie['episode_count']) ? (int) $movie['episode_count'] : 0;
                     $episode_bit = '';
                     if ($seasons > 0) {
-                        $episode_bit = sprintf(_n('%d season', '%d seasons', $seasons, 'movie-meta-by-aris'), $seasons);
+                        if ($lang === 'bn') {
+                            $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $seasons) : (string) $seasons;
+                            $episode_bit = $n . ' সিজন';
+                        } else {
+                            $episode_bit = sprintf(_n('%d season', '%d seasons', $seasons, 'movie-meta-by-aris'), $seasons);
+                        }
                     } elseif ($eps > 0) {
-                        $episode_bit = sprintf(_n('%d episode', '%d episodes', $eps, 'movie-meta-by-aris'), $eps);
+                        if ($lang === 'bn') {
+                            $n = function_exists('mmba_snip_bn_digits') ? mmba_snip_bn_digits((string) $eps) : (string) $eps;
+                            $episode_bit = $n . ' পর্ব';
+                        } else {
+                            $episode_bit = sprintf(_n('%d episode', '%d episodes', $eps, 'movie-meta-by-aris'), $eps);
+                        }
                     }
 
                     $meta_bits = array_filter([$year, $episode_bit]);
@@ -358,18 +429,21 @@ function mmsrch_render_search_results_shortcode($atts = []) {
 
             <?php if (!empty($movies)) : ?>
               <section class="mmsrch-section">
-                <h2 class="mmsrch-section-title"><?php echo esc_html__('Movies', 'movie-meta-by-aris'); ?></h2>
+                <h2 class="mmsrch-section-title"><?php echo esc_html($t('Movies')); ?></h2>
                 <div class="mmsa-grid">
                   <?php foreach ($movies as $movie) :
                     $id = isset($movie['id']) ? (string) $movie['id'] : '';
                     $title = isset($movie['title']) ? (string) $movie['title'] : '';
                     $year = isset($movie['year']) ? (string) $movie['year'] : '';
                     $genre = mmsrch_primary_genre($movie);
+                    if ($lang === 'bn' && $genre !== '' && function_exists('mmba_snip_genre')) {
+                        $genre = mmba_snip_genre($genre, 'bn');
+                    }
                     $poster = MMBA_Storage::movie_poster_url($movie);
                     $href = $watch_url . (strpos($watch_url, '?') === false ? '?' : '&') . 'id=' . rawurlencode($id);
                     $initial = $title !== '' ? strtoupper(substr($title, 0, 1)) : 'M';
                     $tone = mmsrch_poster_tone($title);
-                    $display = $title !== '' ? $title : __('Untitled', 'movie-meta-by-aris');
+                    $display = $title !== '' ? $title : $t('Untitled');
                     $meta_bits = array_filter([$year, $genre]);
                     $img_meta = method_exists('MMBA_Storage', 'poster_image_meta')
                         ? MMBA_Storage::poster_image_meta($display)
@@ -736,5 +810,77 @@ function mmsrch_search_score_item(array $item, string $q_norm): int {
     }
 
     return $score;
+}
+
+/** Local BN helpers if other snippets are not loaded. */
+if (!function_exists('mmba_snip_normalize_lang')) {
+    function mmba_snip_normalize_lang($lang) {
+        $lang = strtolower(trim((string) $lang));
+        if ($lang === 'bn' || $lang === 'bengali' || $lang === 'bangla') {
+            return 'bn';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('mmba_snip_apply_bn_url_defaults')) {
+    function mmba_snip_apply_bn_url_defaults(array $raw, array $atts, array $bn_urls) {
+        $lang = mmba_snip_normalize_lang(isset($atts['lang']) ? $atts['lang'] : (isset($raw['lang']) ? $raw['lang'] : ''));
+        if ($lang !== 'bn') {
+            return $atts;
+        }
+        foreach ($bn_urls as $key => $path) {
+            if (!array_key_exists($key, $raw) || trim((string) $raw[$key]) === '') {
+                $atts[$key] = $path;
+            }
+        }
+        return $atts;
+    }
+}
+
+if (!function_exists('mmba_snip_bn_digits')) {
+    function mmba_snip_bn_digits($text) {
+        return strtr((string) $text, [
+            '0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪',
+            '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯',
+        ]);
+    }
+}
+
+if (!function_exists('mmba_snip_genre')) {
+    function mmba_snip_genre($genre, $lang = '') {
+        $genre = trim((string) $genre);
+        if ($genre === '' || mmba_snip_normalize_lang($lang) !== 'bn') {
+            return $genre;
+        }
+        $map = [
+            'horror' => 'হরর',
+            'action' => 'অ্যাকশন',
+            'drama' => 'ড্রামা',
+            'comedy' => 'কমেডি',
+            'thriller' => 'থ্রিলার',
+            'romance' => 'রোমান্স',
+            'crime' => 'ক্রাইম',
+            'animation' => 'অ্যানিমেশন',
+            'adventure' => 'অ্যাডভেঞ্চার',
+            'sci-fi' => 'সায়েন্স ফিকশন',
+            'scifi' => 'সায়েন্স ফিকশন',
+            'sci fi' => 'সায়েন্স ফিকশন',
+            'science fiction' => 'সায়েন্স ফিকশন',
+            'war' => 'যুদ্ধ',
+            'western' => 'ওয়েস্টার্ন',
+            'documentary' => 'ডকুমেন্টারি',
+            'mystery' => 'মিস্ট্রি',
+            'fantasy' => 'ফ্যান্টাসি',
+            'family' => 'ফ্যামিলি',
+            'teen' => 'টিন',
+            'lgbtq' => 'এলজিবিটিকিউ',
+            'lgbtq+' => 'এলজিবিটিকিউ',
+            'lgbt' => 'এলজিবিটিকিউ',
+            'other' => 'অন্যান্য',
+        ];
+        $key = strtolower($genre);
+        return isset($map[$key]) ? $map[$key] : $genre;
+    }
 }
 
