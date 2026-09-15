@@ -1,0 +1,56 @@
+{
+  "popup_bg": "https://img-live.bannershive.dev/h001_uploads/images/CrossSell_Popup.png",
+  "popup_bg_bn": "https://img-live.bannershive.dev/h001_uploads/images/CrossSell_Popup_BN.png",
+  "sites": [
+    {
+      "name": "mcw",
+      "url": "https://mcwlink.net/mcwpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/mcw.gif"
+    },
+    {
+      "name": "mxw",
+      "url": "https://mcricketlink.co/mxwpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/mxw.gif"
+    },
+    {
+      "name": "banglabet",
+      "url": "https://bbtlink.co/bbpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/banglabet.gif"
+    },
+    {
+      "name": "bengalbet",
+      "url": "https://bnglnk.com/bgbpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/bengalbet.gif"
+    },
+    {
+      "name": "khelaghor",
+      "url": "https://kglnk.com/khgpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/khelaghor.gif"
+    },
+    {
+      "name": "deshislots",
+      "url": "https://deshislotslnk.co/dspop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/deshislots.gif"
+    },
+    {
+      "name": "banglawin",
+      "url": "https://bngwlnk.com/bwinpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/banglawin.gif"
+    },
+    {
+      "name": "tkbaazi",
+      "url": "https://tkbzlnk.com/tkpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/tkbaazi.gif"
+    },
+    {
+      "name": "banglaplus",
+      "url": "https://bnplus88lnk.com/bppop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/banglaplus.gif"
+    },
+    {
+      "name": "joywin88",
+      "url": "https://joywn88lnk.com/jwpop1",
+      "logo": "https://img-live.bannershive.dev/h001_uploads/gifs/joywin88.gif"
+    }
+  ]
+}
