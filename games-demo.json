@@ -1,7 +1,7 @@
 {
   "source": "https://slotcatalog.com",
   "generated_at": "2026-09-22",
-  "note": "demo_url = actual playable iframe from SlotCatalog 'Play Demo for free'. slotcatalog_demo = SlotCatalog page with demo section. | Prefer api.freedemo.games/launcher over freedemo.games page wrappers to avoid affiliate overlays.",
+  "note": "demo_url = actual playable iframe from SlotCatalog 'Play Demo for free'. slotcatalog_demo = SlotCatalog page with demo section. | Prefer api.freedemo.games/launcher over freedemo.games page wrappers to avoid affiliate overlays. | Fa Chai demo_url from SlotCatalog play-demo iframe (web.fachaigaming.com / web.fcg666.net).",
   "total": 100,
   "found": 100,
   "missing": [],
@@ -31,15 +31,6 @@
       "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-garuda-1000",
       "found": true,
       "matched_name": "Fortune Garuda 1000 Demo & Slot Review"
-    },
-    {
-      "name": "SUPER ELEMENTS",
-      "slug": "super-elements",
-      "demo_url": "https://web.fachaigaming.com/game/22055/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Super-Elements#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/Super-Elements",
-      "found": true,
-      "matched_name": "SUPER ELEMENTS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
     },
     {
       "name": "Super Ace Deluxe",
@@ -111,15 +102,6 @@
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Treasures-of-Aztec",
       "found": true,
       "matched_name": "Treasures of Aztec Slot (PG Soft) Demo & Review"
-    },
-    {
-      "name": "SUPER ELEMENTS 2",
-      "slug": "super-elements-2",
-      "demo_url": "https://web.fachaigaming.com/game/22098/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-elements-2#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-elements-2",
-      "found": true,
-      "matched_name": "SUPER ELEMENTS 2 (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
     },
     {
       "name": "Money Coming Expand Bets",
@@ -257,15 +239,6 @@
       "note": "Swintt official fun demo (slug is -swintt; not Fa Chai Golden Genie)"
     },
     {
-      "name": "CHINESE NEW YEAR MOREWAYS",
-      "slug": "chinese-new-year-moreways",
-      "demo_url": "https://web.fachaigaming.com/game/22064/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/chinese-new-year-moreways#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/chinese-new-year-moreways",
-      "found": true,
-      "matched_name": "CHINESE NEW YEAR MOREWAYS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
-    },
-    {
       "name": "Royale House",
       "slug": "royale-house",
       "demo_url": "https://lobby.sgplayfun.com/index.jsp?game=S-RH02&type=web&menumode=off",
@@ -308,15 +281,6 @@
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fiery-Sevens-Exclusive#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Fiery-Sevens-Exclusive",
       "found": true
-    },
-    {
-      "name": "DJ BOOM BOOM",
-      "slug": "dj-boom-boom",
-      "demo_url": "https://web.fachaigaming.com/game/22092/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/dj-boom-boom#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/dj-boom-boom",
-      "found": true,
-      "matched_name": "DJ BOOM BOOM (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
     },
     {
       "name": "Mighty Sevens",
@@ -557,25 +521,6 @@
       "found": true
     },
     {
-      "name": "POKER WIN",
-      "slug": "poker-win",
-      "demo_url": "https://web.fachaigaming.com/game/22060/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/poker-win#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/poker-win",
-      "found": true,
-      "matched_name": "POKER WIN (Fa Chai — web.fachaigaming.com/game/22060)",
-      "note": "Fa Chai official web demo (soft-404 SPA shell OK)"
-    },
-    {
-      "name": "QUEEN OF INCA",
-      "slug": "queen-of-inca",
-      "demo_url": "https://web.fachaigaming.com/game/22063/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/queen-of-inca#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/queen-of-inca",
-      "found": true,
-      "matched_name": "QUEEN OF INCA (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
-    },
-    {
       "name": "Mahjong Ways 2",
       "slug": "mahjong-ways-2",
       "demo_url": "https://api.freedemo.games/launcher/demo/mahjong-ways-2",
@@ -610,24 +555,6 @@
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/clover-coins-4x4#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/clover-coins-4x4",
       "found": true
-    },
-    {
-      "name": "SUGAR BANG BANG 2",
-      "slug": "sugar-bang-bang-2",
-      "demo_url": "https://web.fachaigaming.com/game/22071/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-bang-bang-2#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-bang-bang-2",
-      "found": true,
-      "matched_name": "SUGAR BANG BANG 2 (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
-    },
-    {
-      "name": "SUGAR BANG BANG PLUS",
-      "slug": "sugar-bang-bang-plus",
-      "demo_url": "https://web.fachaigaming.com/game/22093/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-bang-bang-plus#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-bang-bang-plus",
-      "found": true,
-      "matched_name": "SUGAR BANG BANG PLUS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
     },
     {
       "name": "Fortune Dragon",
@@ -720,15 +647,6 @@
       "matched_name": "Play Legacy Of Egypt (Play'n Go) Slot"
     },
     {
-      "name": "LEGEND OF INCA",
-      "slug": "legend-of-inca",
-      "demo_url": "https://web.fachaigaming.com/game/22053/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Legend-of-Inca#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/Legend-of-Inca",
-      "found": true,
-      "matched_name": "LEGEND OF INCA (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
-    },
-    {
       "name": "Clover Coins 3x3",
       "slug": "clover-coins-3x3",
       "demo_url": "https://tadagaming.com/PlusTrial/545/en-us",
@@ -771,15 +689,6 @@
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/Wild-Ace#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Wild-Ace",
       "found": true
-    },
-    {
-      "name": "TREASURE RAIDERS",
-      "slug": "treasure-raiders",
-      "demo_url": "https://web.fachaigaming.com/game/22042/en",
-      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Treasure-Raiders#play-demo",
-      "slotcatalog_url": "https://slotcatalog.com/en/slots/Treasure-Raiders",
-      "found": true,
-      "matched_name": "TREASURE RAIDERS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
     },
     {
       "name": "Fortune Coins 2",
@@ -894,6 +803,97 @@
       "found": true,
       "matched_name": "Treasure Gems → Fortune Gems (JILI/109) ad-free stand-in",
       "note": "Microgaming Treasure Gems has no public demo. Ad-free stand-in: JILI Fortune Gems PlusTrial/109"
+    },
+    {
+      "name": "DJ Boom Boom",
+      "slug": "dj-boom-boom",
+      "demo_url": "https://web.fachaigaming.com/game/22092/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/dj-boom-boom#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/dj-boom-boom",
+      "found": true,
+      "matched_name": "DJ Boom Boom"
+    },
+    {
+      "name": "Poker Win",
+      "slug": "poker-win",
+      "demo_url": "https://web.fachaigaming.com/game/22060/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/poker-win#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/poker-win",
+      "found": true,
+      "matched_name": "Poker Win",
+      "note": "SlotCatalog play-demo iframe currently empty/unavailable; demo_url is Fa Chai provider URL used previously for this title."
+    },
+    {
+      "name": "Queen of Inca",
+      "slug": "queen-of-inca",
+      "demo_url": "https://web.fcg666.net/game/22063/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/queen-of-inca#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/queen-of-inca",
+      "found": true,
+      "matched_name": "Queen of Inca"
+    },
+    {
+      "name": "Legend of Inca",
+      "slug": "legend-of-inca",
+      "demo_url": "https://web.fcg666.net/game/22053/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Legend-of-Inca#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Legend-of-Inca",
+      "found": true,
+      "matched_name": "Legend of Inca"
+    },
+    {
+      "name": "Treasure Raiders",
+      "slug": "treasure-raiders",
+      "demo_url": "https://web.fcg666.net/game/22042/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Treasure-Raiders#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Treasure-Raiders",
+      "found": true,
+      "matched_name": "Treasure Raiders"
+    },
+    {
+      "name": "Chinese New Year Moreways",
+      "slug": "chinese-new-year-moreways",
+      "demo_url": "https://web.fcg666.net/game/22064/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/chinese-new-year-moreways#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/chinese-new-year-moreways",
+      "found": true,
+      "matched_name": "Chinese New Year Moreways"
+    },
+    {
+      "name": "Sugar Bang Bang Plus",
+      "slug": "sugar-bang-bang-plus",
+      "demo_url": "https://web.fachaigaming.com/game/22071/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-bang-bang-plus#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-bang-bang-plus",
+      "found": true,
+      "matched_name": "Sugar Bang Bang Plus"
+    },
+    {
+      "name": "Sugar Bang Bang 2",
+      "slug": "sugar-bang-bang-2",
+      "demo_url": "https://web.fcg666.net/game/22071/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-bang-bang-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-bang-bang-2",
+      "found": true,
+      "matched_name": "Sugar Bang Bang 2"
+    },
+    {
+      "name": "Super Elements",
+      "slug": "super-elements",
+      "demo_url": "https://web.fcg666.net/game/22055/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Super-Elements#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Super-Elements",
+      "found": true,
+      "matched_name": "Super Elements"
+    },
+    {
+      "name": "Super Elements 2",
+      "slug": "super-elements-2",
+      "demo_url": "https://web.fachaigaming.com/game/22098/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-elements-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-elements-2",
+      "found": true,
+      "matched_name": "Super Elements 2"
     }
   ]
 }
