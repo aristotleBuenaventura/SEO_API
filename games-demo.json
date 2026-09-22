@@ -1,0 +1,886 @@
+{
+  "source": "https://slotcatalog.com",
+  "generated_at": "2026-09-22",
+  "note": "demo_url = actual playable iframe from SlotCatalog 'Play Demo for free'. slotcatalog_demo = SlotCatalog page with demo section.",
+  "total": 100,
+  "found": 100,
+  "missing": [],
+  "games": [
+    {
+      "name": "Super Ace",
+      "slug": "super-ace",
+      "demo_url": "https://jiligames.com/PlusTrial/49",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Super-Ace#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Super-Ace",
+      "found": true
+    },
+    {
+      "name": "Wild Bounty Showdown",
+      "slug": "wild-bounty-showdown",
+      "demo_url": "https://freedemo.games/en/slots/wild-bounty-showdown?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Wild-Bounty-Showdown#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Wild-Bounty-Showdown",
+      "found": true,
+      "matched_name": "Wild Bounty Showdown Demo & Review"
+    },
+    {
+      "name": "Fortune Garuda 1000",
+      "slug": "fortune-garuda-1000",
+      "demo_url": "https://tadagaming.com/PlusTrial/807/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-garuda-1000#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-garuda-1000",
+      "found": true,
+      "matched_name": "Fortune Garuda 1000 Demo & Slot Review"
+    },
+    {
+      "name": "SUPER ELEMENTS",
+      "slug": "super-elements",
+      "demo_url": "https://web.fcg666.net/game/22055/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Super-Elements#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Super-Elements",
+      "found": true,
+      "matched_name": "SUPER ELEMENTS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Super Ace Deluxe",
+      "slug": "super-ace-deluxe",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/403/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-ace-deluxe#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-ace-deluxe",
+      "found": true,
+      "matched_name": "Super Ace Deluxe Demo & Slot Review"
+    },
+    {
+      "name": "Fortune Gems 500",
+      "slug": "fortune-gems-500",
+      "demo_url": "https://tadagaming.com/PlusTrial/540",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-gems-500#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-gems-500",
+      "found": true
+    },
+    {
+      "name": "Boxing King",
+      "slug": "boxing-king",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/77/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Boxing-King#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Boxing-King",
+      "found": true,
+      "matched_name": "Boxing King Demo & Slot Review"
+    },
+    {
+      "name": "Dragon Gems 500",
+      "slug": "dragon-gems-500",
+      "demo_url": "https://www.yellowbat.com/games/dragon-gems-500/?page_id=4594&id=1070",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/dragon-gems-500#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/dragon-gems-500",
+      "found": true,
+      "matched_name": "Dragon Gems 500 Demo & Slot Review"
+    },
+    {
+      "name": "Circus Joker 4096",
+      "slug": "circus-joker-4096",
+      "demo_url": "https://jiligames.com/PlusTrial/518/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/circus-joker-4096#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/circus-joker-4096",
+      "found": true,
+      "matched_name": "Circus Joker 4096 Demo & Slot Review"
+    },
+    {
+      "name": "Super Ace Speed Exclusive",
+      "slug": "super-ace-speed-exclusive",
+      "demo_url": "https://jiligames.com/PlusTrial/539",
+      "slotcatalog_demo": null,
+      "slotcatalog_url": null,
+      "found": true,
+      "matched_name": "Super Ace SPEED (JILI PlusIntro/539) — used as Exclusive fallback",
+      "note": "No separate Exclusive demo found; using public Super Ace SPEED trial"
+    },
+    {
+      "name": "Fortune Garuda 500",
+      "slug": "fortune-garuda-500",
+      "demo_url": "https://jiligames.com/PlusTrial/696/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-garuda-500#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-garuda-500",
+      "found": true
+    },
+    {
+      "name": "Treasures of Aztec",
+      "slug": "treasures-of-aztec",
+      "demo_url": "https://freedemo.games/en/slots/treasures-of-aztec?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Treasures-of-Aztec#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Treasures-of-Aztec",
+      "found": true,
+      "matched_name": "Treasures of Aztec Slot (PG Soft) Demo & Review"
+    },
+    {
+      "name": "SUPER ELEMENTS 2",
+      "slug": "super-elements-2",
+      "demo_url": "https://web.fachaigaming.com/game/22098/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-elements-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-elements-2",
+      "found": true,
+      "matched_name": "SUPER ELEMENTS 2 (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Money Coming Expand Bets",
+      "slug": "money-coming-expand-bets",
+      "demo_url": "https://jiligames.com/PlusTrial/302",
+      "slotcatalog_demo": null,
+      "slotcatalog_url": null,
+      "found": true,
+      "matched_name": "Money Coming Expand Bets (JILI PlusIntro/302)"
+    },
+    {
+      "name": "Money Coming",
+      "slug": "money-coming",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/51/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Money-Coming#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Money-Coming",
+      "found": true,
+      "matched_name": "Money Coming Demo & Slot Review"
+    },
+    {
+      "name": "Fortune Gems 3",
+      "slug": "fortune-gems-3",
+      "demo_url": "https://tadagaming.com/PlusTrial/300/3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-gems-3#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-gems-3",
+      "found": true,
+      "matched_name": "Fortune Gems 3 Demo & Slot Review"
+    },
+    {
+      "name": "Super Ace Speed",
+      "slug": "super-ace-speed",
+      "demo_url": "https://jiligames.com/PlusTrial/539",
+      "slotcatalog_demo": null,
+      "slotcatalog_url": null,
+      "found": true,
+      "matched_name": "Super Ace SPEED (JILI PlusIntro/539)"
+    },
+    {
+      "name": "Super Ace II",
+      "slug": "super-ace-2",
+      "demo_url": "https://www.rsg-games.com/TryGame?lang=en-US&gameid=128",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-ace-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-ace-2",
+      "found": true,
+      "matched_name": "Super Ace 2"
+    },
+    {
+      "name": "Lucky Tamarin",
+      "slug": "lucky-tamarin",
+      "demo_url": "https://tadagaming.com/PlusTrial/678/en-US",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/lucky-tamarin#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/lucky-tamarin",
+      "found": true
+    },
+    {
+      "name": "Fortune Gems Legend",
+      "slug": "fortune-gems-legend",
+      "demo_url": "https://jiligames.com/PlusTrial/812",
+      "slotcatalog_demo": null,
+      "slotcatalog_url": null,
+      "found": true,
+      "matched_name": "Fortune Gems Legend (JILI PlusIntro/812)"
+    },
+    {
+      "name": "Magic Ace WILD LOCK",
+      "slug": "magic-ace-wild-lock",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39323&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/magic-ace-wild-lock#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/magic-ace-wild-lock",
+      "found": true,
+      "matched_name": "Magic Ace Wild Lock"
+    },
+    {
+      "name": "Fortune Rabbit",
+      "slug": "fortune-rabbit",
+      "demo_url": "https://freedemo.games/en/slots/fortune-rabbit?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fortune-Rabbit#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fortune-Rabbit",
+      "found": true,
+      "matched_name": "Fortune Rabbit Demo & Slot Review"
+    },
+    {
+      "name": "Asgardian Rising",
+      "slug": "asgardian-rising",
+      "demo_url": "https://freedemo.games/en/slots/asgardian-rising?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Asgardian-Rising#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Asgardian-Rising",
+      "found": true,
+      "matched_name": "Asgardian Rising Demo & Review"
+    },
+    {
+      "name": "Pinata Wins",
+      "slug": "pinata-wins",
+      "demo_url": "https://freedemo.games/en/slots/pinata-wins?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/pinata-wins#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/pinata-wins",
+      "found": true,
+      "matched_name": "Pinata Wins Demo & Review"
+    },
+    {
+      "name": "Anubis Wrath",
+      "slug": "anubis-wrath",
+      "demo_url": "https://freedemo.games/en/slots/anubis-wrath?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/anubis-wrath#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/anubis-wrath",
+      "found": true,
+      "matched_name": "Anubis Wrath Demo & Review"
+    },
+    {
+      "name": "Lucky Neko",
+      "slug": "lucky-neko",
+      "demo_url": "https://freedemo.games/en/slots/lucky-neko?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Lucky-Neko#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Lucky-Neko",
+      "found": true,
+      "matched_name": "Lucky Neko Demo & Slot Review"
+    },
+    {
+      "name": "Alibaba",
+      "slug": "alibaba",
+      "demo_url": "https://www.rsg-games.com/TryGame?lang=en-US&gameid=7",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Alibaba#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Alibaba",
+      "found": true,
+      "matched_name": "Play Alibaba Slot"
+    },
+    {
+      "name": "GOLDEN GENIE",
+      "slug": "golden-genie-swintt",
+      "demo_url": "https://freedemo.games/en/slots/golden-genie-swintt?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Golden-Genie#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Golden-Genie",
+      "found": true,
+      "matched_name": "Play Golden Genie (Swintt) Slot"
+    },
+    {
+      "name": "CHINESE NEW YEAR MOREWAYS",
+      "slug": "chinese-new-year-moreways",
+      "demo_url": "https://web.fcg666.net/game/22064/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/chinese-new-year-moreways#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/chinese-new-year-moreways",
+      "found": true,
+      "matched_name": "CHINESE NEW YEAR MOREWAYS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Royale House",
+      "slug": "royale-house",
+      "demo_url": "https://lobby.sgplayfun.com/index.jsp?game=S-RH02&type=web&menumode=off",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Royale-House#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Royale-House",
+      "found": true,
+      "matched_name": "Play Royale House Slot"
+    },
+    {
+      "name": "Crazy777",
+      "slug": "crazy777",
+      "demo_url": "https://freedemo.games/en/slots/crazy777?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Crazy777#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Crazy777",
+      "found": true,
+      "matched_name": "Crazy777 (PlayStar) Game ᐈ Game Info + Where to play"
+    },
+    {
+      "name": "Lucky Jaguar 500",
+      "slug": "lucky-jaguar-500",
+      "demo_url": "https://tadagaming.com/PlusTrial/664/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/lucky-jaguar-500#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/lucky-jaguar-500",
+      "found": true
+    },
+    {
+      "name": "Pirate Legends",
+      "slug": "pirate-legends",
+      "demo_url": "https://www.yellowbat.com/play-game/?id=1048",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/pirate-legends#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/pirate-legends",
+      "found": true,
+      "matched_name": "Pirate Legends Demo & Slot Review"
+    },
+    {
+      "name": "Fiery Sevens Exclusive",
+      "slug": "fiery-sevens-exclusive",
+      "demo_url": "https://lobby.sgplayfun.com/touch/spadenew/20200315P/games/fierysevensexclusive/index.jsp?menumode=off&game=S-FS02&language=en_US&type=web",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fiery-Sevens-Exclusive#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fiery-Sevens-Exclusive",
+      "found": true
+    },
+    {
+      "name": "DJ BOOM BOOM",
+      "slug": "dj-boom-boom",
+      "demo_url": "https://web.fachaigaming.com/game/22092/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/dj-boom-boom#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/dj-boom-boom",
+      "found": true,
+      "matched_name": "DJ BOOM BOOM (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Mighty Sevens",
+      "slug": "mighty-sevens",
+      "demo_url": "https://go.fastspindemo.com/?game=S-MS01&language=en_EN&type=web&menumode=off&pm=3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/mighty-sevens#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/mighty-sevens",
+      "found": true
+    },
+    {
+      "name": "Wild Bandito",
+      "slug": "wild-bandito",
+      "demo_url": "https://freedemo.games/en/slots/wild-bandito?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Wild-Bandito#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Wild-Bandito",
+      "found": true,
+      "matched_name": "Wild Bandito Demo & Slot Review"
+    },
+    {
+      "name": "Fortune Gems",
+      "slug": "fortune-gems",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/109/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fortune-Gems#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fortune-Gems",
+      "found": true,
+      "matched_name": "Fortune Gems Demo & Slot Review"
+    },
+    {
+      "name": "Fortune Coins",
+      "slug": "fortune-coins",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/523/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-coins#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-coins",
+      "found": true
+    },
+    {
+      "name": "Fiery Sevens",
+      "slug": "fiery-sevens",
+      "demo_url": "https://lobby.sgplayfun.com/touch/spadenew/20200315P/games/fieryseven/index.jsp?menumode=off&game=S-FS01&language=en_US&type=web",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fiery-Sevens#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fiery-Sevens",
+      "found": true,
+      "matched_name": "Fiery Sevens Slot ᐈ Play the demo for free!"
+    },
+    {
+      "name": "Gates of Olympus Super Scatter",
+      "slug": "gates-of-olympus-super-scatter",
+      "demo_url": "https://demogamesfree.pragmaticplay.net/hub-demo/openGame.do?lang=en&cur=USD&websiteUrl=https%3A%2F%2Fclienthub.pragmaticplay.com%2F&gcpif=2831&gameSymbol=vs20olympgold&jurisdiction=99&lobbyUrl=https://clienthub.pragmaticplay.com/slots/game-library/",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/gates-of-olympus-super-scatter#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/gates-of-olympus-super-scatter",
+      "found": true
+    },
+    {
+      "name": "Fortune Gems 2",
+      "slug": "fortune-gems-2",
+      "demo_url": "https://tadagaming.com/PlusTrial/223/3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fortune-Gems-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fortune-Gems-2",
+      "found": true,
+      "matched_name": "Fortune Gems 2 Slot Review & Free Demo"
+    },
+    {
+      "name": "Golden Empire",
+      "slug": "golden-empire-iconic-gaming",
+      "demo_url": "https://freedemo.games/en/slots/golden-empire-iconic-gaming?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Golden-Empire#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Golden-Empire",
+      "found": true,
+      "matched_name": "Play Golden Empire (Iconic Gaming) Slot"
+    },
+    {
+      "name": "Fruity Bonanza",
+      "slug": "fruity-bonanza",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39330&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fruity-Bonanza#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fruity-Bonanza",
+      "found": true,
+      "matched_name": "Fruity Bonanza Demo & Slot Review"
+    },
+    {
+      "name": "Calavera Fiesta",
+      "slug": "calavera-fiesta-yellow-bat",
+      "demo_url": "https://freedemo.games/en/slots/calavera-fiesta-yellow-bat?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Calavera-Fiesta#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Calavera-Fiesta",
+      "found": true
+    },
+    {
+      "name": "Mahjong Ways",
+      "slug": "mahjong-ways",
+      "demo_url": "https://freedemo.games/en/slots/mahjong-ways?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Mahjong-Ways#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Mahjong-Ways",
+      "found": true
+    },
+    {
+      "name": "Royal Ace",
+      "slug": "royal-ace",
+      "demo_url": "https://www.yellowbat.com/play-game/?id=1032",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/royal-ace#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/royal-ace",
+      "found": true
+    },
+    {
+      "name": "NCVIP Gates of Olympus 1000",
+      "slug": "gates-of-olympus-1000",
+      "demo_url": "https://demogamesfree.pragmaticplay.net/gs2c/openGame.do?lang=en&cur=USD&websiteUrl=&gcpif=2273&gameSymbol=vs20olympx&jurisdiction=99&lobbyUrl=",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Gates-of-Olympus-1000#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Gates-of-Olympus-1000",
+      "found": true,
+      "matched_name": "Gates of Olympus 1000 Demo & Review"
+    },
+    {
+      "name": "Money Pot",
+      "slug": "money-pot-jili-games",
+      "demo_url": "https://freedemo.games/en/slots/money-pot-jili-games?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/money-pot#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/money-pot",
+      "found": true,
+      "matched_name": "Money Pot Demo & Slot Review"
+    },
+    {
+      "name": "3 Super Ace",
+      "slug": "3-super-ace",
+      "demo_url": "https://jiligames.com/PlusTrial/588",
+      "slotcatalog_demo": null,
+      "slotcatalog_url": null,
+      "found": true,
+      "matched_name": "3 Super Ace (JILI PlusIntro/588)"
+    },
+    {
+      "name": "Legacy Of Kong Maxways",
+      "slug": "legacy-of-kong-maxways",
+      "demo_url": "https://lobby.sgplayfun.com/?game=S-LK03&language=en_US&type=web&menumode=off",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Legacy-of-Kong-Maxways#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Legacy-of-Kong-Maxways",
+      "found": true,
+      "matched_name": "Legacy of Kong Maxways Demo & Slot Review"
+    },
+    {
+      "name": "Mithai Madness 10000X",
+      "slug": "mithai-madness-10000x",
+      "demo_url": "https://aiitgnuapvspmldzui4pd1vmuialbqqedvrcnqxjtga.goplaylaunch.com/?gameId=SMG_mithaiMadness10000X&languageCode=en&host=desktop",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/mithai-madness-10000x#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/mithai-madness-10000x",
+      "found": true,
+      "matched_name": "Mithai Madness 10000X Demo & Slot Review"
+    },
+    {
+      "name": "NC Bountiful Birds",
+      "slug": "bountiful-birds",
+      "demo_url": "https://vip.gametech88.com/gamelauncher/play/10CRIC/MGP_Bountiful_Birds?democurrency=USD&language=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/bountiful-birds#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/bountiful-birds",
+      "found": true,
+      "matched_name": "Bountiful Birds Demo & Slot Review"
+    },
+    {
+      "name": "Pirate Queen 2",
+      "slug": "pirate-queen-gameart",
+      "demo_url": "https://freedemo.games/en/slots/pirate-queen-gameart?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/pirate-queen-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/pirate-queen-2",
+      "found": true,
+      "matched_name": "Play Pirate Queen (GameArt) Slot"
+    },
+    {
+      "name": "Adventure To The West",
+      "slug": "adventure-to-the-west",
+      "demo_url": "https://go.fastspindemo.com/?game=S-AW01&language=en_EN&type=web&menumode=off&pm=3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/adventure-to-the-west#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/adventure-to-the-west",
+      "found": true,
+      "matched_name": "Adventure to the West"
+    },
+    {
+      "name": "Bakery Bonanza",
+      "slug": "bakery-bonanza",
+      "demo_url": "https://freedemo.games/en/slots/bakery-bonanza?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Bakery-Bonanza#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Bakery-Bonanza",
+      "found": true,
+      "matched_name": "Bakery Bonanza Slot by PG Soft 🎰 Free Demo and Review"
+    },
+    {
+      "name": "Double Fortune",
+      "slug": "double-fortune-ka-gaming",
+      "demo_url": "https://freedemo.games/en/slots/double-fortune-ka-gaming?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Double-Fortune#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Double-Fortune",
+      "found": true,
+      "matched_name": "Play Double Fortune (KA Gaming) Slot"
+    },
+    {
+      "name": "Fortune Ace Super Scatter",
+      "slug": "fortune-ace-super-scatter",
+      "demo_url": "https://demogamesfree.pragmaticplay.net/hub-demo/openGame.do??lang=en&cur=USD&jurisdiction=99&gameSymbol=vswaysfortsup",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-ace-super-scatter#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-ace-super-scatter",
+      "found": true
+    },
+    {
+      "name": "The Great Safari",
+      "slug": "the-great-safari",
+      "demo_url": "https://go.fastspindemo.com/?game=S-GS05&type=web&menumode=off&pm=3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/the-great-safari#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/the-great-safari",
+      "found": true
+    },
+    {
+      "name": "Fruity Bonanza Combo",
+      "slug": "fruity-bonanza-combo",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39330&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fruity-bonanza-combo#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fruity-bonanza-combo",
+      "found": true,
+      "matched_name": "Fruity Bonanza Combo Demo & Slot Review"
+    },
+    {
+      "name": "Charge Buffalo",
+      "slug": "charge-buffalo",
+      "demo_url": "https://freedemo.games/en/slots/charge-buffalo?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Charge-Buffalo#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Charge-Buffalo",
+      "found": true,
+      "matched_name": "Charge Buffalo Demo & Slot Review"
+    },
+    {
+      "name": "Super Ace Joker",
+      "slug": "super-ace-joker",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/409/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-ace-joker#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-ace-joker",
+      "found": true
+    },
+    {
+      "name": "POKER WIN",
+      "slug": "poker-win",
+      "demo_url": "https://freedemo.games/en/slots/poker-win?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/poker-win#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/poker-win",
+      "found": true,
+      "matched_name": "Poker Win Demo & Slot Review"
+    },
+    {
+      "name": "QUEEN OF INCA",
+      "slug": "queen-of-inca",
+      "demo_url": "https://web.fcg666.net/game/22063/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/queen-of-inca#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/queen-of-inca",
+      "found": true,
+      "matched_name": "QUEEN OF INCA (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Mahjong Ways 2",
+      "slug": "mahjong-ways-2",
+      "demo_url": "https://freedemo.games/en/slots/mahjong-ways-2?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Mahjong-Ways-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Mahjong-Ways-2",
+      "found": true,
+      "matched_name": "Mahjong Ways 2 Slot Review & Free Demo"
+    },
+    {
+      "name": "Piggy Bank",
+      "slug": "piggy-bank-belatra-games",
+      "demo_url": "https://demo.bltr-static.com/belatra/demo?language=en&game=piggy_old",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Piggy-Bank-Belatra-Games#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Piggy-Bank-Belatra-Games",
+      "found": true,
+      "matched_name": "Piggy Bank (Belatra) — demo.bltr-static.com"
+    },
+    {
+      "name": "Dragon Treasure",
+      "slug": "dragon-treasure-aspect-gaming",
+      "demo_url": "https://freedemo.games/en/slots/dragon-treasure-aspect-gaming?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Dragon-Treasure#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Dragon-Treasure",
+      "found": true,
+      "matched_name": "Play Dragon Treasure (Aspect Gaming) Slot"
+    },
+    {
+      "name": "Clover Coins 4x4",
+      "slug": "clover-coins-4x4",
+      "demo_url": "https://tadagaming.com/PlusTrial/590",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/clover-coins-4x4#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/clover-coins-4x4",
+      "found": true
+    },
+    {
+      "name": "SUGAR BANG BANG 2",
+      "slug": "sugar-bang-bang-2",
+      "demo_url": "https://web.fcg666.net/game/22071/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-bang-bang-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-bang-bang-2",
+      "found": true,
+      "matched_name": "SUGAR BANG BANG 2 (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "SUGAR BANG BANG PLUS",
+      "slug": "sugar-bang-bang-plus",
+      "demo_url": "https://web.fachaigaming.com/game/22071/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-bang-bang-plus#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-bang-bang-plus",
+      "found": true,
+      "matched_name": "SUGAR BANG BANG PLUS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Fortune Dragon",
+      "slug": "fortune-dragon-genesis",
+      "demo_url": "https://freedemo.games/en/slots/fortune-dragon-genesis?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fortune-Dragon#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Fortune-Dragon",
+      "found": true,
+      "matched_name": "Play Fortune Dragon (Genesis) Slot"
+    },
+    {
+      "name": "Pocket Ace",
+      "slug": "pocket-ace",
+      "demo_url": "https://anya.microfg.com/game/slot/sl2569/?hide=txID%2Cexit&lang=en&ui=6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/pocket-ace#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/pocket-ace",
+      "found": true,
+      "matched_name": "Pocket Ace (Microgaming/Games Global via anya.microfg.com sl2569)"
+    },
+    {
+      "name": "Cocktail Nights",
+      "slug": "cocktail-nights",
+      "demo_url": "https://freedemo.games/en/slots/cocktail-nights?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Cocktail-Nights#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Cocktail-Nights",
+      "found": true
+    },
+    {
+      "name": "Golden Bank",
+      "slug": "golden-bank",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/45/6",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Golden-Bank#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Golden-Bank",
+      "found": true
+    },
+    {
+      "name": "Boxing King Title Match",
+      "slug": "boxing-king-title-match",
+      "demo_url": "https://tadagaming.com/PlusTrial/495/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/boxing-king-title-match#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/boxing-king-title-match",
+      "found": true
+    },
+    {
+      "name": "Trump Card",
+      "slug": "trumpcard",
+      "demo_url": "https://freedemo.games/en/slots/trumpcard?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Trumpcard#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Trumpcard",
+      "found": true,
+      "matched_name": "Play Trumpcard Slot"
+    },
+    {
+      "name": "Bubble Beauty",
+      "slug": "bubble-beauty",
+      "demo_url": "https://jiligames.com/plusplayer/PlusTrial/30/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Bubble-Beauty#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Bubble-Beauty",
+      "found": true,
+      "matched_name": "Play Bubble Beauty Slot"
+    },
+    {
+      "name": "Magic Ace",
+      "slug": "magic-ace",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39313&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/magic-ace#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/magic-ace",
+      "found": true,
+      "matched_name": "Magic Ace Demo & Review"
+    },
+    {
+      "name": "Super Ace Plus",
+      "slug": "super-ace-plus",
+      "demo_url": "https://freedemo.games/en/slots/super-ace-plus?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-ace-plus#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/super-ace-plus",
+      "found": true,
+      "matched_name": "Super Ace Plus Demo & Slot Review"
+    },
+    {
+      "name": "Legacy of Egypt",
+      "slug": "legacy-of-egypt",
+      "demo_url": "https://asccw.playngonetwork.com/Casino/IframedView?pid=2&gid=legacyofegypt&lang=en_US&practice=1&channel=desktop&div=flashobject&width=100%25&height=100%25&user=&password=&ctx=&demo=2&brand=&lobby=&rccurrentsessiontime=0&rcintervaltime=0&rcaccounthistoryurl=&rccontinueurl=&rcexiturl=&rchistoryurlmode=&autoplaylimits=0&autoplayreset=0&callback=flashCallback&rcmga=&resourcelevel=0&hasjackpots=False&country=&pauseplay=&playlimit=&selftest=&sessiontime=&coreweburl=https://asccw.playngonetwork.com/&showpoweredby=True",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Legacy-Of-Egypt#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Legacy-Of-Egypt",
+      "found": true,
+      "matched_name": "Play Legacy Of Egypt (Play'n Go) Slot"
+    },
+    {
+      "name": "LEGEND OF INCA",
+      "slug": "legend-of-inca",
+      "demo_url": "https://web.fcg666.net/game/22053/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Legend-of-Inca#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Legend-of-Inca",
+      "found": true,
+      "matched_name": "LEGEND OF INCA (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Clover Coins 3x3",
+      "slug": "clover-coins-3x3",
+      "demo_url": "https://tadagaming.com/PlusTrial/545/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/clover-coins-3x3#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/clover-coins-3x3",
+      "found": true
+    },
+    {
+      "name": "Aztec Gems",
+      "slug": "aztec-gems",
+      "demo_url": "https://demogamesfree.pragmaticplay.net/gs2c/openGame.do?lang=en&cur=EUR&gameSymbol=vs5aztecgems&websiteUrl=http%3A%2F%2Fdemogamesfree.pragmaticplay.net",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Aztec-Gems#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Aztec-Gems",
+      "found": true,
+      "matched_name": "Aztec Gems (Pragmatic Play) Slot ᐈ Demo game + Review"
+    },
+    {
+      "name": "BlossomOfWealth",
+      "slug": "blossom-of-wealth",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39135&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Blossom-of-Wealth#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Blossom-of-Wealth",
+      "found": true,
+      "matched_name": "Blossom of Wealth"
+    },
+    {
+      "name": "Jackpot Joker",
+      "slug": "jackpot-joker-eurocoin-interactive",
+      "demo_url": "https://freedemo.games/en/slots/jackpot-joker-eurocoin-interactive?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Jackpot-Joker#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Jackpot-Joker",
+      "found": true,
+      "matched_name": "Play Jackpot Joker (Eurocoin Interactive) Slot"
+    },
+    {
+      "name": "Wild Ace",
+      "slug": "wild-ace",
+      "demo_url": "https://tadagaming.com/PlusTrial/181/3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Wild-Ace#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Wild-Ace",
+      "found": true
+    },
+    {
+      "name": "TREASURE RAIDERS",
+      "slug": "treasure-raiders",
+      "demo_url": "https://web.fcg666.net/game/22042/en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Treasure-Raiders#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Treasure-Raiders",
+      "found": true,
+      "matched_name": "TREASURE RAIDERS (Fa Chai — web.fcg666.net / web.fachaigaming.com; soft-404 SPA OK)"
+    },
+    {
+      "name": "Fortune Coins 2",
+      "slug": "fortune-coins-2",
+      "demo_url": "https://tadagaming.com/PlusTrial/573",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/fortune-coins-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/fortune-coins-2",
+      "found": true
+    },
+    {
+      "name": "Sugar Rush Super Scatter",
+      "slug": "sugar-rush-super-scatter",
+      "demo_url": "https://demogamesfree.pragmaticplay.net/gs2c/openGame.do?stylename=demo_clienthub&lang=en&cur=USD&websiteUrl=https%3A%2F%2Fclienthub.pragmaticplay.com%2F&gcpif=1864&gameSymbol=vs20sugrushss&jurisdiction=99",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sugar-rush-super-scatter#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/sugar-rush-super-scatter",
+      "found": true
+    },
+    {
+      "name": "Maya Gold Crazy",
+      "slug": "maya-gold-crazy",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39130&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Maya-Gold-Crazy#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Maya-Gold-Crazy",
+      "found": true,
+      "matched_name": "Play Maya Gold Crazy Slot"
+    },
+    {
+      "name": "Dream of Macau",
+      "slug": "dreams-of-macau",
+      "demo_url": "https://freedemo.games/en/slots/dreams-of-macau?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Dreams-of-Macau#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Dreams-of-Macau",
+      "found": true,
+      "matched_name": "Dreams of Macau Demo & Slot Review"
+    },
+    {
+      "name": "Wild Ape #3258",
+      "slug": "wild-ape-3258-pg",
+      "demo_url": "https://freedemo.games/en/slots/wild-ape-3258-pg?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/wild-ape-3258#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/wild-ape-3258",
+      "found": true,
+      "matched_name": "Wild Ape #3258 Demo & Slot Review"
+    },
+    {
+      "name": "Elemental Link Fire",
+      "slug": "elemental-link-fire",
+      "demo_url": "https://www.sbtianjin.com:9900/six/demo_game.php?game_id=39147&lang=en",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Elemental-Link-Fire#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Elemental-Link-Fire",
+      "found": true,
+      "matched_name": "Play Elemental Link Fire Slot"
+    },
+    {
+      "name": "Ganesha Fortune",
+      "slug": "ganesha-fortune",
+      "demo_url": "https://freedemo.games/en/slots/ganesha-fortune?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Ganesha-Fortune#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Ganesha-Fortune",
+      "found": true
+    },
+    {
+      "name": "Crazy777 2",
+      "slug": "crazy-777-2",
+      "demo_url": "https://tadagaming.com/PlusTrial/504/en-us",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/crazy-777-2#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/crazy-777-2",
+      "found": true,
+      "matched_name": "Crazy 777 2"
+    },
+    {
+      "name": "Lucky Jaguar",
+      "slug": "lucky-jaguar",
+      "demo_url": "https://tadagaming.com/PlusTrial/421/3",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/lucky-jaguar#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/lucky-jaguar",
+      "found": true
+    },
+    {
+      "name": "Jungle King",
+      "slug": "jungle-king-spadegaming",
+      "demo_url": "https://freedemo.games/en/slots/jungle-king-spadegaming?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/Jungle-King#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/Jungle-King",
+      "found": true,
+      "matched_name": "Play Jungle King (Spadegaming) Slot"
+    },
+    {
+      "name": "Cricket Sah 75",
+      "slug": "cricket-sah-75",
+      "demo_url": "https://jiligames.com/PlusTrial/230",
+      "slotcatalog_demo": null,
+      "slotcatalog_url": null,
+      "found": true,
+      "matched_name": "Cricket Sah 75 (JILI PlusIntro/230)"
+    },
+    {
+      "name": "Sexy Joker Deluxe",
+      "slug": "sexy-joker-deluxe",
+      "demo_url": "https://www.yellowbat.com/games/sexy-joker-deluxe/?page_id=4594&id=1065",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/sexy-joker-deluxe#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/sexy-joker-deluxe",
+      "found": true,
+      "matched_name": "Sexy Joker Deluxe Demo & Slot Review"
+    },
+    {
+      "name": "Treasure Gems",
+      "slug": "treasure-gems",
+      "demo_url": "https://freedemo.games/en/slots/treasure-gems?view=demo",
+      "slotcatalog_demo": "https://slotcatalog.com/en/slots/treasure-gems#play-demo",
+      "slotcatalog_url": "https://slotcatalog.com/en/slots/treasure-gems",
+      "found": true,
+      "matched_name": "Treasure Gems Demo & Slot Review"
+    }
+  ]
+}
