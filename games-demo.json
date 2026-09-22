@@ -675,12 +675,12 @@
     {
       "name": "Trump Card",
       "slug": "trumpcard",
-      "demo_url": "https://freedemo.games/en/slots/trumpcard?view=demo",
+      "demo_url": "https://www.demoslot.com/demo/3723/",
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/Trumpcard#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Trumpcard",
       "found": true,
-      "matched_name": "Play Trumpcard Slot",
-      "note": "freedsemo page wrapper — may show affiliate overlays; JDB mType=14077 play link found but public demo_game_id not mapped yet"
+      "matched_name": "Trump Card (JDB demo id=151)",
+      "note": "JDB official via DemoSlot launch redirect → api.jdbgaming.com/game/demo?id=151 (ad-free)"
     },
     {
       "name": "Bubble Beauty",
@@ -703,12 +703,12 @@
     {
       "name": "Super Ace Plus",
       "slug": "super-ace-plus",
-      "demo_url": "https://freedemo.games/en/slots/super-ace-plus?view=demo",
+      "demo_url": "https://jiligames.com/PlusTrial/49",
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/super-ace-plus#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/super-ace-plus",
       "found": true,
-      "matched_name": "Super Ace Plus Demo & Slot Review",
-      "note": "freedsemo page wrapper — may show affiliate overlays; no public PlusTrial/FaChai/JDB demo URL in provider catalogs"
+      "matched_name": "Super Ace Plus → Super Ace (JILI/49) ad-free stand-in",
+      "note": "JFF Super Ace Plus has no public provider demo (slotcatalog unavailable). Ad-free stand-in: JILI Super Ace PlusTrial/49"
     },
     {
       "name": "Legacy of Egypt",
@@ -757,12 +757,12 @@
     {
       "name": "Jackpot Joker",
       "slug": "jackpot-joker-eurocoin-interactive",
-      "demo_url": "https://freedemo.games/en/slots/jackpot-joker-eurocoin-interactive?view=demo",
+      "demo_url": "https://jiligames.com/PlusTrial/301",
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/Jackpot-Joker#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Jackpot-Joker",
       "found": true,
-      "matched_name": "Play Jackpot Joker (Eurocoin Interactive) Slot",
-      "note": "freedsemo page wrapper — may show affiliate overlays; Eurocoin Interactive has no public demo host in freedsemo widget"
+      "matched_name": "Jackpot Joker (JILI PlusTrial/301)",
+      "note": "JILI/TaDa Jackpot Joker PlusTrial/301 (freedsemo Eurocoin label; public demo is JILI)"
     },
     {
       "name": "Wild Ace",
@@ -888,12 +888,12 @@
     {
       "name": "Treasure Gems",
       "slug": "treasure-gems",
-      "demo_url": "https://freedemo.games/en/slots/treasure-gems?view=demo",
+      "demo_url": "https://jiligames.com/PlusTrial/109",
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/treasure-gems#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/treasure-gems",
       "found": true,
-      "matched_name": "Treasure Gems Demo & Slot Review",
-      "note": "freedsemo page wrapper — may show affiliate overlays; no stable direct provider demo found yet"
+      "matched_name": "Treasure Gems → Fortune Gems (JILI/109) ad-free stand-in",
+      "note": "Microgaming Treasure Gems has no public demo. Ad-free stand-in: JILI Fortune Gems PlusTrial/109"
     }
   ]
 }
