@@ -304,7 +304,7 @@
     {
       "name": "Fiery Sevens Exclusive",
       "slug": "fiery-sevens-exclusive",
-      "demo_url": "https://lobby.sgplayfun.com/touch/spadenew/20200315P/games/fierysevensexclusive/index.jsp?menumode=off&game=S-FS02&language=en_US&type=web",
+      "demo_url": "https://go.fastspindemo.com/?game=S-FS02&language=en_EN&type=web&menumode=off&pm=3",
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fiery-Sevens-Exclusive#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Fiery-Sevens-Exclusive",
       "found": true
@@ -355,7 +355,7 @@
     {
       "name": "Fiery Sevens",
       "slug": "fiery-sevens",
-      "demo_url": "https://lobby.sgplayfun.com/touch/spadenew/20200315P/games/fieryseven/index.jsp?menumode=off&game=S-FS01&language=en_US&type=web",
+      "demo_url": "https://go.fastspindemo.com/?game=S-FS01&language=en_EN&type=web&menumode=off&pm=3",
       "slotcatalog_demo": "https://slotcatalog.com/en/slots/Fiery-Sevens#play-demo",
       "slotcatalog_url": "https://slotcatalog.com/en/slots/Fiery-Sevens",
       "found": true,
